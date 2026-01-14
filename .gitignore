@@ -1,0 +1,16 @@
+# Build
+build/
+*.app
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# Logs
+*.log

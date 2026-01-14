@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+*.swp
+*~
+
+# macOS build
+macOS/build/
+macOS/*.dmg
+
+# Windows build
+Windows/build/
+Windows/*.exe
+
+# IDE
+.vscode/
+.idea/
+*.xcodeproj/
+*.xcworkspace/
+
+# Logs
+*.log

@@ -1,0 +1,53 @@
+// ============================================================================
+// HAUT Network Guard - Windows
+// 资源脚本
+// ============================================================================
+
+#include <windows.h>
+#include "resource.h"
+
+// 版本信息
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS       VS_FF_DEBUG
+#else
+FILEFLAGS       0
+#endif
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"  // 简体中文, Unicode
+        BEGIN
+            VALUE "CompanyName",      "YellowPeach"
+            VALUE "FileDescription",  "HAUT Network Guard - 校园网自动登录工具"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "HAUTNetworkGuard"
+            VALUE "LegalCopyright",   "Copyright (C) 2024 YellowPeach"
+            VALUE "OriginalFilename", "HAUTNetworkGuard.exe"
+            VALUE "ProductName",      "HAUT Network Guard"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x804, 1200  // 简体中文, Unicode
+    END
+END
+
+// 图标资源
+// 注意: 需要准备对应的 .ico 文件
+// 暂时使用占位符，可以后续添加真实图标
+
+// IDI_APP_ICON    ICON    "icons/app.ico"
+// IDI_ONLINE      ICON    "icons/online.ico"
+// IDI_OFFLINE     ICON    "icons/offline.ico"
+// IDI_CHECKING    ICON    "icons/checking.ico"
+
+// 应用清单
+// 1 RT_MANIFEST "manifest.xml"

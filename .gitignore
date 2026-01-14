@@ -10,6 +10,7 @@ macOS/*.dmg
 # Windows build
 Windows/build/
 Windows/*.exe
+Windows/target/
 
 # IDE
 .vscode/

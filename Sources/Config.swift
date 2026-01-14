@@ -8,7 +8,7 @@ class AppConfig {
     static let appName = "HAUT Network Guard"
     static let version = "1.0.0"
     static let author = "YellowPeach"
-    static let website = "https://ehaut.cn"
+    static let website = "https://github.com/yellowpeachxgp/HAUTNetworkGuard"
     static let qqGroup = "789860526"
 
     // UserDefaults 键

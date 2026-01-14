@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- 🔄 **自动监控**: 每3秒检测网络状态
+- 🔄 **自动监控**: 实时检测网络连接状态
 - 🔌 **自动重连**: 断线后自动尝试重新登录
 - 🔔 **系统通知**: 登录状态变化时推送通知
 - ⚙️ **首次配置**: 首次运行时弹出设置窗口
@@ -17,11 +17,12 @@
 
 ## 安装方法
 
-### 方法一：直接使用
+### 方法一：直接下载 (推荐)
 
-1. 下载 Release 中的 `HAUTNetworkGuard.app`
-2. 将应用拖入 `/Applications` 文件夹
-3. 双击运行
+1. 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面
+2. 下载最新版本的 `HAUTNetworkGuard.dmg`
+3. 打开 DMG 文件，将应用拖入 Applications 文件夹
+4. 双击运行
 
 ### 方法二：从源码编译
 
@@ -68,7 +69,7 @@ HAUTNetworkGuard/
 │   ├── main.swift              # 应用入口
 │   ├── AppDelegate.swift       # 应用代理
 │   ├── Config.swift            # 配置管理
-│   ├── Encryption.swift        # SRUN3K 加密算法
+│   ├── Encryption.swift        # 加密模块
 │   ├── SrunAPI.swift           # API 封装
 │   ├── StatusBarController.swift # 菜单栏控制器
 │   ├── SettingsWindow.swift    # 设置窗口
@@ -80,17 +81,11 @@ HAUTNetworkGuard/
 └── uninstall.sh                # 卸载脚本
 ```
 
-## 技术说明
-
-- 基于 SRUN3K 协议实现
-- 用户名加密：ASCII +4，前缀 `{SRUN3}\r\n`
-- 密码加密：XOR 加密，密钥 "1234567890"
-
 ## 作者
 
 **YellowPeach**
 
-- 网站: https://ehaut.cn
+- 项目地址: https://github.com/yellowpeachxgp/HAUTNetworkGuard
 - QQ群: 789860526
 
 ## 许可证

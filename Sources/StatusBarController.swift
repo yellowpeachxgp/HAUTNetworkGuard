@@ -18,12 +18,16 @@ class StatusBarController: NSObject {
     private let offlineIcon = "wifi.slash"
     private let checkingIcon = "arrow.triangle.2.circlepath"
 
+    // 更新窗口引用
+    private var updateWindowController: UpdateWindowController?
+
     override init() {
         super.init()
         setupStatusItem()
         setupMenu()
         requestNotificationPermission()
         startMonitoring()
+        setupUpdateChecker()
     }
 }
 
@@ -108,6 +112,15 @@ extension StatusBarController {
         )
         aboutItem.target = self
         menu.addItem(aboutItem)
+
+        // 检查更新
+        let updateItem = NSMenuItem(
+            title: "检查更新...",
+            action: #selector(checkUpdateAction),
+            keyEquivalent: "u"
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -269,6 +282,11 @@ extension StatusBarController {
         controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    @objc private func checkUpdateAction() {
+        Logger.log("手动检查更新")
+        UpdateChecker.shared.checkForUpdate(force: true)
+    }
 }
 
 // MARK: - 通知
@@ -296,5 +314,30 @@ extension StatusBarController {
         )
 
         UNUserNotificationCenter.current().add(request)
+    }
+}
+
+// MARK: - 更新检测
+extension StatusBarController {
+    private func setupUpdateChecker() {
+        UpdateChecker.shared.onUpdateAvailable = { [weak self] releaseInfo in
+            self?.showUpdateWindow(releaseInfo)
+        }
+        UpdateChecker.shared.startPeriodicCheck()
+    }
+
+    private func showUpdateWindow(_ releaseInfo: ReleaseInfo) {
+        // 关闭之前的更新窗口
+        updateWindowController?.close()
+
+        updateWindowController = UpdateWindowController(
+            releaseInfo: releaseInfo,
+            onSkip: {
+                UpdateChecker.shared.skipVersion(releaseInfo.version)
+            }
+        )
+        updateWindowController?.showWindow(nil)
+        updateWindowController?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

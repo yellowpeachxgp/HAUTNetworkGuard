@@ -30,6 +30,8 @@ swiftc \
     "$SOURCES_DIR/Config.swift" \
     "$SOURCES_DIR/Encryption.swift" \
     "$SOURCES_DIR/SrunAPI.swift" \
+    "$SOURCES_DIR/UpdateChecker.swift" \
+    "$SOURCES_DIR/UpdateWindow.swift" \
     "$SOURCES_DIR/SettingsWindow.swift" \
     "$SOURCES_DIR/AboutWindow.swift" \
     "$SOURCES_DIR/StatusBarController.swift" \

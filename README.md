@@ -6,6 +6,7 @@
 
 - **自动监控**: 每3秒自动检测网络连接状态
 - **自动重连**: 检测到断线后自动尝试重新登录
+- **开机自启**: 支持开机自动启动，保持网络始终连接
 - **系统托盘**: 最小化到系统托盘/菜单栏，静默运行
 - **系统通知**: 登录/注销状态变化时推送通知
 - **配置保存**: 安全存储凭据，支持记住密码
@@ -38,10 +39,11 @@
 ## 使用说明
 
 1. **首次运行**: 会弹出设置窗口，输入学号和密码
-2. **状态图标**:
+2. **开机自启动**: 在设置中勾选"开机自启动"选项
+3. **状态图标**:
    - 绿色：已连接
    - 红色：未连接
-3. **右键菜单**:
+4. **右键菜单** (macOS):
    - 查看当前状态、IP、流量、在线时长
    - 手动登录/注销
    - 立即检测
@@ -66,9 +68,6 @@ cd macOS
 
 # 创建 DMG 安装包
 ./create-dmg.sh
-
-# 安装（可选，包含开机自启）
-./install.sh
 ```
 
 ### Windows
@@ -113,7 +112,8 @@ HAUTNetworkGuard/
 │   │   ├── SettingsWindow.swift
 │   │   ├── AboutWindow.swift
 │   │   ├── UpdateChecker.swift
-│   │   └── UpdateWindow.swift
+│   │   ├── UpdateWindow.swift
+│   │   └── LaunchManager.swift    # 开机自启动管理
 │   ├── Info.plist
 │   ├── build.sh
 │   ├── create-dmg.sh
@@ -124,7 +124,7 @@ HAUTNetworkGuard/
 │   ├── src/
 │   │   ├── main.rs            # 主程序 + egui GUI
 │   │   ├── api.rs             # 网络 API
-│   │   ├── config.rs          # 配置管理 (注册表)
+│   │   ├── config.rs          # 配置管理 (注册表 + 开机自启)
 │   │   ├── encryption.rs      # SRUN3K 加密
 │   │   └── update.rs          # 更新检测
 │   ├── Cargo.toml
@@ -142,6 +142,7 @@ HAUTNetworkGuard/
 | HTTP | URLSession | reqwest |
 | 加密 | SRUN3K | SRUN3K |
 | 配置存储 | UserDefaults | Windows 注册表 |
+| 开机自启 | LaunchAgent | 注册表 Run 键 |
 | 构建 | swiftc | cargo |
 
 ## 卸载
@@ -160,7 +161,9 @@ cd macOS
 ### Windows
 
 1. 删除 `HAUTNetworkGuard-Windows.exe`
-2. （可选）运行 `regedit`，删除 `HKEY_CURRENT_USER\Software\HAUTNetworkGuard`
+2. （可选）运行 `regedit`，删除：
+   - `HKEY_CURRENT_USER\Software\HAUTNetworkGuard`
+   - `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `HAUTNetworkGuard` 项
 
 ## 作者
 

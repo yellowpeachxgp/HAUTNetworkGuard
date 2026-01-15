@@ -52,6 +52,7 @@ struct HautApp {
     username_input: String,
     password_input: String,
     remember: bool,
+    auto_launch: bool,
 }
 
 impl HautApp {
@@ -63,6 +64,7 @@ impl HautApp {
         let username = s.config.username.clone();
         let password = s.config.password.clone();
         let remember = s.config.auto_save;
+        let auto_launch = s.config.auto_launch;
         let show_settings = !s.config.has_configured;
         drop(s);
 
@@ -74,6 +76,7 @@ impl HautApp {
             username_input: username,
             password_input: password,
             remember,
+            auto_launch,
         }
     }
 }
@@ -250,8 +253,23 @@ impl HautApp {
                         ui.end_row();
                     });
 
+                ui.add_space(10.0);
+                ui.separator();
                 ui.add_space(5.0);
-                ui.checkbox(&mut self.remember, "记住密码");
+
+                // 选项区域
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.remember, "记住密码");
+                    ui.add_space(20.0);
+                    ui.checkbox(&mut self.auto_launch, "开机自启动");
+                });
+
+                ui.add_space(5.0);
+                ui.label(
+                    egui::RichText::new("开启后，每次开机将自动启动并保持网络连接")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
 
                 ui.add_space(10.0);
                 ui.separator();
@@ -427,6 +445,7 @@ impl HautApp {
         state.config.username = self.username_input.clone();
         state.config.password = self.password_input.clone();
         state.config.auto_save = self.remember;
+        state.config.auto_launch = self.auto_launch;
         state.config.has_configured = true;
         let _ = state.config.save();
     }

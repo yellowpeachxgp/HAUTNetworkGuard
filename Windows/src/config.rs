@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub auto_save: bool,
     pub has_configured: bool,
     pub skipped_version: String,
+    pub auto_launch: bool,
 }
 
 #[cfg(target_os = "windows")]
@@ -17,6 +18,8 @@ mod platform {
     use winreg::RegKey;
 
     const REG_PATH: &str = r"Software\HAUTNetworkGuard";
+    const RUN_PATH: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    const APP_NAME: &str = "HAUTNetworkGuard";
 
     impl AppConfig {
         pub fn load() -> Self {
@@ -26,6 +29,9 @@ mod platform {
                 Err(_) => return Self::default(),
             };
 
+            // 检查是否已设置开机自启动
+            let auto_launch = Self::is_auto_launch_enabled();
+
             Self {
                 username: key.get_value("Username").unwrap_or_default(),
                 password: decode_password(
@@ -34,6 +40,7 @@ mod platform {
                 auto_save: key.get_value::<u32, _>("AutoSave").unwrap_or(0) == 1,
                 has_configured: key.get_value::<u32, _>("HasConfigured").unwrap_or(0) == 1,
                 skipped_version: key.get_value("SkippedVersion").unwrap_or_default(),
+                auto_launch,
             }
         }
 
@@ -47,7 +54,40 @@ mod platform {
             key.set_value("HasConfigured", &(self.has_configured as u32))?;
             key.set_value("SkippedVersion", &self.skipped_version)?;
 
+            // 设置开机自启动
+            Self::set_auto_launch(self.auto_launch);
+
             Ok(())
+        }
+
+        /// 检查是否已启用开机自启动
+        fn is_auto_launch_enabled() -> bool {
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+            if let Ok(key) = hkcu.open_subkey(RUN_PATH) {
+                key.get_value::<String, _>(APP_NAME).is_ok()
+            } else {
+                false
+            }
+        }
+
+        /// 设置开机自启动
+        fn set_auto_launch(enabled: bool) {
+            let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+
+            if enabled {
+                // 获取当前可执行文件路径
+                if let Ok(exe_path) = std::env::current_exe() {
+                    if let Ok(key) = hkcu.open_subkey_with_flags(RUN_PATH, KEY_WRITE) {
+                        let path_str = exe_path.to_string_lossy().to_string();
+                        let _ = key.set_value(APP_NAME, &path_str);
+                    }
+                }
+            } else {
+                // 删除自启动项
+                if let Ok(key) = hkcu.open_subkey_with_flags(RUN_PATH, KEY_WRITE) {
+                    let _ = key.delete_value(APP_NAME);
+                }
+            }
         }
     }
 

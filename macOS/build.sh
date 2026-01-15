@@ -34,6 +34,7 @@ swiftc \
     "$SOURCES_DIR/UpdateWindow.swift" \
     "$SOURCES_DIR/SettingsWindow.swift" \
     "$SOURCES_DIR/AboutWindow.swift" \
+    "$SOURCES_DIR/LaunchManager.swift" \
     "$SOURCES_DIR/StatusBarController.swift" \
     "$SOURCES_DIR/AppDelegate.swift" \
     "$SOURCES_DIR/main.swift"

@@ -1,6 +1,6 @@
 # HAUT Network Guard
 
-河南工业大学校园网自动登录工具 - 支持 macOS 和 Windows 双平台
+河南工业大学校园网自动登录工具 - 支持 macOS、Windows 和 OpenWrt 三平台
 
 ## 功能特性
 
@@ -20,6 +20,10 @@
 ### Windows
 - Windows 10 或更高版本
 - 64位系统
+
+### OpenWrt
+- OpenWrt 19.07 或更高版本
+- 需要安装: lua, curl, openssl-util
 
 ## 下载安装
 
@@ -41,6 +45,26 @@
 
 1. 下载 `HAUTNetworkGuard-Windows.exe`
 2. 双击运行即可（无需安装）
+
+### OpenWrt
+
+详见 [OpenWrt/README.md](OpenWrt/README.md)
+
+```bash
+# 安装依赖
+opkg update && opkg install lua curl openssl-util
+
+# 上传 OpenWrt 目录到路由器后执行
+chmod +x install.sh && ./install.sh
+
+# 配置
+uci set haut-network-guard.main.username='你的学号'
+uci set haut-network-guard.main.password='你的密码'
+uci commit haut-network-guard
+
+# 启动
+/etc/init.d/haut-network-guard start
+```
 
 ## 使用说明
 
@@ -136,20 +160,32 @@ HAUTNetworkGuard/
 │   ├── Cargo.toml
 │   └── build.rs
 │
+├── OpenWrt/                    # OpenWrt 版本 (Lua)
+│   ├── files/
+│   │   ├── usr/lib/haut-network-guard/
+│   │   │   ├── main.lua       # 主程序
+│   │   │   ├── api.lua        # API 模块
+│   │   │   └── crypto.lua     # 加密模块
+│   │   ├── etc/init.d/        # 服务脚本
+│   │   └── etc/config/        # UCI 配置
+│   ├── install.sh
+│   ├── uninstall.sh
+│   └── README.md
+│
 └── README.md
 ```
 
 ## 技术栈
 
-| 组件 | macOS | Windows |
-|-----|-------|---------|
-| 语言 | Swift | Rust |
-| GUI | AppKit | egui + eframe |
-| HTTP | URLSession | reqwest |
-| 加密 | SRUN3K | SRUN3K |
-| 配置存储 | UserDefaults | Windows 注册表 |
-| 开机自启 | LaunchAgent | 注册表 Run 键 |
-| 构建 | swiftc | cargo |
+| 组件 | macOS | Windows | OpenWrt |
+|-----|-------|---------|---------|
+| 语言 | Swift | Rust | Lua |
+| GUI | AppKit | egui + eframe | CLI |
+| HTTP | URLSession | reqwest | curl |
+| 加密 | SRUN3K | SRUN3K | SRUN Portal |
+| 配置存储 | UserDefaults | Windows 注册表 | UCI |
+| 开机自启 | LaunchAgent | 注册表 Run 键 | procd |
+| 构建 | swiftc | cargo | - |
 
 ## 卸载
 
@@ -170,6 +206,13 @@ cd macOS
 2. （可选）运行 `regedit`，删除：
    - `HKEY_CURRENT_USER\Software\HAUTNetworkGuard`
    - `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `HAUTNetworkGuard` 项
+
+### OpenWrt
+
+```bash
+cd OpenWrt
+./uninstall.sh
+```
 
 ## 作者
 

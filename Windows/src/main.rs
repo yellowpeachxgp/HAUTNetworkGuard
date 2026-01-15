@@ -48,6 +48,7 @@ struct HautApp {
     state: Arc<Mutex<AppState>>,
     show_settings: bool,
     show_update: bool,
+    show_about: bool,
     update_result: UpdateCheckResult,
     username_input: String,
     password_input: String,
@@ -72,6 +73,7 @@ impl HautApp {
             state,
             show_settings,
             show_update: false,
+            show_about: false,
             update_result: UpdateCheckResult::Checking,
             username_input: username,
             password_input: password,
@@ -131,6 +133,10 @@ impl eframe::App for HautApp {
 
         if self.show_update {
             self.show_update_window(ctx);
+        }
+
+        if self.show_about {
+            self.show_about_window(ctx);
         }
 
         self.show_main_panel(ctx);
@@ -212,7 +218,7 @@ impl HautApp {
                     self.check_update();
                 }
                 if ui.button("关于").clicked() {
-                    let _ = open::that("https://github.com/yellowpeachxgp/HAUTNetworkGuard");
+                    self.show_about = true;
                 }
             });
 
@@ -437,6 +443,70 @@ impl HautApp {
                         });
                     }
                 }
+            });
+    }
+
+    fn show_about_window(&mut self, ctx: &egui::Context) {
+        egui::Window::new("关于")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .default_width(320.0)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(10.0);
+                    ui.heading("HAUT Network Guard");
+                    ui.add_space(5.0);
+                    ui.label(
+                        egui::RichText::new("河南工业大学校园网自动登录工具")
+                            .color(egui::Color32::GRAY),
+                    );
+                });
+
+                ui.add_space(15.0);
+                ui.separator();
+                ui.add_space(10.0);
+
+                egui::Grid::new("about_grid")
+                    .num_columns(2)
+                    .spacing([20.0, 8.0])
+                    .show(ui, |ui| {
+                        ui.label("版本:");
+                        ui.label(format!("v{}", CURRENT_VERSION));
+                        ui.end_row();
+
+                        ui.label("作者:");
+                        ui.label("YellowPeach");
+                        ui.end_row();
+
+                        ui.label("QQ群:");
+                        if ui.link("789860526").clicked() {
+                            let _ = open::that(
+                                "https://qm.qq.com/q/wlNBnpMVfE"
+                            );
+                        }
+                        ui.end_row();
+
+                        ui.label("项目主页:");
+                        if ui.link("GitHub").clicked() {
+                            let _ = open::that(
+                                "https://github.com/yellowpeachxgp/HAUTNetworkGuard"
+                            );
+                        }
+                        ui.end_row();
+                    });
+
+                ui.add_space(15.0);
+                ui.separator();
+                ui.add_space(10.0);
+
+                ui.vertical_centered(|ui| {
+                    if ui.button("  关闭  ").clicked() {
+                        self.show_about = false;
+                    }
+                });
+
+                ui.add_space(5.0);
             });
     }
 

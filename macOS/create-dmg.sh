@@ -37,6 +37,9 @@ mkdir -p "$TMP_DIR"
 # 复制应用到临时目录
 cp -R "$APP_BUNDLE" "$TMP_DIR/"
 
+# 移除扩展属性，避免 Gatekeeper 标记为"已损坏"
+xattr -cr "$TMP_DIR/$APP_NAME.app"
+
 # 创建 Applications 快捷方式
 ln -s /Applications "$TMP_DIR/Applications"
 

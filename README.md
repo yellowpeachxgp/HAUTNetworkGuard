@@ -31,6 +31,12 @@
 2. 打开 DMG 文件，将应用拖入 Applications 文件夹
 3. 双击运行
 
+> **注意**: 如果首次打开时提示"文件已损坏"或"无法验证开发者"，请在终端执行：
+> ```bash
+> xattr -cr /Applications/HAUTNetworkGuard.app
+> ```
+> 然后重新打开应用即可。
+
 ### Windows
 
 1. 下载 `HAUTNetworkGuard-Windows.exe`

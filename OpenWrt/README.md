@@ -24,7 +24,21 @@ opkg update
 opkg install lua curl openssl-util
 ```
 
-## 安装
+## 一键安装（推荐）
+
+在路由器终端执行：
+
+```bash
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
+```
+
+或使用 curl：
+
+```bash
+curl -sSL https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
+```
+
+## 手动安装
 
 ```bash
 # 上传文件到路由器后执行
@@ -77,6 +91,14 @@ logread | grep haut-network-guard
 ```
 
 ## 卸载
+
+一键卸载：
+
+```bash
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/uninstall-online.sh | sh
+```
+
+或手动卸载：
 
 ```bash
 chmod +x uninstall.sh

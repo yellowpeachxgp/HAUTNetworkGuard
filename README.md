@@ -50,19 +50,16 @@
 
 详见 [OpenWrt/README.md](OpenWrt/README.md)
 
+**一键安装：**
 ```bash
-# 安装依赖
-opkg update && opkg install lua curl openssl-util
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
+```
 
-# 上传 OpenWrt 目录到路由器后执行
-chmod +x install.sh && ./install.sh
-
-# 配置
+**配置并启动：**
+```bash
 uci set haut-network-guard.main.username='你的学号'
 uci set haut-network-guard.main.password='你的密码'
 uci commit haut-network-guard
-
-# 启动
 /etc/init.d/haut-network-guard start
 ```
 

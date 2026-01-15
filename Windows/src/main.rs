@@ -524,16 +524,32 @@ fn main() -> eframe::Result<()> {
         let api = SrunApi::new();
         loop {
             let status = api.check_status();
+            let should_login;
+            let username;
+            let password;
+
             {
                 let mut s = state_clone.lock().unwrap();
-                let was_online = s.status.is_online;
                 s.status = status.clone();
 
-                // 离线时自动登录
-                if !status.is_online && s.config.has_configured && was_online {
-                    let _ = api.login(&s.config.username, &s.config.password);
+                // 离线且已配置时自动登录
+                should_login = !status.is_online && s.config.has_configured;
+                username = s.config.username.clone();
+                password = s.config.password.clone();
+            }
+
+            // 在锁外执行登录，避免阻塞 GUI
+            if should_login && !username.is_empty() && !password.is_empty() {
+                let login_result = api.login(&username, &password);
+                if login_result.success {
+                    // 登录成功后立即刷新状态
+                    thread::sleep(Duration::from_millis(500));
+                    let new_status = api.check_status();
+                    let mut s = state_clone.lock().unwrap();
+                    s.status = new_status;
                 }
             }
+
             thread::sleep(Duration::from_secs(3));
         }
     });

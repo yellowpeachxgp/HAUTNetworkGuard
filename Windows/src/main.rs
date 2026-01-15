@@ -12,18 +12,26 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use eframe::egui;
+use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 
 pub use api::{NetworkStatus, SrunApi};
 pub use config::AppConfig;
 pub use update::{ReleaseInfo, UpdateChecker, CURRENT_VERSION};
+
+/// 更新检测结果
+#[derive(Clone)]
+enum UpdateCheckResult {
+    Checking,
+    HasUpdate(ReleaseInfo),
+    NoUpdate(ReleaseInfo),
+    Error(String),
+}
 
 /// 共享应用状态
 #[derive(Clone)]
 struct AppState {
     status: NetworkStatus,
     config: AppConfig,
-    is_checking: bool,
 }
 
 impl Default for AppState {
@@ -31,7 +39,6 @@ impl Default for AppState {
         Self {
             status: NetworkStatus::default(),
             config: AppConfig::load(),
-            is_checking: false,
         }
     }
 }
@@ -39,17 +46,19 @@ impl Default for AppState {
 /// 主应用
 struct HautApp {
     state: Arc<Mutex<AppState>>,
-    api: SrunApi,
     show_settings: bool,
     show_update: bool,
-    update_info: Option<ReleaseInfo>,
+    update_result: UpdateCheckResult,
     username_input: String,
     password_input: String,
     remember: bool,
 }
 
 impl HautApp {
-    fn new(state: Arc<Mutex<AppState>>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, state: Arc<Mutex<AppState>>) -> Self {
+        // 配置中文字体
+        setup_fonts(&cc.egui_ctx);
+
         let s = state.lock().unwrap();
         let username = s.config.username.clone();
         let password = s.config.password.clone();
@@ -59,15 +68,54 @@ impl HautApp {
 
         Self {
             state,
-            api: SrunApi::new(),
             show_settings,
             show_update: false,
-            update_info: None,
+            update_result: UpdateCheckResult::Checking,
             username_input: username,
             password_input: password,
             remember,
         }
     }
+}
+
+/// 配置中文字体
+fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
+
+    // 尝试加载 Windows 系统中文字体
+    #[cfg(target_os = "windows")]
+    {
+        // Microsoft YaHei 字体路径
+        let font_paths = [
+            "C:\\Windows\\Fonts\\msyh.ttc",
+            "C:\\Windows\\Fonts\\msyh.ttf",
+            "C:\\Windows\\Fonts\\simhei.ttf",
+            "C:\\Windows\\Fonts\\simsun.ttc",
+        ];
+
+        for path in &font_paths {
+            if let Ok(font_data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "chinese".to_owned(),
+                    FontData::from_owned(font_data).into(),
+                );
+                // 将中文字体添加到字体族
+                fonts
+                    .families
+                    .entry(FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, "chinese".to_owned());
+                fonts
+                    .families
+                    .entry(FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, "chinese".to_owned());
+                break;
+            }
+        }
+    }
+
+    ctx.set_fonts(fonts);
 }
 
 impl eframe::App for HautApp {
@@ -89,47 +137,90 @@ impl eframe::App for HautApp {
 impl HautApp {
     fn show_main_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("HAUT Network Guard");
-            ui.label("河南工业大学校园网自动登录工具");
+            ui.vertical_centered(|ui| {
+                ui.add_space(10.0);
+                ui.heading("HAUT Network Guard");
+                ui.label("河南工业大学校园网自动登录工具");
+            });
+
+            ui.add_space(10.0);
             ui.separator();
+            ui.add_space(10.0);
 
             let state = self.state.lock().unwrap();
             let status = &state.status;
 
-            // 状态显示
-            ui.horizontal(|ui| {
-                ui.label("状态:");
-                if status.is_online {
-                    ui.colored_label(egui::Color32::GREEN, "● 在线");
+            // 状态卡片
+            egui::Frame::none()
+                .fill(if status.is_online {
+                    egui::Color32::from_rgb(230, 255, 230)
                 } else {
-                    ui.colored_label(egui::Color32::RED, "● 离线");
-                }
-            });
+                    egui::Color32::from_rgb(255, 230, 230)
+                })
+                .rounding(8.0)
+                .inner_margin(12.0)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("状态:");
+                        if status.is_online {
+                            ui.colored_label(egui::Color32::DARK_GREEN, "● 在线");
+                        } else {
+                            ui.colored_label(egui::Color32::DARK_RED, "● 离线");
+                        }
+                    });
 
-            if status.is_online {
-                ui.horizontal(|ui| {
-                    ui.label("IP 地址:");
-                    ui.label(&status.ip_address);
+                    if status.is_online {
+                        ui.add_space(8.0);
+                        egui::Grid::new("status_grid")
+                            .num_columns(2)
+                            .spacing([20.0, 6.0])
+                            .show(ui, |ui| {
+                                ui.label("IP 地址:");
+                                ui.label(&status.ip_address);
+                                ui.end_row();
+
+                                ui.label("已用流量:");
+                                ui.label(format_bytes(status.used_bytes));
+                                ui.end_row();
+
+                                ui.label("在线时长:");
+                                ui.label(format_duration(status.online_seconds));
+                                ui.end_row();
+
+                                ui.label("用户名:");
+                                ui.label(&status.username);
+                                ui.end_row();
+                            });
+                    }
                 });
-                ui.horizontal(|ui| {
-                    ui.label("已用流量:");
-                    ui.label(format_bytes(status.used_bytes));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("在线时长:");
-                    ui.label(format_duration(status.online_seconds));
-                });
-            }
+
             drop(state);
 
+            ui.add_space(15.0);
             ui.separator();
+            ui.add_space(10.0);
+
+            // 操作按钮
             ui.horizontal(|ui| {
-                if ui.button("设置").clicked() {
+                if ui.button("  设置  ").clicked() {
                     self.show_settings = true;
                 }
                 if ui.button("检查更新").clicked() {
                     self.check_update();
                 }
+                if ui.button("关于").clicked() {
+                    let _ = open::that("https://github.com/yellowpeachxgp/HAUTNetworkGuard");
+                }
+            });
+
+            // 底部版本信息
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                ui.add_space(5.0);
+                ui.label(
+                    egui::RichText::new(format!("v{} by YellowPeach", CURRENT_VERSION))
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
             });
         });
     }
@@ -138,24 +229,41 @@ impl HautApp {
         egui::Window::new("账号设置")
             .collapsible(false)
             .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("学号:");
-                    ui.text_edit_singleline(&mut self.username_input);
-                });
-                ui.horizontal(|ui| {
-                    ui.label("密码:");
-                    ui.add(egui::TextEdit::singleline(&mut self.password_input).password(true));
-                });
+                ui.add_space(10.0);
+
+                egui::Grid::new("settings_grid")
+                    .num_columns(2)
+                    .spacing([10.0, 10.0])
+                    .show(ui, |ui| {
+                        ui.label("学号:");
+                        ui.add(egui::TextEdit::singleline(&mut self.username_input).desired_width(200.0));
+                        ui.end_row();
+
+                        ui.label("密码:");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.password_input)
+                                .password(true)
+                                .desired_width(200.0),
+                        );
+                        ui.end_row();
+                    });
+
+                ui.add_space(5.0);
                 ui.checkbox(&mut self.remember, "记住密码");
 
+                ui.add_space(10.0);
                 ui.separator();
+                ui.add_space(10.0);
+
                 ui.horizontal(|ui| {
-                    if ui.button("保存").clicked() {
+                    if ui.button("  保存  ").clicked() {
                         self.save_settings();
                         self.show_settings = false;
                     }
-                    if ui.button("取消").clicked() {
+                    ui.add_space(10.0);
+                    if ui.button("  取消  ").clicked() {
                         self.show_settings = false;
                     }
                 });
@@ -166,38 +274,149 @@ impl HautApp {
         egui::Window::new("检查更新")
             .collapsible(false)
             .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .default_width(400.0)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("当前版本:");
-                    ui.label(CURRENT_VERSION);
-                });
+                match &self.update_result {
+                    UpdateCheckResult::Checking => {
+                        ui.vertical_centered(|ui| {
+                            ui.add_space(20.0);
+                            ui.spinner();
+                            ui.add_space(10.0);
+                            ui.label("正在检查更新...");
+                            ui.add_space(20.0);
+                        });
+                    }
 
-                if let Some(info) = &self.update_info {
-                    ui.horizontal(|ui| {
-                        ui.label("最新版本:");
-                        ui.label(&info.tag_name);
-                    });
-                    ui.separator();
-                    ui.label("更新日志:");
-                    egui::ScrollArea::vertical()
-                        .max_height(150.0)
-                        .show(ui, |ui| {
-                            ui.label(&info.body);
+                    UpdateCheckResult::HasUpdate(info) => {
+                        // 有新版本
+                        ui.vertical_centered(|ui| {
+                            ui.colored_label(egui::Color32::from_rgb(0, 120, 215), "⬇ 发现新版本");
                         });
 
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        if ui.button("立即更新").clicked() {
-                            let _ = open::that(&info.html_url);
-                        }
-                        if ui.button("稍后更新").clicked() {
-                            self.show_update = false;
-                        }
-                    });
-                } else {
-                    ui.label("已是最新版本");
-                    if ui.button("关闭").clicked() {
-                        self.show_update = false;
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        egui::Grid::new("version_grid")
+                            .num_columns(2)
+                            .spacing([20.0, 6.0])
+                            .show(ui, |ui| {
+                                ui.label("当前版本:");
+                                ui.label(format!("v{}", CURRENT_VERSION));
+                                ui.end_row();
+
+                                ui.label("最新版本:");
+                                ui.colored_label(egui::Color32::DARK_GREEN, &info.tag_name);
+                                ui.end_row();
+                            });
+
+                        ui.add_space(10.0);
+                        ui.label("更新日志:");
+                        egui::ScrollArea::vertical()
+                            .max_height(150.0)
+                            .show(ui, |ui| {
+                                ui.label(simplify_release_notes(&info.body));
+                            });
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        ui.horizontal(|ui| {
+                            if ui.button("立即更新").clicked() {
+                                let _ = open::that(&info.html_url);
+                                self.show_update = false;
+                            }
+                            ui.add_space(10.0);
+                            if ui.button("稍后提醒").clicked() {
+                                self.show_update = false;
+                            }
+                        });
+                    }
+
+                    UpdateCheckResult::NoUpdate(info) => {
+                        // 已是最新版本
+                        ui.vertical_centered(|ui| {
+                            ui.colored_label(egui::Color32::DARK_GREEN, "✓ 已是最新版本");
+                        });
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        egui::Grid::new("version_grid")
+                            .num_columns(2)
+                            .spacing([20.0, 6.0])
+                            .show(ui, |ui| {
+                                ui.label("当前版本:");
+                                ui.label(format!("v{}", CURRENT_VERSION));
+                                ui.end_row();
+
+                                ui.label("最新版本:");
+                                ui.label(&info.tag_name);
+                                ui.end_row();
+                            });
+
+                        ui.add_space(10.0);
+                        ui.label("当前版本更新日志:");
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                ui.label(simplify_release_notes(&info.body));
+                            });
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        ui.horizontal(|ui| {
+                            if ui.button("  关闭  ").clicked() {
+                                self.show_update = false;
+                            }
+                        });
+                    }
+
+                    UpdateCheckResult::Error(msg) => {
+                        // 检测失败
+                        ui.vertical_centered(|ui| {
+                            ui.colored_label(egui::Color32::DARK_RED, "⚠ 检测更新失败");
+                        });
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        ui.label(format!("当前版本: v{}", CURRENT_VERSION));
+                        ui.add_space(10.0);
+
+                        egui::Frame::none()
+                            .fill(egui::Color32::from_rgb(255, 240, 240))
+                            .rounding(4.0)
+                            .inner_margin(10.0)
+                            .show(ui, |ui| {
+                                ui.label("无法连接到 GitHub 服务器获取版本信息。");
+                                ui.add_space(5.0);
+                                ui.label("可能的原因:");
+                                ui.label("• 网络连接问题");
+                                ui.label("• GitHub 服务暂时不可用");
+                                ui.add_space(5.0);
+                                ui.label(format!("错误详情: {}", msg));
+                            });
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        ui.horizontal(|ui| {
+                            if ui.button("  重试  ").clicked() {
+                                self.check_update();
+                            }
+                            ui.add_space(10.0);
+                            if ui.button("  关闭  ").clicked() {
+                                self.show_update = false;
+                            }
+                        });
                     }
                 }
             });
@@ -213,15 +432,45 @@ impl HautApp {
     }
 
     fn check_update(&mut self) {
-        let checker = UpdateChecker::new();
-        let (has_update, info) = checker.has_update();
-        if has_update {
-            self.update_info = Some(info);
-        } else {
-            self.update_info = None;
-        }
+        self.update_result = UpdateCheckResult::Checking;
         self.show_update = true;
+
+        let checker = UpdateChecker::new();
+        match checker.check() {
+            Some(info) => {
+                let latest = info.tag_name.trim_start_matches('v');
+                let current = CURRENT_VERSION;
+                if compare_versions(latest, current) {
+                    self.update_result = UpdateCheckResult::HasUpdate(info);
+                } else {
+                    self.update_result = UpdateCheckResult::NoUpdate(info);
+                }
+            }
+            None => {
+                self.update_result = UpdateCheckResult::Error("无法获取版本信息".to_string());
+            }
+        }
     }
+}
+
+/// 简化更新说明
+fn simplify_release_notes(notes: &str) -> String {
+    let mut result = notes.to_string();
+    result = result.replace("### ", "▸ ");
+    result = result.replace("## ", "■ ");
+    result = result.replace("# ", "● ");
+    result = result.replace("- ", "  • ");
+    result.trim().to_string()
+}
+
+/// 比较版本号
+fn compare_versions(latest: &str, current: &str) -> bool {
+    let parse = |v: &str| -> Vec<u32> {
+        v.split('.').filter_map(|s| s.parse().ok()).collect()
+    };
+    let l = parse(latest);
+    let c = parse(current);
+    l > c
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -272,14 +521,15 @@ fn main() -> eframe::Result<()> {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 300.0])
-            .with_min_inner_size([300.0, 200.0]),
+            .with_inner_size([420.0, 350.0])
+            .with_min_inner_size([350.0, 280.0])
+            .with_title("HAUT Network Guard"),
         ..Default::default()
     };
 
     eframe::run_native(
         "HAUT Network Guard",
         options,
-        Box::new(|_cc| Ok(Box::new(HautApp::new(state)))),
+        Box::new(|cc| Ok(Box::new(HautApp::new(cc, state)))),
     )
 }

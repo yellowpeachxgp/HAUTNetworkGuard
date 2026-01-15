@@ -3,7 +3,7 @@
 use serde::Deserialize;
 
 const GITHUB_API: &str = "https://api.github.com/repos/yellowpeachxgp/HAUTNetworkGuard/releases/latest";
-pub const CURRENT_VERSION: &str = "1.1.5";
+pub const CURRENT_VERSION: &str = "1.1.6";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReleaseInfo {

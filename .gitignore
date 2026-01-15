@@ -3,6 +3,10 @@
 *.swp
 *~
 
+# AI 文档 (本地参考用)
+AIREADME.md
+*/AIREADME.md
+
 # macOS build
 macOS/build/
 macOS/*.dmg

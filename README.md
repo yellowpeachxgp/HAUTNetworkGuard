@@ -9,16 +9,7 @@
 - **系统托盘**: 最小化到系统托盘/菜单栏，静默运行
 - **系统通知**: 登录/注销状态变化时推送通知
 - **配置保存**: 安全存储凭据，支持记住密码
-- **自动更新**: 检测 GitHub Release 新版本
-
-### 平台特有功能
-
-| 功能 | macOS | Windows |
-|-----|-------|---------|
-| 系统托盘 | 菜单栏图标 | 系统托盘图标 |
-| 可视化面板 | - | 详细网络状态面板 |
-| 开机自启 | LaunchAgent | - |
-| 配置存储 | UserDefaults | Windows 注册表 |
+- **更新检测**: 可视化更新窗口，显示版本号和更新日志
 
 ## 系统要求
 
@@ -31,26 +22,25 @@
 
 ## 下载安装
 
+前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面下载最新版本。
+
 ### macOS
 
-1. 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面
-2. 下载最新版本的 `HAUTNetworkGuard.dmg`
-3. 打开 DMG 文件，将应用拖入 Applications 文件夹
-4. 双击运行
+1. 下载 `HAUTNetworkGuard-macOS.dmg`
+2. 打开 DMG 文件，将应用拖入 Applications 文件夹
+3. 双击运行
 
 ### Windows
 
-1. 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面
-2. 下载最新版本的 `HAUTNetworkGuard.exe`
-3. 双击运行即可
+1. 下载 `HAUTNetworkGuard-Windows.exe`
+2. 双击运行即可（无需安装）
 
 ## 使用说明
 
 1. **首次运行**: 会弹出设置窗口，输入学号和密码
 2. **状态图标**:
-   - 绿色/WiFi图标：已连接
-   - 红色/斜杠WiFi：未连接
-   - 灰色/循环箭头：检测中
+   - 绿色：已连接
+   - 红色：未连接
 3. **右键菜单**:
    - 查看当前状态、IP、流量、在线时长
    - 手动登录/注销
@@ -58,14 +48,13 @@
    - 修改账号设置
    - 检查更新
 
-### Windows 可视化面板
+### 更新检测窗口
 
-Windows 版本新增可视化面板功能，可在托盘菜单中打开，显示：
-- 连接状态和在线指示
-- IP 地址
-- 已用流量（带进度条）
-- 在线时长
-- 快捷操作按钮
+点击"检查更新"后，会弹出更新窗口显示：
+- 当前版本号
+- 最新版本号
+- GitHub Release 更新日志
+- 立即更新 / 稍后更新 按钮
 
 ## 从源码构建
 
@@ -75,26 +64,38 @@ Windows 版本新增可视化面板功能，可在托盘菜单中打开，显示
 cd macOS
 ./build.sh
 
+# 创建 DMG 安装包
+./create-dmg.sh
+
 # 安装（可选，包含开机自启）
 ./install.sh
 ```
 
 ### Windows
 
-需要安装：
-- Visual Studio 2019/2022 (含 C++ 桌面开发工作负载)
-- CMake 3.20+
+需要安装 Rust 工具链：
 
-```batch
+```bash
+# 安装 Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 构建
 cd Windows
+cargo build --release
 
-:: 方式一：使用构建脚本
-build.bat
+# 输出位于 target/release/haut-network-guard.exe
+```
 
-:: 方式二：使用 CMake
-mkdir build && cd build
-cmake -G "Visual Studio 17 2022" -A x64 ..
-cmake --build . --config Release
+#### 从 macOS 交叉编译 Windows
+
+```bash
+# 安装 Windows 目标和 mingw-w64
+rustup target add x86_64-pc-windows-gnu
+brew install mingw-w64
+
+# 交叉编译
+cd Windows
+cargo build --release --target x86_64-pc-windows-gnu
 ```
 
 ## 项目结构
@@ -111,36 +112,37 @@ HAUTNetworkGuard/
 │   │   ├── StatusBarController.swift
 │   │   ├── SettingsWindow.swift
 │   │   ├── AboutWindow.swift
-│   │   └── UpdateChecker.swift
+│   │   ├── UpdateChecker.swift
+│   │   └── UpdateWindow.swift
 │   ├── Info.plist
 │   ├── build.sh
+│   ├── create-dmg.sh
 │   ├── install.sh
 │   └── uninstall.sh
 │
-├── Windows/                    # Windows 版本 (C++)
+├── Windows/                    # Windows 版本 (Rust)
 │   ├── src/
-│   │   ├── main.cpp
-│   │   ├── Application.h/cpp
-│   │   ├── core/               # 核心业务
-│   │   ├── config/             # 配置管理
-│   │   ├── ui/                 # 界面
-│   │   ├── utils/              # 工具类
-│   │   └── resource/           # 资源文件
-│   ├── CMakeLists.txt
-│   └── build.bat
+│   │   ├── main.rs            # 主程序 + egui GUI
+│   │   ├── api.rs             # 网络 API
+│   │   ├── config.rs          # 配置管理 (注册表)
+│   │   ├── encryption.rs      # SRUN3K 加密
+│   │   └── update.rs          # 更新检测
+│   ├── Cargo.toml
+│   └── build.rs
 │
-└── README.md                   # 本文件
+└── README.md
 ```
 
 ## 技术栈
 
 | 组件 | macOS | Windows |
 |-----|-------|---------|
-| 语言 | Swift | C++17 |
-| 框架 | AppKit | Win32 API |
-| HTTP | URLSession | WinHTTP |
+| 语言 | Swift | Rust |
+| GUI | AppKit | egui + eframe |
+| HTTP | URLSession | reqwest |
 | 加密 | SRUN3K | SRUN3K |
-| 构建 | swiftc | CMake + MSVC |
+| 配置存储 | UserDefaults | Windows 注册表 |
+| 构建 | swiftc | cargo |
 
 ## 卸载
 
@@ -157,8 +159,8 @@ cd macOS
 
 ### Windows
 
-1. 删除 `HAUTNetworkGuard.exe`
-2. 运行 `regedit`，删除 `HKEY_CURRENT_USER\Software\HAUTNetworkGuard`
+1. 删除 `HAUTNetworkGuard-Windows.exe`
+2. （可选）运行 `regedit`，删除 `HKEY_CURRENT_USER\Software\HAUTNetworkGuard`
 
 ## 作者
 

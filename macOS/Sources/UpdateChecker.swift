@@ -8,6 +8,13 @@ struct ReleaseInfo {
     let releaseNotes: String
 }
 
+/// 更新检测结果
+enum UpdateCheckResult {
+    case hasUpdate(ReleaseInfo)
+    case noUpdate(ReleaseInfo)  // 包含当前最新版本信息
+    case error(String)
+}
+
 /// 更新检测器
 class UpdateChecker {
     static let shared = UpdateChecker()
@@ -25,8 +32,11 @@ class UpdateChecker {
     private let session: URLSession
     private var checkTimer: Timer?
 
-    // 更新回调
+    // 后台自动检测回调（只在有更新时触发）
     var onUpdateAvailable: ((ReleaseInfo) -> Void)?
+
+    // 手动检测完成回调（无论是否有更新都触发）
+    var onCheckComplete: ((UpdateCheckResult) -> Void)?
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -38,13 +48,13 @@ class UpdateChecker {
     func startPeriodicCheck() {
         // 立即检测一次（如果距离上次检测超过1天）
         if shouldCheckNow() {
-            checkForUpdate()
+            checkForUpdate(isManual: false)
         }
 
         // 设置定时器，每小时检查一次是否需要检测更新
         checkTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             if self?.shouldCheckNow() == true {
-                self?.checkForUpdate()
+                self?.checkForUpdate(isManual: false)
             }
         }
     }
@@ -62,9 +72,19 @@ class UpdateChecker {
         return (now - lastCheck) >= checkInterval
     }
 
-    /// 手动检测更新
-    func checkForUpdate(force: Bool = false) {
-        guard let url = URL(string: releaseAPIURL) else { return }
+    /// 检测更新
+    /// - Parameters:
+    ///   - isManual: 是否为手动检测（手动检测会触发 onCheckComplete 回调）
+    ///   - force: 是否强制检测（忽略跳过的版本）
+    func checkForUpdate(isManual: Bool = true, force: Bool = false) {
+        guard let url = URL(string: releaseAPIURL) else {
+            if isManual {
+                DispatchQueue.main.async {
+                    self.onCheckComplete?(.error("无效的 API 地址"))
+                }
+            }
+            return
+        }
 
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
@@ -73,30 +93,47 @@ class UpdateChecker {
         Logger.log("检测更新...")
 
         let task = session.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self else { return }
+
             // 记录检测时间
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: self?.lastCheckKey ?? "")
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: self.lastCheckKey)
 
             if let error = error {
                 Logger.log("检测更新失败: \(error.localizedDescription)")
+                if isManual {
+                    DispatchQueue.main.async {
+                        self.onCheckComplete?(.error("网络请求失败: \(error.localizedDescription)"))
+                    }
+                }
                 return
             }
 
             guard let data = data else {
                 Logger.log("检测更新失败: 无响应数据")
+                if isManual {
+                    DispatchQueue.main.async {
+                        self.onCheckComplete?(.error("服务器无响应"))
+                    }
+                }
                 return
             }
 
-            self?.parseReleaseResponse(data, force: force)
+            self.parseReleaseResponse(data, isManual: isManual, force: force)
         }
         task.resume()
     }
 
     /// 解析 Release 响应
-    private func parseReleaseResponse(_ data: Data, force: Bool) {
+    private func parseReleaseResponse(_ data: Data, isManual: Bool, force: Bool) {
         do {
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String else {
                 Logger.log("解析 Release 信息失败")
+                if isManual {
+                    DispatchQueue.main.async {
+                        self.onCheckComplete?(.error("解析版本信息失败"))
+                    }
+                }
                 return
             }
 
@@ -105,45 +142,62 @@ class UpdateChecker {
 
             Logger.log("当前版本: \(AppConfig.version), 最新版本: \(latestVersion)")
 
+            // 获取下载链接
+            var downloadURL: String? = nil
+            if let assets = json["assets"] as? [[String: Any]] {
+                for asset in assets {
+                    if let name = asset["name"] as? String,
+                       name.hasSuffix(".dmg"),
+                       let url = asset["browser_download_url"] as? String {
+                        downloadURL = url
+                        break
+                    }
+                }
+            }
+
+            let releaseInfo = ReleaseInfo(
+                version: latestVersion,
+                htmlURL: json["html_url"] as? String ?? "",
+                downloadURL: downloadURL,
+                releaseNotes: json["body"] as? String ?? "暂无更新说明"
+            )
+
             // 比较版本号
-            if isNewerVersion(latestVersion, than: AppConfig.version) {
+            let hasUpdate = isNewerVersion(latestVersion, than: AppConfig.version)
+
+            if hasUpdate {
                 // 检查是否跳过了此版本
                 let skippedVersion = UserDefaults.standard.string(forKey: skippedVersionKey)
-                if !force && skippedVersion == latestVersion {
+                if !force && !isManual && skippedVersion == latestVersion {
                     Logger.log("用户已跳过此版本: \(latestVersion)")
                     return
                 }
 
-                // 获取下载链接
-                var downloadURL: String? = nil
-                if let assets = json["assets"] as? [[String: Any]] {
-                    for asset in assets {
-                        if let name = asset["name"] as? String,
-                           name.hasSuffix(".dmg"),
-                           let url = asset["browser_download_url"] as? String {
-                            downloadURL = url
-                            break
-                        }
-                    }
-                }
-
-                let releaseInfo = ReleaseInfo(
-                    version: latestVersion,
-                    htmlURL: json["html_url"] as? String ?? "",
-                    downloadURL: downloadURL,
-                    releaseNotes: json["body"] as? String ?? ""
-                )
-
                 Logger.log("发现新版本: \(latestVersion)")
 
                 DispatchQueue.main.async {
-                    self.onUpdateAvailable?(releaseInfo)
+                    // 后台自动检测回调
+                    if !isManual {
+                        self.onUpdateAvailable?(releaseInfo)
+                    }
+                    // 手动检测回调
+                    self.onCheckComplete?(.hasUpdate(releaseInfo))
                 }
             } else {
                 Logger.log("已是最新版本")
+                if isManual {
+                    DispatchQueue.main.async {
+                        self.onCheckComplete?(.noUpdate(releaseInfo))
+                    }
+                }
             }
         } catch {
             Logger.log("解析 Release JSON 失败: \(error.localizedDescription)")
+            if isManual {
+                DispatchQueue.main.async {
+                    self.onCheckComplete?(.error("解析数据失败: \(error.localizedDescription)"))
+                }
+            }
         }
     }
 

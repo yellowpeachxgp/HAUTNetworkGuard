@@ -285,7 +285,7 @@ extension StatusBarController {
 
     @objc private func checkUpdateAction() {
         Logger.log("手动检查更新")
-        UpdateChecker.shared.checkForUpdate(force: true)
+        UpdateChecker.shared.checkForUpdate(isManual: true, force: true)
     }
 }
 
@@ -320,21 +320,33 @@ extension StatusBarController {
 // MARK: - 更新检测
 extension StatusBarController {
     private func setupUpdateChecker() {
+        // 后台自动检测回调（只在有更新时触发）
         UpdateChecker.shared.onUpdateAvailable = { [weak self] releaseInfo in
-            self?.showUpdateWindow(releaseInfo)
+            self?.showUpdateWindow(result: .hasUpdate(releaseInfo))
         }
+
+        // 手动检测完成回调（无论是否有更新都触发）
+        UpdateChecker.shared.onCheckComplete = { [weak self] result in
+            self?.showUpdateWindow(result: result)
+        }
+
         UpdateChecker.shared.startPeriodicCheck()
     }
 
-    private func showUpdateWindow(_ releaseInfo: ReleaseInfo) {
+    private func showUpdateWindow(result: UpdateCheckResult) {
         // 关闭之前的更新窗口
         updateWindowController?.close()
 
-        updateWindowController = UpdateWindowController(
-            releaseInfo: releaseInfo,
-            onSkip: {
-                UpdateChecker.shared.skipVersion(releaseInfo.version)
+        var onSkip: (() -> Void)? = nil
+        if case .hasUpdate(let info) = result {
+            onSkip = {
+                UpdateChecker.shared.skipVersion(info.version)
             }
+        }
+
+        updateWindowController = UpdateWindowController(
+            result: result,
+            onSkip: onSkip
         )
         updateWindowController?.showWindow(nil)
         updateWindowController?.window?.makeKeyAndOrderFront(nil)

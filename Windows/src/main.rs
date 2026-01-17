@@ -8,11 +8,17 @@ mod config;
 mod encryption;
 mod update;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
+
+#[cfg(target_os = "windows")]
+use tray_icon::{TrayIcon, TrayIconBuilder, Icon};
+#[cfg(target_os = "windows")]
+use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 
 pub use api::{NetworkStatus, SrunApi};
 pub use config::AppConfig;
@@ -588,6 +594,10 @@ fn format_duration(seconds: u64) -> String {
 fn main() -> eframe::Result<()> {
     let state = Arc::new(Mutex::new(AppState::default()));
     let state_clone = Arc::clone(&state);
+    
+    // 应用退出标志
+    let should_exit = Arc::new(AtomicBool::new(false));
+    let should_exit_clone = Arc::clone(&should_exit);
 
     // 后台状态检测线程
     thread::spawn(move || {
@@ -600,6 +610,11 @@ fn main() -> eframe::Result<()> {
         let mut first_run = true;
         
         loop {
+            // 检查是否应该退出
+            if should_exit_clone.load(Ordering::Relaxed) {
+                break;
+            }
+            
             let status = api.check_status();
             let should_login;
             let username;
@@ -610,7 +625,6 @@ fn main() -> eframe::Result<()> {
                 s.status = status.clone();
 
                 // 离线且已配置时自动登录
-                // first_run: 启动时无论如何都尝试登录（如果配置了）
                 should_login = !status.is_online && s.config.has_configured;
                 username = s.config.username.clone();
                 password = s.config.password.clone();
@@ -637,6 +651,55 @@ fn main() -> eframe::Result<()> {
         }
     });
 
+    // 创建系统托盘 (仅 Windows)
+    #[cfg(target_os = "windows")]
+    let _tray_icon = {
+        // 创建托盘菜单
+        let menu = Menu::new();
+        let show_item = MenuItem::new("显示窗口", true, None);
+        let separator = PredefinedMenuItem::separator();
+        let exit_item = MenuItem::new("退出程序", true, None);
+        
+        let show_id = show_item.id().clone();
+        let exit_id = exit_item.id().clone();
+        
+        let _ = menu.append(&show_item);
+        let _ = menu.append(&separator);
+        let _ = menu.append(&exit_item);
+
+        // 创建简单的图标 (16x16 RGBA)
+        let icon_data = create_tray_icon_data();
+        let icon = Icon::from_rgba(icon_data, 16, 16).unwrap_or_else(|_| {
+            // 如果失败，创建一个简单的备用图标
+            Icon::from_rgba(vec![0u8; 16 * 16 * 4], 16, 16).unwrap()
+        });
+
+        // 创建托盘图标
+        let tray = TrayIconBuilder::new()
+            .with_tooltip("HAUT Network Guard - 校园网自动登录")
+            .with_menu(Box::new(menu))
+            .with_icon(icon)
+            .build();
+            
+        // 处理菜单事件
+        let should_exit_menu = Arc::clone(&should_exit);
+        thread::spawn(move || {
+            loop {
+                if let Ok(event) = MenuEvent::receiver().recv() {
+                    if event.id == show_id {
+                        // 显示窗口 - 通过重启应用实现 (简化方案)
+                        // 由于 eframe 限制，这里只能提示用户
+                    } else if event.id == exit_id {
+                        should_exit_menu.store(true, Ordering::Relaxed);
+                        std::process::exit(0);
+                    }
+                }
+            }
+        });
+        
+        tray
+    };
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([420.0, 350.0])
@@ -652,3 +715,45 @@ fn main() -> eframe::Result<()> {
         Box::new(|cc| Ok(Box::new(HautApp::new(cc, state)))),
     )
 }
+
+/// 创建托盘图标数据 (16x16 绿色圆形图标)
+#[cfg(target_os = "windows")]
+fn create_tray_icon_data() -> Vec<u8> {
+    let size = 16;
+    let mut data = Vec::with_capacity(size * size * 4);
+    
+    let center = size as f32 / 2.0;
+    let radius = (size as f32 / 2.0) - 1.0;
+    
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f32 - center + 0.5;
+            let dy = y as f32 - center + 0.5;
+            let distance = (dx * dx + dy * dy).sqrt();
+            
+            if distance <= radius {
+                // 绿色填充
+                data.push(46);   // R
+                data.push(204);  // G
+                data.push(113);  // B
+                data.push(255);  // A
+            } else if distance <= radius + 0.5 {
+                // 边缘抗锯齿
+                let alpha = ((radius + 0.5 - distance) * 255.0) as u8;
+                data.push(46);
+                data.push(204);
+                data.push(113);
+                data.push(alpha);
+            } else {
+                // 透明
+                data.push(0);
+                data.push(0);
+                data.push(0);
+                data.push(0);
+            }
+        }
+    }
+    
+    data
+}
+

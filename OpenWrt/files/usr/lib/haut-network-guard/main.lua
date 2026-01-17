@@ -6,9 +6,6 @@ package.path = package.path .. ";/usr/lib/haut-network-guard/?.lua"
 
 local api = require("api")
 
--- 配置文件路径
-local CONFIG_FILE = "/etc/config/haut-network-guard"
-
 -- 日志函数
 local function log(level, msg)
     local timestamp = os.date("%H:%M:%S")
@@ -108,15 +105,18 @@ local function main()
 
     while true do
         -- 检查网络状态
-        local user_info = api.get_user_info()
-
-        if user_info then
-            log("info", string.format(
-                "在线 - IP: %s, 流量: %s, 时长: %s",
-                user_info.ip,
-                format_bytes(user_info.bytes),
-                format_time(user_info.seconds)
-            ))
+        if api.test_connection() then
+            local user_info = api.get_user_info()
+            if user_info == nil then
+                log("warn", "用户信息获取失败!")
+            else
+                log("info", string.format(
+                    "在线 - IP: %s, 流量: %s, 时长: %s",
+                    user_info.ip,
+                    format_bytes(user_info.bytes),
+                    format_time(user_info.seconds)
+                ))
+            end
         else
             log("warn", "离线，尝试登录...")
 

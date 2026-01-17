@@ -11,23 +11,29 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+echo "[1/5] 安装依赖..."
+opkg update >/dev/null 2>&1 || true
+opkg install lua curl openssl-util >/dev/null 2>&1 || {
+    echo "警告: 部分依赖可能已安装"
+}
+
 # 创建目录
-echo "[1/4] 创建目录..."
+echo "[2/5] 创建目录..."
 mkdir -p /usr/lib/haut-network-guard
 
 # 复制文件
-echo "[2/4] 复制文件..."
+echo "[3/5] 复制文件..."
 cp -f files/usr/lib/haut-network-guard/*.lua /usr/lib/haut-network-guard/
 cp -f files/etc/init.d/haut-network-guard /etc/init.d/
 cp -f files/etc/config/haut-network-guard /etc/config/
 
 # 设置权限
-echo "[3/4] 设置权限..."
+echo "[4/5] 设置权限..."
 chmod +x /etc/init.d/haut-network-guard
 chmod 600 /etc/config/haut-network-guard
 
 # 启用服务
-echo "[4/4] 启用服务..."
+echo "[5/5] 启用服务..."
 /etc/init.d/haut-network-guard enable
 
 echo ""

@@ -5,13 +5,69 @@
 
 local crypto = {}
 
--- 加载 bit 库 (Lua 5.1)
-local bit = require("bit")
-local bxor = bit.bxor
-local band = bit.band
-local bor = bit.bor
-local rshift = bit.rshift
-local lshift = bit.lshift
+-- 尝试加载 bit 库 (多种方式兼容不同环境)
+local bit_loaded, bit = pcall(require, "bit")
+if not bit_loaded then
+    bit_loaded, bit = pcall(require, "bit32")
+end
+if not bit_loaded then
+    -- 尝试 nixio.bit (OpenWrt 特有)
+    local nixio_ok, nixio = pcall(require, "nixio")
+    if nixio_ok and nixio.bit then
+        bit = nixio.bit
+        bit_loaded = true
+    end
+end
+
+-- 如果没有找到 bit 库，使用纯 Lua 实现
+local bxor, band, bor, rshift, lshift
+
+if bit_loaded and bit then
+    bxor = bit.bxor or bit.bxor32
+    band = bit.band or bit.band32
+    bor = bit.bor or bit.bor32
+    rshift = bit.rshift or bit.rshift32
+    lshift = bit.lshift or bit.lshift32
+else
+    -- 纯 Lua 实现位运算 (性能较低但兼容性好)
+    local function make_bitop(operation)
+        return function(a, b)
+            local result = 0
+            local bitval = 1
+            a = a % 0x100000000
+            b = b % 0x100000000
+            for i = 0, 31 do
+                local abit = a % 2
+                local bbit = b % 2
+                if operation == "xor" then
+                    if abit ~= bbit then result = result + bitval end
+                elseif operation == "and" then
+                    if abit == 1 and bbit == 1 then result = result + bitval end
+                elseif operation == "or" then
+                    if abit == 1 or bbit == 1 then result = result + bitval end
+                end
+                a = math.floor(a / 2)
+                b = math.floor(b / 2)
+                bitval = bitval * 2
+            end
+            return result
+        end
+    end
+    
+    bxor = make_bitop("xor")
+    band = make_bitop("and")
+    bor = make_bitop("or")
+    
+    rshift = function(n, bits)
+        n = n % 0x100000000
+        return math.floor(n / (2 ^ bits))
+    end
+    
+    lshift = function(n, bits)
+        n = n % 0x100000000
+        return (n * (2 ^ bits)) % 0x100000000
+    end
+end
 
 -- Custom Base64 编码表
 local ALPHABET = "LVoJPiCN2R8G90yg+hmFHuacZ1OWMnrsSTXkYpUq/3dlbfKwv6xztjI7DeBE45QA"
@@ -22,7 +78,7 @@ for i = 1, 64 do
     char_to_index[ALPHABET:sub(i, i)] = i - 1
 end
 
--- 辅助函数：无符号右移 (使用 bit 库)
+-- 辅助函数：无符号右移
 local function unsigned_right_shift(num, shift)
     if num < 0 then
         num = num + 0x100000000

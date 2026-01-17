@@ -6,7 +6,7 @@ class AppConfig {
 
     // 应用信息
     static let appName = "HAUT Network Guard"
-    static let version = "1.2.3"
+    static let version = "1.2.4"
     static let author = "YellowPeach"
     static let website = "https://github.com/yellowpeachxgp/HAUTNetworkGuard"
     static let qqGroup = "789860526"

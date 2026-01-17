@@ -6,7 +6,7 @@ local api = {}
 local crypto = require("crypto")
 
 -- 配置
-api.BASE_URL = "http://192.168.2.71:8000"
+api.BASE_URL = "http://172.16.154.130"
 api.AC_ID = "1"
 
 -- URL 编码

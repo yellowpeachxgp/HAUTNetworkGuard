@@ -21,10 +21,19 @@ echo "[1/4] 清理旧构建..."
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
+# 清理 Swift 模块缓存 (修复模块冲突)
+rm -rf ~/Library/Developer/Xcode/DerivedData/ModuleCache* 2>/dev/null || true
+rm -rf /var/folders/*/*/com.apple.DeveloperTools/*/SwiftASTContext/* 2>/dev/null || true
+
+# 获取 SDK 路径
+SDK_PATH=$(xcrun --show-sdk-path)
+
 # 编译 Swift 源文件
 echo "[2/4] 编译 Swift 源文件..."
 swiftc \
     -o "$BUILD_DIR/$APP_NAME" \
+    -sdk "$SDK_PATH" \
+    -target arm64-apple-macosx11.0 \
     -framework Cocoa \
     -framework UserNotifications \
     "$SOURCES_DIR/Config.swift" \

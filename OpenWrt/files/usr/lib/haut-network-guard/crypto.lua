@@ -1,8 +1,17 @@
 #!/usr/bin/lua
 -- HAUT Network Guard - 加密模块
 -- XXTEA + HMAC-MD5 + SHA1 + Custom Base64
+-- 兼容 Lua 5.1 (OpenWrt)
 
 local crypto = {}
+
+-- 加载 bit 库 (Lua 5.1)
+local bit = require("bit")
+local bxor = bit.bxor
+local band = bit.band
+local bor = bit.bor
+local rshift = bit.rshift
+local lshift = bit.lshift
 
 -- Custom Base64 编码表
 local ALPHABET = "LVoJPiCN2R8G90yg+hmFHuacZ1OWMnrsSTXkYpUq/3dlbfKwv6xztjI7DeBE45QA"
@@ -13,12 +22,12 @@ for i = 1, 64 do
     char_to_index[ALPHABET:sub(i, i)] = i - 1
 end
 
--- 辅助函数：无符号右移
+-- 辅助函数：无符号右移 (使用 bit 库)
 local function unsigned_right_shift(num, shift)
     if num < 0 then
         num = num + 0x100000000
     end
-    return math.floor(num / (2 ^ shift)) % 0x100000000
+    return rshift(band(num, 0xFFFFFFFF), shift)
 end
 
 -- 辅助函数：字符串转整数数组
@@ -98,17 +107,17 @@ function crypto.xxtea_encode(str, key)
 
         for p = 0, n - 1 do
             y = v[p + 2]
-            local m = unsigned_right_shift(z, 5) ~ (y * 4)
-            m = m + ((unsigned_right_shift(y, 3) ~ (z * 16)) ~ (sum ~ y))
-            m = m + (k[(p % 4 ~ e) + 1] ~ z)
+            local m = bxor(unsigned_right_shift(z, 5), band(y * 4, 0xFFFFFFFF))
+            m = m + bxor(bxor(unsigned_right_shift(y, 3), band(z * 16, 0xFFFFFFFF)), bxor(sum, y))
+            m = m + bxor(k[bxor(p % 4, e) + 1], z)
             v[p + 1] = (v[p + 1] + m) % 0x100000000
             z = v[p + 1]
         end
 
         y = v[1]
-        local m = unsigned_right_shift(z, 5) ~ (y * 4)
-        m = m + ((unsigned_right_shift(y, 3) ~ (z * 16)) ~ (sum ~ y))
-        m = m + (k[(n % 4 ~ e) + 1] ~ z)
+        local m = bxor(unsigned_right_shift(z, 5), band(y * 4, 0xFFFFFFFF))
+        m = m + bxor(bxor(unsigned_right_shift(y, 3), band(z * 16, 0xFFFFFFFF)), bxor(sum, y))
+        m = m + bxor(k[bxor(n % 4, e) + 1], z)
         v[n + 1] = (v[n + 1] + m) % 0x100000000
         z = v[n + 1]
 

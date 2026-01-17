@@ -592,6 +592,13 @@ fn main() -> eframe::Result<()> {
     // 后台状态检测线程
     thread::spawn(move || {
         let api = SrunApi::new();
+        
+        // 启动时等待网络就绪 (5秒)
+        thread::sleep(Duration::from_secs(5));
+        
+        // 启动后立即尝试一次登录检测
+        let mut first_run = true;
+        
         loop {
             let status = api.check_status();
             let should_login;
@@ -603,6 +610,7 @@ fn main() -> eframe::Result<()> {
                 s.status = status.clone();
 
                 // 离线且已配置时自动登录
+                // first_run: 启动时无论如何都尝试登录（如果配置了）
                 should_login = !status.is_online && s.config.has_configured;
                 username = s.config.username.clone();
                 password = s.config.password.clone();
@@ -617,9 +625,14 @@ fn main() -> eframe::Result<()> {
                     let new_status = api.check_status();
                     let mut s = state_clone.lock().unwrap();
                     s.status = new_status;
+                } else if first_run {
+                    // 首次运行登录失败，等待更长时间后重试
+                    thread::sleep(Duration::from_secs(2));
+                    continue;
                 }
             }
-
+            
+            first_run = false;
             thread::sleep(Duration::from_secs(3));
         }
     });
@@ -628,7 +641,8 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([420.0, 350.0])
             .with_min_inner_size([350.0, 280.0])
-            .with_title("HAUT Network Guard"),
+            .with_title("HAUT Network Guard")
+            .with_close_button(true),
         ..Default::default()
     };
 

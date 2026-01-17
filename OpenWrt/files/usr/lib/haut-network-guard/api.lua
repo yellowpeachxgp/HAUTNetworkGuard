@@ -121,13 +121,8 @@ function api.login(username, password)
 
     local url = api.BASE_URL .. "/cgi-bin/srun_portal?" .. table.concat(params, "&")
     local response = http_get(url)
-    for i, v in pairs(params) do
-        print(v)
-    end
-    print(hmd5_password)
 
     if not response or response == "" then
-        
         return false, "登录请求失败"
     end
 

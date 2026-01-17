@@ -6,7 +6,7 @@ local api = {}
 local crypto = require("crypto")
 
 -- 配置
-api.BASE_URL = "http://172.16.154.130"
+api.BASE_URL = "http://192.168.2.71:8000"
 api.AC_ID = "1"
 
 -- URL 编码
@@ -50,19 +50,18 @@ end
 function api.get_challenge(username)
     local callback, timestamp = gen_callback()
     local url = string.format(
-        "%s/cgi-bin/get_challenge?callback=%s&username=%s&_=%d",
-        api.BASE_URL, callback, url_encode(username), timestamp
+        "%s/cgi-bin/get_challenge?callback=%s&username=%s&_=%.0f",
+        api.BASE_URL, callback, url_encode(username), math.floor(timestamp)
     )
-
     local response = http_get(url)
     if not response or response == "" then
         return nil, "网络请求失败"
     end
 
     -- 解析响应
-    local challenge = response:match('"challenge":"([^"]+)"')
-    local client_ip = response:match('"client_ip":"([^"]+)"')
-    local error_msg = response:match('"error":"([^"]+)"')
+    local challenge = response:match('"challenge":%s?"([^"]+)"')
+    local client_ip = response:match('"client_ip":%s?"([^"]+)"')
+    local error_msg = response:match('"error":%s?"([^"]+)"')
 
     if error_msg and error_msg ~= "ok" then
         return nil, error_msg
@@ -107,7 +106,7 @@ function api.login(username, password)
         "callback=" .. callback,
         "action=login",
         "username=" .. url_encode(username),
-        "password={MD5}" .. hmd5_password,
+        "password=%7BMD5%7D" .. hmd5_password,
         "ac_id=" .. api.AC_ID,
         "ip=" .. url_encode(ip),
         "chksum=" .. chksum,
@@ -122,8 +121,13 @@ function api.login(username, password)
 
     local url = api.BASE_URL .. "/cgi-bin/srun_portal?" .. table.concat(params, "&")
     local response = http_get(url)
+    for i, v in pairs(params) do
+        print(v)
+    end
+    print(hmd5_password)
 
     if not response or response == "" then
+        
         return false, "登录请求失败"
     end
 
@@ -143,8 +147,8 @@ end
 function api.get_user_info()
     local callback, timestamp = gen_callback()
     local url = string.format(
-        "%s/cgi-bin/rad_user_info?callback=%s&_=%d",
-        api.BASE_URL, callback, timestamp
+        "%s/cgi-bin/rad_user_info?callback=%s&_=%.0f",
+        api.BASE_URL, callback, math.floor(timestamp)
     )
 
     local response = http_get(url)

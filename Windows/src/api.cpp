@@ -35,11 +35,12 @@ void Api::login(const QString &username, const QString &password) {
   postData.addQueryItem("minutes", "0");
   postData.addQueryItem("mac", "02:00:00:00:00:00");
 
-  QNetworkRequest request(QUrl(LOGIN_URL));
+  QUrl loginUrl(LOGIN_URL);
+  QNetworkRequest request(loginUrl);
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     "application/x-www-form-urlencoded");
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.2 Qt");
+                    "HAUTNetworkGuard/1.3.3 Qt");
   request.setTransferTimeout(10000);
 
   QNetworkReply *reply = m_networkManager->post(
@@ -51,11 +52,12 @@ void Api::logout() {
   QUrlQuery postData;
   postData.addQueryItem("action", "logout");
 
-  QNetworkRequest request(QUrl(LOGIN_URL));
+  QUrl logoutUrl(LOGIN_URL);
+  QNetworkRequest request(logoutUrl);
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     "application/x-www-form-urlencoded");
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.2 Qt");
+                    "HAUTNetworkGuard/1.3.3 Qt");
   request.setTransferTimeout(10000);
 
   QNetworkReply *reply = m_networkManager->post(
@@ -64,9 +66,10 @@ void Api::logout() {
 }
 
 void Api::checkStatus() {
-  QNetworkRequest request(QUrl(STATUS_URL));
+  QUrl statusUrl(STATUS_URL);
+  QNetworkRequest request(statusUrl);
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.2 Qt");
+                    "HAUTNetworkGuard/1.3.3 Qt");
   request.setTransferTimeout(5000); // 5 秒超时
 
   QNetworkReply *reply = m_networkManager->get(request);

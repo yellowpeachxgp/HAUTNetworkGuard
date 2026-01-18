@@ -46,6 +46,10 @@
 1. 下载 `HAUTNetworkGuard-Windows.exe`
 2. 双击运行即可（无需安装）
 
+> **技术栈**: Windows 版本使用 Qt 6 (C++) 开发，提供原生系统托盘支持。
+> 
+> 构建方式: GitHub Actions 自动编译，推送 tag 时自动发布。
+
 ### OpenWrt
 
 详见 [OpenWrt/README.md](OpenWrt/README.md)
@@ -212,6 +216,17 @@ cd OpenWrt
 ```
 
 ## 版本历史
+
+### v1.3.0 (2026-01)
+- **Windows**: 使用 Qt 6 (C++) 完全重写
+  - 原生 `QSystemTrayIcon` 系统托盘，更稳定
+  - `QSettings` 管理配置，标准化存储
+  - 异步 HTTP 请求 (`QNetworkAccessManager`)
+  - 更好的 Windows 原生集成
+- **CI/CD**: 新增 GitHub Actions 自动构建
+  - 推送 tag 时自动编译 Windows (Qt) 和 macOS (Swift)
+  - 自动上传二进制文件到 GitHub Release
+- **说明**: 原 Rust 版本保留在 `Windows/` 目录作为备份
 
 ### v1.2.6 (2026-01)
 - **OpenWrt**: 修复服务启动崩溃问题 (感谢 @1826013250 提交 PR #2)

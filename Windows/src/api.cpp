@@ -1,20 +1,19 @@
 #include "api.h"
 #include "encryption.h"
-#include <QDateTime>
-#include <QNetworkRequest>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkReply>
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
 
-// 使用与 Rust 版本相同的 API 地址
 const QString Api::STATUS_URL = "http://172.16.154.130/cgi-bin/rad_user_info";
 const QString Api::LOGIN_URL = "http://172.16.154.130:69/cgi-bin/srun_portal";
 
-Api::Api(QObject *parent) : QObject(parent) {
-  m_networkManager = new QNetworkAccessManager(this);
-  // 设置较长的超时时间
-  m_networkManager->setTransferTimeout(10000); // 10秒
-}
+Api::Api(QObject *parent)
+    : QObject(parent), m_networkManager(new QNetworkAccessManager(this)) {}
+
+Api::~Api() {}
 
 void Api::login(const QString &username, const QString &password) {
   // 加密用户名和密码
@@ -40,7 +39,7 @@ void Api::login(const QString &username, const QString &password) {
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     "application/x-www-form-urlencoded");
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.4 Qt");
+                    "HAUTNetworkGuard/1.3.5 Qt");
   request.setTransferTimeout(10000);
 
   QNetworkReply *reply = m_networkManager->post(
@@ -57,7 +56,7 @@ void Api::logout() {
   request.setHeader(QNetworkRequest::ContentTypeHeader,
                     "application/x-www-form-urlencoded");
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.4 Qt");
+                    "HAUTNetworkGuard/1.3.5 Qt");
   request.setTransferTimeout(10000);
 
   QNetworkReply *reply = m_networkManager->post(
@@ -66,11 +65,20 @@ void Api::logout() {
 }
 
 void Api::checkStatus() {
-  QUrl statusUrl(STATUS_URL);
-  QNetworkRequest request(statusUrl);
+  // 使用 JSONP callback 格式获取 JSON 响应 (与 OpenWrt 一致)
+  qint64 timestamp = QDateTime::currentMSecsSinceEpoch();
+  QString callback = QString("jQuery_%1").arg(timestamp);
+
+  QUrl url(STATUS_URL);
+  QUrlQuery query;
+  query.addQueryItem("callback", callback);
+  query.addQueryItem("_", QString::number(timestamp));
+  url.setQuery(query);
+
+  QNetworkRequest request(url);
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.4 Qt");
-  request.setTransferTimeout(5000); // 5 秒超时
+                    "HAUTNetworkGuard/1.3.5 Qt");
+  request.setTransferTimeout(5000);
 
   QNetworkReply *reply = m_networkManager->get(request);
   connect(reply, &QNetworkReply::finished, this, &Api::onStatusReplyFinished);
@@ -153,7 +161,45 @@ void Api::onStatusReplyFinished() {
     return;
   }
 
-  // 解析逗号分隔的响应格式: username,seconds,ip,bytes,...
+  // 尝试解析 JSONP 响应 (与 OpenWrt 一致)
+  // 格式: callback({...})
+  QString jsonStr;
+  QRegularExpression jsonpRe("jQuery_\\d+\\((.+)\\)$");
+  QRegularExpressionMatch match = jsonpRe.match(response.trimmed());
+  if (match.hasMatch()) {
+    jsonStr = match.captured(1);
+  } else {
+    // 回退到尝试直接解析 JSON
+    jsonStr = response;
+  }
+
+  // 解析 JSON
+  QJsonParseError parseError;
+  QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8(), &parseError);
+
+  if (doc.isObject()) {
+    QJsonObject obj = doc.object();
+
+    // 检查 error 字段
+    QString error = obj.value("error").toString();
+    if (error == "not_online_error" || error.contains("not_online")) {
+      emit statusChecked(false, "", 0, 0);
+      return;
+    }
+
+    // 解析用户信息 (与 OpenWrt 一致的字段名)
+    QString ip = obj.value("online_ip").toString();
+    qint64 bytes = obj.value("sum_bytes").toVariant().toLongLong();
+    qint64 seconds = obj.value("sum_seconds").toVariant().toLongLong();
+    QString username = obj.value("user_name").toString();
+
+    if (!username.isEmpty() || !ip.isEmpty()) {
+      emit statusChecked(true, ip, bytes, seconds);
+      return;
+    }
+  }
+
+  // 回退到 CSV 解析格式: username,seconds,ip,bytes,...
   QStringList parts = response.split(',');
   if (parts.size() >= 4) {
     QString username = parts[0];

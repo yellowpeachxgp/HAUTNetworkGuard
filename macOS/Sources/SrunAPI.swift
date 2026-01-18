@@ -80,9 +80,19 @@ class SrunAPI {
         self.session = URLSession(configuration: config)
     }
 
-    /// 检查网络状态
+    /// 检查网络状态 (使用 JSONP 格式，与 OpenWrt 一致)
     func checkStatus(completion: @escaping (NetworkStatus) -> Void) {
-        guard let url = URL(string: SrunAPI.statusURL) else {
+        // 生成 JSONP callback 参数
+        let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        let callback = "jQuery_\(timestamp)"
+        
+        var urlComponents = URLComponents(string: SrunAPI.statusURL)
+        urlComponents?.queryItems = [
+            URLQueryItem(name: "callback", value: callback),
+            URLQueryItem(name: "_", value: String(timestamp))
+        ]
+        
+        guard let url = urlComponents?.url else {
             completion(.error("无效的URL"))
             return
         }
@@ -101,14 +111,14 @@ class SrunAPI {
             }
 
             Logger.log("状态响应: \(responseStr)")
-            let status = self.parseStatusResponse(responseStr)
+            let status = self.parseStatusResponse(responseStr, callback: callback)
             completion(status)
         }
         task.resume()
     }
 
-    /// 解析状态响应
-    private func parseStatusResponse(_ response: String) -> NetworkStatus {
+    /// 解析状态响应 (支持 JSONP 和 CSV 格式)
+    private func parseStatusResponse(_ response: String, callback: String) -> NetworkStatus {
         let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // 如果响应为空或包含 "not_online"，则表示离线
@@ -116,7 +126,31 @@ class SrunAPI {
             return .offline
         }
 
-        // 响应格式: username,time,ip,bytes,...
+        // 尝试解析 JSONP 响应: callback({...})
+        if let jsonStr = extractJSONFromJSONP(trimmed, callback: callback) {
+            if let jsonData = jsonStr.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                
+                // 检查 error 字段
+                if let error = json["error"] as? String,
+                   error.contains("not_online") {
+                    return .offline
+                }
+                
+                // 解析用户信息 (与 OpenWrt 一致的字段名)
+                let ip = json["online_ip"] as? String ?? ""
+                let bytes = parseNumber(json["sum_bytes"])
+                let seconds = parseNumber(json["sum_seconds"])
+                let username = json["user_name"] as? String ?? ""
+                
+                if !username.isEmpty || !ip.isEmpty {
+                    return .online(username: username, ip: ip,
+                                  usedBytes: bytes, usedSeconds: seconds)
+                }
+            }
+        }
+
+        // 回退到 CSV 格式: username,time,ip,bytes,...
         let parts = trimmed.components(separatedBy: ",")
         if parts.count >= 4 {
             let username = parts[0]
@@ -128,6 +162,42 @@ class SrunAPI {
         }
 
         return .offline
+    }
+    
+    /// 从 JSONP 响应中提取 JSON 字符串
+    private func extractJSONFromJSONP(_ response: String, callback: String) -> String? {
+        // 格式: callback({...}) 或 jQuery_xxx({...})
+        let pattern = "jQuery_\\d+\\((.+)\\)$"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+           let match = regex.firstMatch(in: response, range: NSRange(response.startIndex..., in: response)),
+           let range = Range(match.range(at: 1), in: response) {
+            return String(response[range])
+        }
+        
+        // 尝试精确匹配 callback
+        let prefix = "\(callback)("
+        let suffix = ")"
+        if response.hasPrefix(prefix) && response.hasSuffix(suffix) {
+            let start = response.index(response.startIndex, offsetBy: prefix.count)
+            let end = response.index(response.endIndex, offsetBy: -suffix.count)
+            return String(response[start..<end])
+        }
+        
+        return nil
+    }
+    
+    /// 解析数字 (支持 Int 和 String)
+    private func parseNumber(_ value: Any?) -> Int64 {
+        if let intValue = value as? Int64 {
+            return intValue
+        } else if let intValue = value as? Int {
+            return Int64(intValue)
+        } else if let doubleValue = value as? Double {
+            return Int64(doubleValue)
+        } else if let strValue = value as? String {
+            return Int64(strValue) ?? 0
+        }
+        return 0
     }
 
     /// 执行登录

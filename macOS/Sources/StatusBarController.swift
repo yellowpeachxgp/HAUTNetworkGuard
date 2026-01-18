@@ -11,7 +11,7 @@ class StatusBarController: NSObject {
     private let api = SrunAPI()
     private var checkTimer: Timer?
     private var currentStatus: NetworkStatus = .checking
-    private var checkInterval: TimeInterval = 3
+    private var checkInterval: TimeInterval { TimeInterval(AppConfig.shared.checkInterval) }
 
     // 状态图标
     private let onlineIcon = "wifi"
@@ -28,6 +28,27 @@ class StatusBarController: NSObject {
         requestNotificationPermission()
         startMonitoring()
         setupUpdateChecker()
+        setupNotifications()
+    }
+    
+    private func setupNotifications() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(restartTimer),
+            name: .checkIntervalChanged,
+            object: nil
+        )
+    }
+    
+    @objc private func restartTimer() {
+        checkTimer?.invalidate()
+        checkTimer = Timer.scheduledTimer(
+            withTimeInterval: checkInterval,
+            repeats: true
+        ) { [weak self] _ in
+            self?.checkStatus()
+        }
+        Logger.log("定时器已重启, 间隔: \(Int(checkInterval))秒")
     }
 }
 
@@ -167,7 +188,7 @@ extension StatusBarController {
         updateUI()
 
         // 每次检测到离线状态都尝试自动登录
-        if !newStatus.isOnline {
+        if !newStatus.isOnline && AppConfig.shared.autoLogin {
             // 只在首次检测到掉线时发送通知
             if wasOnline {
                 Logger.log("检测到掉线，尝试自动重连...")

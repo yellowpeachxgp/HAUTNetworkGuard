@@ -8,8 +8,8 @@
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-  setWindowTitle("HAUT Network Guard v1.3.0");
-  setFixedSize(400, 500);
+  setWindowTitle("HAUT Network Guard v1.3.4");
+  setFixedSize(400, 550);
 
   setupUi();
   loadSettings();
@@ -34,14 +34,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
           &MainWindow::onLogoutClicked);
   m_trayIcon->show();
 
-  // 状态检测定时器
+  // 状态检测定时器 (使用配置的间隔)
   m_statusTimer = new QTimer(this);
   connect(m_statusTimer, &QTimer::timeout, this,
           &MainWindow::checkNetworkStatus);
-  m_statusTimer->start(3000); // 每 3 秒检测一次
+  int interval = Config::instance().checkInterval() * 1000;
+  m_statusTimer->start(interval);
 
-  // 启动时检测一次状态
+  // 启动时检测状态并尝试自动登录
   QTimer::singleShot(1000, this, &MainWindow::checkNetworkStatus);
+
+  // 启动时延迟自动登录 (等待网络就绪)
+  QTimer::singleShot(3000, this, &MainWindow::tryAutoLogin);
 }
 
 MainWindow::~MainWindow() {}
@@ -51,8 +55,8 @@ void MainWindow::setupUi() {
   setCentralWidget(m_centralWidget);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(m_centralWidget);
-  mainLayout->setSpacing(15);
-  mainLayout->setContentsMargins(20, 20, 20, 20);
+  mainLayout->setSpacing(12);
+  mainLayout->setContentsMargins(20, 15, 20, 15);
 
   // 标题
   QLabel *titleLabel = new QLabel("HAUT Network Guard");
@@ -96,8 +100,20 @@ void MainWindow::setupUi() {
 
   m_autoSaveCheck = new QCheckBox("记住密码");
   m_autoLaunchCheck = new QCheckBox("开机自启动");
+  m_autoLoginCheck = new QCheckBox("自动登录 (断线重连)");
   accountLayout->addRow(m_autoSaveCheck);
   accountLayout->addRow(m_autoLaunchCheck);
+  accountLayout->addRow(m_autoLoginCheck);
+
+  // 检测间隔设置
+  QHBoxLayout *intervalLayout = new QHBoxLayout();
+  m_intervalSpinBox = new QSpinBox();
+  m_intervalSpinBox->setRange(5, 300);
+  m_intervalSpinBox->setSuffix(" 秒");
+  m_intervalSpinBox->setToolTip("网络状态检测间隔 (5-300 秒)");
+  intervalLayout->addWidget(m_intervalSpinBox);
+  intervalLayout->addStretch();
+  accountLayout->addRow("检测间隔:", intervalLayout);
 
   mainLayout->addWidget(accountGroup);
 
@@ -138,6 +154,8 @@ void MainWindow::loadSettings() {
   m_passwordEdit->setText(config.password());
   m_autoSaveCheck->setChecked(config.autoSave());
   m_autoLaunchCheck->setChecked(config.autoLaunch());
+  m_autoLoginCheck->setChecked(config.autoLogin());
+  m_intervalSpinBox->setValue(config.checkInterval());
 }
 
 void MainWindow::saveSettings() {
@@ -148,8 +166,13 @@ void MainWindow::saveSettings() {
                                                   : "");
   config.setAutoSave(m_autoSaveCheck->isChecked());
   config.setAutoLaunch(m_autoLaunchCheck->isChecked());
+  config.setAutoLogin(m_autoLoginCheck->isChecked());
+  config.setCheckInterval(m_intervalSpinBox->value());
   config.setHasConfigured(true);
   config.save();
+
+  // 更新定时器间隔
+  m_statusTimer->setInterval(config.checkInterval() * 1000);
 }
 
 void MainWindow::onLoginClicked() {
@@ -218,8 +241,27 @@ void MainWindow::onStatusChecked(bool online, const QString &ip,
   updateStatusDisplay(online, ip, bytesUsed, secondsOnline);
   m_trayIcon->setOnlineStatus(online);
 
-  // 如果从在线变为离线，且配置了自动登录，则自动重连
-  if (wasOnline && !online && Config::instance().hasConfigured()) {
+  // 如果离线且开启了自动登录，则自动重连
+  if (!online && Config::instance().autoLogin()) {
+    QString username = Config::instance().username();
+    QString password = Config::instance().password();
+
+    if (!username.isEmpty() && !password.isEmpty()) {
+      // 只有从在线变为离线，或启动时检测才自动登录
+      if (wasOnline || !m_startupLoginAttempted) {
+        m_api->login(username, password);
+      }
+    }
+  }
+}
+
+void MainWindow::tryAutoLogin() {
+  // 启动时尝试自动登录
+  if (m_startupLoginAttempted)
+    return;
+  m_startupLoginAttempted = true;
+
+  if (!m_isOnline && Config::instance().autoLogin()) {
     QString username = Config::instance().username();
     QString password = Config::instance().password();
 

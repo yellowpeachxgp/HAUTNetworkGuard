@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QMainWindow>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QTimer>
 
 #include "api.h"
@@ -37,6 +38,7 @@ private slots:
   void checkNetworkStatus();
   void showWindow();
   void exitApplication();
+  void tryAutoLogin();
 
 private:
   void setupUi();
@@ -57,6 +59,8 @@ private:
   QLineEdit *m_passwordEdit;
   QCheckBox *m_autoSaveCheck;
   QCheckBox *m_autoLaunchCheck;
+  QCheckBox *m_autoLoginCheck;
+  QSpinBox *m_intervalSpinBox;
   QPushButton *m_loginBtn;
   QPushButton *m_logoutBtn;
   QPushButton *m_saveBtn;
@@ -67,6 +71,7 @@ private:
   QTimer *m_statusTimer;
 
   bool m_isOnline = false;
+  bool m_startupLoginAttempted = false;
 };
 
 #endif // MAINWINDOW_H

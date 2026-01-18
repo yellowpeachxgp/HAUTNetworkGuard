@@ -14,31 +14,42 @@ QString Encryption::encryptUsername(const QString &username) {
 }
 
 QString Encryption::encryptPassword(const QString &password) {
-  // SRUN3K 密码加密
-  // 1. XOR 加密
-  // 2. 位分割
+  // SRUN3K 密码加密 (与 Rust/macOS 版本完全一致)
+  // 1. XOR 加密 (密钥反向索引)
+  // 2. 位分割 (低4位 + 0x36, 高4位 + 0x63)
+  // 3. 奇偶交替组合
 
-  QByteArray xored;
-  QByteArray pwdBytes = password.toLatin1();
   QByteArray keyBytes = PASSWORD_KEY.toLatin1();
+  int keyLen = keyBytes.size();
+  QByteArray pwdBytes = password.toLatin1();
 
-  // XOR 加密
-  for (int i = 0; i < pwdBytes.size(); ++i) {
-    unsigned char p = static_cast<unsigned char>(pwdBytes[i]);
-    unsigned char k = static_cast<unsigned char>(keyBytes[i % keyBytes.size()]);
-    xored.append(static_cast<char>(p ^ k));
-  }
-
-  // 位分割: 将每个字节分成高4位和低4位
   QString result;
-  for (int i = 0; i < xored.size(); ++i) {
-    unsigned char byte = static_cast<unsigned char>(xored[i]);
-    unsigned char high = (byte >> 4) & 0x0F;
-    unsigned char low = byte & 0x0F;
 
-    // 转换为可打印字符
-    result.append(QChar('a' + high));
-    result.append(QChar('a' + low));
+  for (int i = 0; i < pwdBytes.size(); ++i) {
+    unsigned char c = static_cast<unsigned char>(pwdBytes[i]);
+
+    // 密钥索引: 反向 (与 Rust 版本一致)
+    int keyIndex = keyLen - 1 - (i % keyLen);
+    unsigned char k = static_cast<unsigned char>(keyBytes[keyIndex]);
+
+    // XOR 运算
+    unsigned char ki = c ^ k;
+
+    // 位分割: 低4位 + 0x36, 高4位 + 0x63
+    unsigned char lowBits = (ki & 0x0F) + 0x36;
+    unsigned char highBits = ((ki >> 4) & 0x0F) + 0x63;
+
+    QChar lowChar(lowBits);
+    QChar highChar(highBits);
+
+    // 根据索引奇偶交替组合
+    if (i % 2 == 0) {
+      result.append(lowChar);
+      result.append(highChar);
+    } else {
+      result.append(highChar);
+      result.append(lowChar);
+    }
   }
 
   return result;

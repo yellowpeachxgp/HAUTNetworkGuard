@@ -50,8 +50,8 @@ end
 function api.get_challenge(username)
     local callback, timestamp = gen_callback()
     local url = string.format(
-        "%s/cgi-bin/get_challenge?callback=%s&username=%s&_=%d",
-        api.BASE_URL, callback, url_encode(username), timestamp
+        "%s/cgi-bin/get_challenge?callback=%s&username=%s&_=%.0f",
+        api.BASE_URL, callback, url_encode(username), math.floor(timestamp)
     )
 
     local response = http_get(url)
@@ -60,9 +60,9 @@ function api.get_challenge(username)
     end
 
     -- 解析响应
-    local challenge = response:match('"challenge":"([^"]+)"')
-    local client_ip = response:match('"client_ip":"([^"]+)"')
-    local error_msg = response:match('"error":"([^"]+)"')
+    local challenge = response:match('"challenge":%s?"([^"]+)"')
+    local client_ip = response:match('"client_ip":%s?"([^"]+)"')
+    local error_msg = response:match('"error":%s?"([^"]+)"')
 
     if error_msg and error_msg ~= "ok" then
         return nil, error_msg
@@ -107,7 +107,7 @@ function api.login(username, password)
         "callback=" .. callback,
         "action=login",
         "username=" .. url_encode(username),
-        "password={MD5}" .. hmd5_password,
+        "password=%7BMD5%7D" .. hmd5_password,
         "ac_id=" .. api.AC_ID,
         "ip=" .. url_encode(ip),
         "chksum=" .. chksum,
@@ -117,7 +117,7 @@ function api.login(username, password)
         "os=Linux",
         "name=OpenWrt",
         "double_stack=0",
-        "_=" .. timestamp
+        "_=" .. string.format("%.0f", math.floor(timestamp))
     }
 
     local url = api.BASE_URL .. "/cgi-bin/srun_portal?" .. table.concat(params, "&")
@@ -143,8 +143,8 @@ end
 function api.get_user_info()
     local callback, timestamp = gen_callback()
     local url = string.format(
-        "%s/cgi-bin/rad_user_info?callback=%s&_=%d",
-        api.BASE_URL, callback, timestamp
+        "%s/cgi-bin/rad_user_info?callback=%s&_=%.0f",
+        api.BASE_URL, callback, math.floor(timestamp)
     )
 
     local response = http_get(url)

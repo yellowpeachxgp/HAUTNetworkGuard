@@ -136,34 +136,43 @@ HAUTNetworkGuard/
 │   │   ├── AboutWindow.swift
 │   │   ├── UpdateChecker.swift
 │   │   ├── UpdateWindow.swift
-│   │   └── LaunchManager.swift    # 开机自启动管理
+│   │   └── LaunchManager.swift
 │   ├── Info.plist
 │   ├── build.sh
 │   ├── create-dmg.sh
 │   ├── install.sh
 │   └── uninstall.sh
 │
-├── Windows/                    # Windows 版本 (Rust)
+├── Windows/                    # Windows 版本 (Qt 6 C++)
 │   ├── src/
-│   │   ├── main.rs            # 主程序 + egui GUI
-│   │   ├── api.rs             # 网络 API
-│   │   ├── config.rs          # 配置管理 (注册表 + 开机自启)
-│   │   ├── encryption.rs      # SRUN3K 加密
-│   │   └── update.rs          # 更新检测
+│   │   ├── main.cpp           # 入口点
+│   │   ├── mainwindow.h/cpp   # 主窗口 UI
+│   │   ├── config.h/cpp       # 配置管理 (QSettings)
+│   │   ├── api.h/cpp          # 网络 API
+│   │   ├── encryption.h/cpp   # SRUN3K 加密
+│   │   └── trayicon.h/cpp     # 系统托盘
+│   ├── CMakeLists.txt
+│   └── AIREADME.md
+│
+├── Windows-Rust-Deprecated/    # ⚠️ 已弃用的 Rust 版本
+│   ├── src/
 │   ├── Cargo.toml
-│   └── build.rs
+│   └── DEPRECATED.md
 │
 ├── OpenWrt/                    # OpenWrt 版本 (Lua)
 │   ├── files/
 │   │   ├── usr/lib/haut-network-guard/
-│   │   │   ├── main.lua       # 主程序
-│   │   │   ├── api.lua        # API 模块
-│   │   │   └── crypto.lua     # 加密模块
-│   │   ├── etc/init.d/        # 服务脚本
-│   │   └── etc/config/        # UCI 配置
+│   │   │   ├── main.lua
+│   │   │   ├── api.lua
+│   │   │   └── crypto.lua
+│   │   ├── etc/init.d/
+│   │   └── etc/config/
 │   ├── install.sh
 │   ├── uninstall.sh
 │   └── README.md
+│
+├── .github/workflows/          # GitHub Actions CI/CD
+│   └── build.yml
 │
 └── README.md
 ```
@@ -171,14 +180,16 @@ HAUTNetworkGuard/
 ## 技术栈
 
 | 组件 | macOS | Windows | OpenWrt |
-|-----|-------|---------|---------|
-| 语言 | Swift | Rust | Lua |
-| GUI | AppKit | egui + eframe | CLI |
-| HTTP | URLSession | reqwest | curl |
+|-----|-------|---------|------------|
+| 语言 | Swift | **C++ (Qt 6)** | Lua |
+| GUI | AppKit | **Qt Widgets** | CLI |
+| HTTP | URLSession | **QNetworkAccessManager** | curl |
 | 加密 | SRUN3K | SRUN3K | SRUN Portal |
-| 配置存储 | UserDefaults | Windows 注册表 | UCI |
+| 配置存储 | UserDefaults | **QSettings** | UCI |
+| 系统托盘 | NSStatusItem | **QSystemTrayIcon** | - |
 | 开机自启 | LaunchAgent | 注册表 Run 键 | procd |
-| 构建 | swiftc | cargo | - |
+| 构建 | swiftc | **CMake + MSVC** | - |
+| CI/CD | GitHub Actions | **GitHub Actions** | - |
 
 ## 卸载
 

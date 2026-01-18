@@ -1,6 +1,7 @@
 #include "trayicon.h"
 #include <QApplication>
 #include <QIcon>
+#include <QStyle>
 
 TrayIcon::TrayIcon(QObject *parent) : QObject(parent) {
   m_trayIcon = new QSystemTrayIcon(this);
@@ -55,7 +56,8 @@ void TrayIcon::updateIcon(bool online) {
   // 使用应用程序图标
   QIcon icon = QApplication::windowIcon();
   if (icon.isNull()) {
-    icon = QIcon(":/icons/app.ico");
+    // 使用系统默认图标
+    icon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
   }
   m_trayIcon->setIcon(icon);
 }

@@ -1,7 +1,7 @@
 #include "config.h"
 #include "mainwindow.h"
 #include <QApplication>
-#include <QIcon>
+#include <QStyle>
 
 int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
@@ -10,7 +10,8 @@ int main(int argc, char *argv[]) {
   app.setApplicationName("HAUTNetworkGuard");
   app.setApplicationVersion("1.3.0");
   app.setOrganizationName("YellowPeach");
-  app.setWindowIcon(QIcon(":/icons/app.ico"));
+  // 使用系统默认图标
+  app.setWindowIcon(app.style()->standardIcon(QStyle::SP_ComputerIcon));
 
   // 设置关闭最后窗口时不退出应用（托盘常驻）
   app.setQuitOnLastWindowClosed(false);

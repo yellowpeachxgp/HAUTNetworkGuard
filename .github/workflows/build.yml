@@ -31,14 +31,14 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Deploy Qt
+      - name: Deploy Qt Runtime
         run: |
-          mkdir deploy
-          copy build\Release\HAUTNetworkGuard.exe deploy\
-          windeployqt deploy\HAUTNetworkGuard.exe --release --no-translations
+          mkdir HAUTNetworkGuard-Windows
+          copy build\Release\HAUTNetworkGuard.exe HAUTNetworkGuard-Windows\
+          windeployqt HAUTNetworkGuard-Windows\HAUTNetworkGuard.exe --release --no-translations --no-opengl-sw
 
-      - name: Create Archive
-        run: Compress-Archive -Path deploy\* -DestinationPath HAUTNetworkGuard-Windows.zip
+      - name: Create Installer ZIP
+        run: Compress-Archive -Path HAUTNetworkGuard-Windows -DestinationPath HAUTNetworkGuard-Windows.zip
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -72,6 +72,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download Windows Artifact
         uses: actions/download-artifact@v4
         with:
@@ -84,15 +87,34 @@ jobs:
           name: macos-build
           path: ./
 
-      - name: Extract Windows Build
-        run: |
-          unzip HAUTNetworkGuard-Windows.zip -d windows-extract
-          mv windows-extract/HAUTNetworkGuard.exe ./HAUTNetworkGuard-Windows.exe
+      - name: Get Version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          name: "${{ steps.get_version.outputs.VERSION }}"
+          body: |
+            ## HAUTNetworkGuard ${{ steps.get_version.outputs.VERSION }}
+            
+            河南工业大学校园网自动登录工具
+            
+            ### 📦 下载
+            
+            | 平台 | 文件 | 说明 |
+            |------|------|------|
+            | **Windows** | `HAUTNetworkGuard-Windows.zip` | 解压后运行 `HAUTNetworkGuard.exe` |
+            | **macOS** | `HAUTNetworkGuard.dmg` | 双击安装到应用程序 |
+            | **OpenWrt** | 一键安装 | `wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh \| sh` |
+            
+            ### 🔄 更新内容
+            
+            详见 [README.md 版本历史](https://github.com/yellowpeachxgp/HAUTNetworkGuard#版本历史)
+            
+            ---
+            
+            **首次使用**: 运行后输入学号和密码，勾选"记住密码"和"开机自启动"即可。
           files: |
-            HAUTNetworkGuard-Windows.exe
+            HAUTNetworkGuard-Windows.zip
             HAUTNetworkGuard.dmg
-          generate_release_notes: true

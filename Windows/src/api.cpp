@@ -1,103 +1,76 @@
 #include "api.h"
 #include "encryption.h"
 #include <QDateTime>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
 
-const QString Api::BASE_URL = "http://172.20.255.2";
-const QString Api::AC_ID = "1";
+// 使用与 Rust 版本相同的 API 地址
+const QString Api::STATUS_URL = "http://172.16.154.130/cgi-bin/rad_user_info";
+const QString Api::LOGIN_URL = "http://172.16.154.130:69/cgi-bin/srun_portal";
 
 Api::Api(QObject *parent) : QObject(parent) {
   m_networkManager = new QNetworkAccessManager(this);
+  // 设置较长的超时时间
+  m_networkManager->setTransferTimeout(10000); // 10秒
 }
 
 void Api::login(const QString &username, const QString &password) {
-  QString url = buildLoginUrl(username, password);
+  // 加密用户名和密码
+  QString encUsername = Encryption::encryptUsername(username);
+  QString encPassword = Encryption::encryptPassword(password);
 
-  QNetworkRequest request(url);
+  // 构建 POST 请求体 (与 Rust 版本一致)
+  QUrlQuery postData;
+  postData.addQueryItem("action", "login");
+  postData.addQueryItem("username", encUsername);
+  postData.addQueryItem("password", encPassword);
+  postData.addQueryItem("ac_id", "1");
+  postData.addQueryItem("drop", "0");
+  postData.addQueryItem("pop", "1");
+  postData.addQueryItem("type", "10");
+  postData.addQueryItem("n", "117");
+  postData.addQueryItem("mbytes", "0");
+  postData.addQueryItem("minutes", "0");
+  postData.addQueryItem("mac", "02:00:00:00:00:00");
+
+  QNetworkRequest request(QUrl(LOGIN_URL));
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    "application/x-www-form-urlencoded");
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.0 Qt");
+                    "HAUTNetworkGuard/1.3.2 Qt");
+  request.setTransferTimeout(10000);
 
-  QNetworkReply *reply = m_networkManager->get(request);
+  QNetworkReply *reply = m_networkManager->post(
+      request, postData.toString(QUrl::FullyEncoded).toUtf8());
   connect(reply, &QNetworkReply::finished, this, &Api::onLoginReplyFinished);
 }
 
 void Api::logout() {
-  QString url = buildLogoutUrl();
+  QUrlQuery postData;
+  postData.addQueryItem("action", "logout");
 
-  QNetworkRequest request(url);
+  QNetworkRequest request(QUrl(LOGIN_URL));
+  request.setHeader(QNetworkRequest::ContentTypeHeader,
+                    "application/x-www-form-urlencoded");
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.0 Qt");
+                    "HAUTNetworkGuard/1.3.2 Qt");
+  request.setTransferTimeout(10000);
 
-  QNetworkReply *reply = m_networkManager->get(request);
+  QNetworkReply *reply = m_networkManager->post(
+      request, postData.toString(QUrl::FullyEncoded).toUtf8());
   connect(reply, &QNetworkReply::finished, this, &Api::onLogoutReplyFinished);
 }
 
 void Api::checkStatus() {
-  QString url = buildStatusUrl();
-
-  QNetworkRequest request(url);
+  QNetworkRequest request(QUrl(STATUS_URL));
   request.setHeader(QNetworkRequest::UserAgentHeader,
-                    "HAUTNetworkGuard/1.3.0 Qt");
+                    "HAUTNetworkGuard/1.3.2 Qt");
   request.setTransferTimeout(5000); // 5 秒超时
 
   QNetworkReply *reply = m_networkManager->get(request);
   connect(reply, &QNetworkReply::finished, this, &Api::onStatusReplyFinished);
-}
-
-QString Api::buildLoginUrl(const QString &username, const QString &password) {
-  // SRUN3K 登录 URL
-  QString encUsername = Encryption::encryptUsername(username);
-  QString encPassword = Encryption::encryptPassword(password);
-
-  qint64 timestamp = QDateTime::currentMSecsSinceEpoch();
-  QString callback = QString("jQuery_%1").arg(timestamp);
-
-  QUrl url(BASE_URL + "/cgi-bin/srun_portal");
-  QUrlQuery query;
-  query.addQueryItem("callback", callback);
-  query.addQueryItem("action", "login");
-  query.addQueryItem("username", encUsername);
-  query.addQueryItem("password", encPassword);
-  query.addQueryItem("ac_id", AC_ID);
-  query.addQueryItem("type", "2");
-  query.addQueryItem("n", "117");
-  query.addQueryItem("_", QString::number(timestamp));
-
-  url.setQuery(query);
-  return url.toString();
-}
-
-QString Api::buildLogoutUrl() {
-  qint64 timestamp = QDateTime::currentMSecsSinceEpoch();
-  QString callback = QString("jQuery_%1").arg(timestamp);
-
-  QUrl url(BASE_URL + "/cgi-bin/srun_portal");
-  QUrlQuery query;
-  query.addQueryItem("callback", callback);
-  query.addQueryItem("action", "logout");
-  query.addQueryItem("ac_id", AC_ID);
-  query.addQueryItem("_", QString::number(timestamp));
-
-  url.setQuery(query);
-  return url.toString();
-}
-
-QString Api::buildStatusUrl() {
-  qint64 timestamp = QDateTime::currentMSecsSinceEpoch();
-  QString callback = QString("jQuery_%1").arg(timestamp);
-
-  QUrl url(BASE_URL + "/cgi-bin/rad_user_info");
-  QUrlQuery query;
-  query.addQueryItem("callback", callback);
-  query.addQueryItem("_", QString::number(timestamp));
-
-  url.setQuery(query);
-  return url.toString();
 }
 
 void Api::onLoginReplyFinished() {
@@ -108,23 +81,29 @@ void Api::onLoginReplyFinished() {
   reply->deleteLater();
 
   if (reply->error() != QNetworkReply::NoError) {
-    emit loginFailed(reply->errorString());
+    emit loginFailed(QString("网络错误: %1").arg(reply->errorString()));
     return;
   }
 
   QString response = QString::fromUtf8(reply->readAll());
 
-  // 解析 JSONP 响应
-  QRegularExpression re("\"result\":\"(\\d+)\"");
-  QRegularExpressionMatch match = re.match(response);
-
-  if (match.hasMatch() && match.captured(1) == "1") {
+  // 检查登录结果 (与 Rust 版本一致)
+  if (response.contains("login_ok") || response.contains("already_online")) {
     emit loginSuccess("登录成功");
   } else {
     // 提取错误信息
-    QRegularExpression errRe("\"error\":\"([^\"]+)\"");
-    QRegularExpressionMatch errMatch = errRe.match(response);
-    QString error = errMatch.hasMatch() ? errMatch.captured(1) : "登录失败";
+    QString error = "登录失败";
+    if (response.contains("E")) {
+      // 尝试提取错误码
+      QRegularExpression errRe("E(\\d+)");
+      QRegularExpressionMatch match = errRe.match(response);
+      if (match.hasMatch()) {
+        error = QString("登录失败 (错误码: E%1)").arg(match.captured(1));
+      }
+    }
+    if (!response.isEmpty() && response.length() < 200) {
+      error = response;
+    }
     emit loginFailed(error);
   }
 }
@@ -137,11 +116,18 @@ void Api::onLogoutReplyFinished() {
   reply->deleteLater();
 
   if (reply->error() != QNetworkReply::NoError) {
-    emit logoutFailed(reply->errorString());
+    emit logoutFailed(QString("网络错误: %1").arg(reply->errorString()));
     return;
   }
 
-  emit logoutSuccess();
+  QString response = QString::fromUtf8(reply->readAll());
+
+  // 与 Rust 版本一致
+  if (response.contains("logout_ok") || response.contains("not_online")) {
+    emit logoutSuccess();
+  } else {
+    emit logoutFailed("注销失败");
+  }
 }
 
 void Api::onStatusReplyFinished() {
@@ -164,20 +150,16 @@ void Api::onStatusReplyFinished() {
     return;
   }
 
-  // 解析在线信息
-  QRegularExpression ipRe("\"online_ip\":\"([^\"]+)\"");
-  QRegularExpression bytesRe("\"sum_bytes\":(\\d+)");
-  QRegularExpression secondsRe("\"sum_seconds\":(\\d+)");
+  // 解析逗号分隔的响应格式: username,seconds,ip,bytes,...
+  QStringList parts = response.split(',');
+  if (parts.size() >= 4) {
+    QString username = parts[0];
+    qint64 seconds = parts[1].toLongLong();
+    QString ip = parts[2];
+    qint64 bytes = parts[3].toLongLong();
 
-  QRegularExpressionMatch ipMatch = ipRe.match(response);
-  QRegularExpressionMatch bytesMatch = bytesRe.match(response);
-  QRegularExpressionMatch secondsMatch = secondsRe.match(response);
-
-  QString ip = ipMatch.hasMatch() ? ipMatch.captured(1) : "";
-  qint64 bytes =
-      bytesMatch.hasMatch() ? bytesMatch.captured(1).toLongLong() : 0;
-  qint64 seconds =
-      secondsMatch.hasMatch() ? secondsMatch.captured(1).toLongLong() : 0;
-
-  emit statusChecked(true, ip, bytes, seconds);
+    emit statusChecked(true, ip, bytes, seconds);
+  } else {
+    emit statusChecked(false, "", 0, 0);
+  }
 }

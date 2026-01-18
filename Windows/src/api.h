@@ -41,8 +41,8 @@ private:
 
   QNetworkAccessManager *m_networkManager;
 
-  static const QString BASE_URL;
-  static const QString AC_ID;
+  static const QString STATUS_URL;
+  static const QString LOGIN_URL;
 };
 
 #endif // API_H

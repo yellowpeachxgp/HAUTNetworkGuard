@@ -26,7 +26,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure CMake
-        run: cmake -B build -S Windows-Qt -DCMAKE_BUILD_TYPE=Release
+        run: cmake -B build -S Windows -DCMAKE_BUILD_TYPE=Release
         
       - name: Build
         run: cmake --build build --config Release

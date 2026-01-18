@@ -1,7 +1,0 @@
-#include "windows.h"
-
-// Application icon
-1 ICON "app.ico"
-
-// Application manifest
-1 24 "app.manifest"

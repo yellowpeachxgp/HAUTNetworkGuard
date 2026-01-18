@@ -24,3 +24,6 @@ Windows/target/
 
 # Logs
 *.log
+
+# Rust build artifacts
+Windows-Rust-Deprecated/target/

@@ -101,32 +101,24 @@ cd macOS
 ./create-dmg.sh
 ```
 
-### Windows
+### Windows (Qt 6)
 
-需要安装 Rust 工具链：
-
-```bash
-# 安装 Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 构建
-cd Windows
-cargo build --release
-
-# 输出位于 target/release/haut-network-guard.exe
-```
-
-#### 从 macOS 交叉编译 Windows
+Windows 版本使用 Qt 6 构建，通过 GitHub Actions 自动编译：
 
 ```bash
-# 安装 Windows 目标和 mingw-w64
-rustup target add x86_64-pc-windows-gnu
-brew install mingw-w64
-
-# 交叉编译
+# 本地构建 (需要 Qt 6 SDK)
 cd Windows
-cargo build --release --target x86_64-pc-windows-gnu
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
 ```
+
+> **推荐方式**: 推送 tag 到 GitHub，自动触发构建并发布
+>
+> ```bash
+> git tag v1.x.x
+> git push origin v1.x.x
+> ```
 
 ## 项目结构
 
@@ -226,7 +218,7 @@ cd OpenWrt
 - **CI/CD**: 新增 GitHub Actions 自动构建
   - 推送 tag 时自动编译 Windows (Qt) 和 macOS (Swift)
   - 自动上传二进制文件到 GitHub Release
-- **说明**: 原 Rust 版本保留在 `Windows/` 目录作为备份
+- **说明**: 原 Rust 版本已弃用，代码保留在 `Windows-Rust-Deprecated/` 目录
 
 ### v1.2.6 (2026-01)
 - **OpenWrt**: 修复服务启动崩溃问题 (感谢 @1826013250 提交 PR #2)

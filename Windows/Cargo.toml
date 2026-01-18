@@ -1,6 +1,6 @@
 [package]
 name = "haut-network-guard"
-version = "1.2.4"
+version = "1.2.5"
 edition = "2021"
 authors = ["YellowPeach"]
 description = "河南工业大学校园网自动登录工具"

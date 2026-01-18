@@ -49,6 +49,12 @@ impl Default for AppState {
     }
 }
 
+/// 全局窗口可见性控制 (用于托盘菜单通信)
+#[cfg(target_os = "windows")]
+static WINDOW_SHOULD_SHOW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+#[cfg(target_os = "windows")]
+static APP_SHOULD_EXIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// 主应用
 struct HautApp {
     state: Arc<Mutex<AppState>>,
@@ -60,6 +66,8 @@ struct HautApp {
     password_input: String,
     remember: bool,
     auto_launch: bool,
+    #[cfg(target_os = "windows")]
+    window_minimized: bool,
 }
 
 impl HautApp {
@@ -85,6 +93,8 @@ impl HautApp {
             password_input: password,
             remember,
             auto_launch,
+            #[cfg(target_os = "windows")]
+            window_minimized: false,
         }
     }
 }
@@ -132,6 +142,32 @@ fn setup_fonts(ctx: &egui::Context) {
 impl eframe::App for HautApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_secs(1));
+
+        // Windows: 检查是否应该退出
+        #[cfg(target_os = "windows")]
+        if APP_SHOULD_EXIT.load(Ordering::Relaxed) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+
+        // Windows: 检查托盘菜单是否请求显示窗口
+        #[cfg(target_os = "windows")]
+        if WINDOW_SHOULD_SHOW.swap(false, Ordering::Relaxed) && self.window_minimized {
+            self.window_minimized = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+
+        // Windows: 检测窗口关闭请求，改为最小化到托盘
+        #[cfg(target_os = "windows")]
+        {
+            if ctx.input(|i| i.viewport().close_requested()) {
+                // 阻止关闭，改为隐藏窗口
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                self.window_minimized = true;
+            }
+        }
 
         if self.show_settings {
             self.show_settings_window(ctx);
@@ -594,10 +630,6 @@ fn format_duration(seconds: u64) -> String {
 fn main() -> eframe::Result<()> {
     let state = Arc::new(Mutex::new(AppState::default()));
     let state_clone = Arc::clone(&state);
-    
-    // 应用退出标志
-    let should_exit = Arc::new(AtomicBool::new(false));
-    let should_exit_clone = Arc::clone(&should_exit);
 
     // 后台状态检测线程
     thread::spawn(move || {
@@ -610,8 +642,9 @@ fn main() -> eframe::Result<()> {
         let mut first_run = true;
         
         loop {
-            // 检查是否应该退出
-            if should_exit_clone.load(Ordering::Relaxed) {
+            // 检查是否应该退出 (使用全局静态变量)
+            #[cfg(target_os = "windows")]
+            if APP_SHOULD_EXIT.load(Ordering::Relaxed) {
                 break;
             }
             
@@ -682,16 +715,15 @@ fn main() -> eframe::Result<()> {
             .build();
             
         // 处理菜单事件
-        let should_exit_menu = Arc::clone(&should_exit);
         thread::spawn(move || {
             loop {
                 if let Ok(event) = MenuEvent::receiver().recv() {
                     if event.id == show_id {
-                        // 显示窗口 - 通过重启应用实现 (简化方案)
-                        // 由于 eframe 限制，这里只能提示用户
+                        // 显示窗口 - 设置全局标志
+                        WINDOW_SHOULD_SHOW.store(true, Ordering::Relaxed);
                     } else if event.id == exit_id {
-                        should_exit_menu.store(true, Ordering::Relaxed);
-                        std::process::exit(0);
+                        // 退出程序 - 设置全局标志
+                        APP_SHOULD_EXIT.store(true, Ordering::Relaxed);
                     }
                 }
             }

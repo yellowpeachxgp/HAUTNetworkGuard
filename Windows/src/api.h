@@ -11,6 +11,7 @@ class Api : public QObject {
 
 public:
   explicit Api(QObject *parent = nullptr);
+  ~Api();
 
   // 登录
   void login(const QString &username, const QString &password);
@@ -35,10 +36,6 @@ private slots:
   void onStatusReplyFinished();
 
 private:
-  QString buildLoginUrl(const QString &username, const QString &password);
-  QString buildLogoutUrl();
-  QString buildStatusUrl();
-
   QNetworkAccessManager *m_networkManager;
 
   static const QString STATUS_URL;

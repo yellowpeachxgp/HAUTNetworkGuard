@@ -34,17 +34,11 @@ set(RESOURCES
     resources/resources.qrc
 )
 
-# Windows 图标
-if(WIN32)
-    set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
-endif()
-
 # 创建可执行文件
 add_executable(${PROJECT_NAME} WIN32
     ${SOURCES}
     ${HEADERS}
     ${RESOURCES}
-    ${APP_ICON_RESOURCE_WINDOWS}
 )
 
 # 链接 Qt 库

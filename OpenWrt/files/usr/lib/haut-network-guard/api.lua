@@ -116,7 +116,7 @@ local function http_get(url, req_id, action)
         end
     end
 
-    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%d body=%s",
+    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%.0f body=%s",
         req_id, tostring(action or "get"), meta.http_code, meta.duration_ms, log.bytes_summary(body)))
     if tonumber(meta.exit_code or 0) ~= 0 then
         return nil, "curl_exit_" .. tostring(meta.exit_code), meta
@@ -170,7 +170,7 @@ local function http_post(url, body, req_id, action)
         end
     end
 
-    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%d body=%s",
+    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%.0f body=%s",
         req_id, tostring(action or "post"), meta.http_code, meta.duration_ms, log.bytes_summary(body_content)))
     if tonumber(meta.exit_code or 0) ~= 0 then
         return nil, "curl_exit_" .. tostring(meta.exit_code), meta
@@ -215,11 +215,11 @@ function api.login(username, password, context)
 
     local classified = protocol.classify_login_response(response)
     log.info(string.format(
-        "[%s] action=login phase=response class=%s http=%s elapsed_ms=%d msg=%s",
+        "[%s] action=login phase=response class=%s http=%s elapsed_ms=%.0f msg=%s",
         req_id,
         tostring(classified.category),
         tostring(meta and meta.http_code or "000"),
-        tonumber(meta and meta.duration_ms or -1),
+        math.floor(tonumber(meta and meta.duration_ms or -1)),
         log.preview(classified.message, 180)
     ))
 
@@ -242,11 +242,11 @@ function api.logout()
 
     local classified = protocol.classify_login_response(response)
     log.info(string.format(
-        "[%s] action=logout phase=response class=%s http=%s elapsed_ms=%d msg=%s",
+        "[%s] action=logout phase=response class=%s http=%s elapsed_ms=%.0f msg=%s",
         req_id,
         tostring(classified.category),
         tostring(meta and meta.http_code or "000"),
-        tonumber(meta and meta.duration_ms or -1),
+        math.floor(tonumber(meta and meta.duration_ms or -1)),
         log.preview(classified.message, 120)
     ))
     if classified.category == "logout_ok" or classified.category == "not_online" then
@@ -274,25 +274,25 @@ function api.get_user_info(source)
     local parsed, format = protocol.parse_status_response(response)
     if parsed then
         log.debug(string.format(
-            "[%s] action=status phase=parse class=online_%s user=%s ip=%s bytes=%d seconds=%d",
+            "[%s] action=status phase=parse class=online_%s user=%s ip=%s bytes=%.0f seconds=%.0f",
             req_id, tostring(format), log.mask_username(parsed.username), tostring(parsed.ip or ""),
-            tonumber(parsed.bytes or 0), tonumber(parsed.seconds or 0)
+            math.floor(tonumber(parsed.bytes or 0)), math.floor(tonumber(parsed.seconds or 0))
         ))
-        log.info(string.format("[%s] action=status phase=response class=online_%s source=%s http=%s elapsed_ms=%d",
+        log.info(string.format("[%s] action=status phase=response class=online_%s source=%s http=%s elapsed_ms=%.0f",
             req_id, tostring(format), source, tostring(meta and meta.http_code or "000"),
-            tonumber(meta and meta.duration_ms or -1)))
+            math.floor(tonumber(meta and meta.duration_ms or -1))))
         return parsed, "online_" .. tostring(format)
     end
 
     if format == "offline" then
-        log.debug(string.format("[%s] action=status phase=response class=offline source=%s http=%s elapsed_ms=%d",
-            req_id, source, tostring(meta and meta.http_code or "000"), tonumber(meta and meta.duration_ms or -1)))
+        log.debug(string.format("[%s] action=status phase=response class=offline source=%s http=%s elapsed_ms=%.0f",
+            req_id, source, tostring(meta and meta.http_code or "000"), math.floor(tonumber(meta and meta.duration_ms or -1))))
         return nil, "offline"
     end
 
-    log.warn(string.format("[%s] action=status phase=response class=%s source=%s http=%s elapsed_ms=%d preview=%s",
+    log.warn(string.format("[%s] action=status phase=response class=%s source=%s http=%s elapsed_ms=%.0f preview=%s",
         req_id, tostring(format), source, tostring(meta and meta.http_code or "000"),
-        tonumber(meta and meta.duration_ms or -1), log.preview(response, 180)))
+        math.floor(tonumber(meta and meta.duration_ms or -1)), log.preview(response, 180)))
     return nil, tostring(format)
 end
 

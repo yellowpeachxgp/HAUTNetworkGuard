@@ -1,0 +1,5 @@
+# Force LF for scripts and Lua files (prevents CRLF issues on OpenWrt)
+*.sh text eol=lf
+*.lua text eol=lf
+*.conf text eol=lf
+*.init text eol=lf

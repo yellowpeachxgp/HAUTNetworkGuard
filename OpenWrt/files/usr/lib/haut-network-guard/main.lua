@@ -117,7 +117,7 @@ end
 -- 格式化流量
 local function format_bytes(bytes)
     if bytes < 1024 then
-        return string.format("%d B", bytes)
+        return string.format("%.0f B", bytes)
     elseif bytes < 1048576 then
         return string.format("%.2f KB", bytes / 1024)
     elseif bytes < 1073741824 then
@@ -133,11 +133,11 @@ local function format_time(seconds)
     local mins = math.floor((seconds % 3600) / 60)
     local secs = seconds % 60
     if hours > 0 then
-        return string.format("%d小时%d分%d秒", hours, mins, secs)
+        return string.format("%.0f小时%.0f分%.0f秒", hours, mins, secs)
     elseif mins > 0 then
-        return string.format("%d分%d秒", mins, secs)
+        return string.format("%.0f分%.0f秒", mins, secs)
     else
-        return string.format("%d秒", secs)
+        return string.format("%.0f秒", secs)
     end
 end
 

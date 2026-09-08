@@ -47,6 +47,17 @@ def main():
         content = path.read_text(encoding="utf-8")
         assert VERSION in content, f"{path} missing current version {VERSION}"
 
+    require_version(
+        ROOT / "README.md",
+        r"HAUTNetworkGuard/v([0-9]+\.[0-9]+\.[0-9]+)/OpenWrt/install-online\.sh \| sh -s -- v?\1",
+    )
+    require_version(
+        ROOT / "OpenWrt" / "README.md",
+        r"HAUTNetworkGuard/v([0-9]+\.[0-9]+\.[0-9]+)/OpenWrt/install-online\.sh \| sh -s -- v?\1",
+    )
+    require_version(ROOT / "Windows" / "AIREADME.md", r"版本号\*\*: ([0-9]+\.[0-9]+\.[0-9]+)")
+    require_version(ROOT / "macOS" / "AIREADME.md", r"版本号\*\*: ([0-9]+\.[0-9]+\.[0-9]+)")
+
     online_install = (ROOT / "OpenWrt" / "install-online.sh").read_text(encoding="utf-8")
     assert 'echo "  安装完成! (v$VERSION)"' in online_install, (
         "OpenWrt 在线安装完成提示必须消费下载程序的版本源"

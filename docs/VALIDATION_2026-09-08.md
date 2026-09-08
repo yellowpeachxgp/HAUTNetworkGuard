@@ -101,7 +101,7 @@ lua5.3 tests/test_openwrt_runtime.lua
 
 ## 契约与仍未验证内容
 
-Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff --check 已检查。CI 工作流现已加入 PR/main 触发及 Lua 5.1/5.3 模块、运行和安装故障回归。
+Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff --check 已检查。版本契约还会精确匹配 README、OpenWrt README 和两份 AIREADME 的当前安装/版本位置，发现漂移即失败。CI 工作流现已加入 PR/main 触发及 Lua 5.1/5.3 模块、运行和安装故障回归。
 
 尚未达到产品完成门禁的项目：真实 Windows/macOS 桌面重复启动与睡眠唤醒、OpenWrt 路由器重启和真实状态请求、OpenWrt 下载端消费 Release 哈希、Developer ID/公证、跨签名升级、完整日志字段审计、真实校园网首次登录/断线恢复/注销/重启、完整学生旅程和 7 天稳定性。
 

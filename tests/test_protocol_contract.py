@@ -190,6 +190,9 @@ def sanitize_uci_value(raw: str):
 def main():
     fixtures = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
+    openwrt_api = (ROOT / "OpenWrt/files/usr/lib/haut-network-guard/api.lua").read_text(encoding="utf-8")
+    assert "apple.com" not in openwrt_api, "OpenWrt 状态模块不得依赖公网探测"
+
     for case in fixtures["username_vectors"]:
         actual = encrypt_username(case["input"])
         assert actual == case["expected"], f"username vector failed: {case}"

@@ -296,12 +296,4 @@ function api.get_user_info(source)
     return nil, tostring(format)
 end
 
-function api.test_connection()
-    local cmd = "curl -s --connect-timeout 3 'http://www.apple.com/library/test/success.html'"
-    local handle = io.popen(cmd)
-    local result = handle:read("*a")
-    handle:close()
-    return result:find("Success") ~= nil
-end
-
 return api

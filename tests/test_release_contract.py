@@ -26,6 +26,9 @@ def main():
     require(workflow, "name: Validate Release Assets", "Release asset validation step")
     require(workflow, "sha256sum -c SHA256SUMS", "desktop checksum verification")
     require(workflow, 'grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS', "OpenWrt manifest coverage")
+    online_install = (ROOT / "OpenWrt/install-online.sh").read_text(encoding="utf-8")
+    require(online_install, 'EXPECTED_VERSION="${REPO_REF#v}"', "OpenWrt tag/version guard")
+    require(online_install, '"$VERSION" != "$EXPECTED_VERSION"', "OpenWrt tag/version equality")
     for asset in (
         "HAUTNetworkGuard-Windows.zip",
         "HAUTNetworkGuard.dmg",

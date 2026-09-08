@@ -84,7 +84,7 @@ Lua 源码来自 [官方下载区](https://www.lua.org/ftp/)，下载后核对�
 
 1. `tests/test_openwrt_modules.lua`：通过。
 2. `tests/test_openwrt_runtime.lua`：通过，实际执行 API 和一轮 main 循环，curl/UCI/文件边界模拟；覆盖 PR #3 崩溃、小数流量/时长、JSON 空格、URL 编码、登录/注销、异常与网络失败。
-3. `tests/test_openwrt_installation.py`：每种解释器 20 项通过，共 40 项。实际执行正式 Shell 脚本和真实 Lua 的安装/卸载路径，覆盖离线与在线场景，只对安装根目录、下载和服务边界注入临时环境。
+3. `tests/test_openwrt_installation.py`：每种解释器 21 项通过，共 42 项，新增固定 tag 与 `version.lua` 不一致拒绝。实际执行正式 Shell 脚本和真实 Lua 的安装/卸载路径，覆盖离线与在线场景，只对安装根目录、下载和服务边界注入临时环境。
 
 故障注入覆盖：新装、重装保留配置、下载失败、半截 init 文件清理、非法 Lua、启用失败时恢复旧版本或移除新装、切换失败回滚、升级健康失败恢复、保持停止状态、下载失败不停止旧服务、备份清理失败不删除新安装。
 

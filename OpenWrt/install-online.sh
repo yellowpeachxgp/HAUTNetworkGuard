@@ -175,6 +175,15 @@ if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo "错误: 无法读取有效程序版本"
     exit 1
 fi
+case "$REPO_REF" in
+    v*)
+        EXPECTED_VERSION="${REPO_REF#v}"
+        if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "错误: tag 与程序版本不一致: $REPO_REF -> $VERSION"
+            exit 1
+        fi
+        ;;
+esac
 test -s "$INIT_STAGE"
 sh -n "$INIT_STAGE"
 for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do

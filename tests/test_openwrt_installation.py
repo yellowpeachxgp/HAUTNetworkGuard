@@ -142,8 +142,8 @@ esac
             for p in self.root.rglob("*") if p.is_file()
         }
 
-    def run_script(self, script, success=True):
-        result = subprocess.run(["sh", str(ROOT / "OpenWrt" / script), "v1.3.18"],
+    def run_script(self, script, success=True, ref="v1.3.18"):
+        result = subprocess.run(["sh", str(ROOT / "OpenWrt" / script), ref],
                                 env=self.env, cwd=ROOT, capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
         return result
@@ -182,6 +182,13 @@ esac
         self.assertTrue(os.access(self.init, os.X_OK))
         self.assertEqual((self.program / "main.lua").read_bytes(),
                          (self.remote / "files/usr/lib/haut-network-guard/main.lua").read_bytes())
+        self.assert_no_temporary_files()
+
+    def test_tag_version_mismatch_is_rejected(self):
+        version_file = self.remote / "files/usr/lib/haut-network-guard/version.lua"
+        version_file.write_text('return "1.3.19"\n')
+        result = self.run_script("install-online.sh", False)
+        self.assertIn("tag 与程序版本不一致", result.stdout)
         self.assert_no_temporary_files()
 
     def test_reinstall_preserves_config(self):

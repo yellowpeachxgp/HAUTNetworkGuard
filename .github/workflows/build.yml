@@ -106,6 +106,18 @@ jobs:
           }
           Compress-Archive -Path HAUTNetworkGuard-Windows -DestinationPath HAUTNetworkGuard-Windows.zip
 
+      - name: Validate Installer ZIP
+        shell: pwsh
+        run: |
+          $extract = Join-Path $PWD "zip-validation"
+          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+          Expand-Archive -Path HAUTNetworkGuard-Windows.zip -DestinationPath $extract
+          $root = Join-Path $extract "HAUTNetworkGuard-Windows"
+          if (-not (Test-Path (Join-Path $root "HAUTNetworkGuard.exe"))) { throw "ZIP 缺少主程序" }
+          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Network.dll", "Qt6Widgets.dll", "platforms/qwindows.dll")) {
+            if (-not (Test-Path (Join-Path $root $dll))) { throw "ZIP 缺少运行库: $dll" }
+          }
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
         with:
@@ -135,6 +147,20 @@ jobs:
         run: |
           codesign --verify --verbose macOS/build/HAUTNetworkGuard.app
           echo "代码签名验证通过"
+
+      - name: Validate DMG Artifact
+        run: |
+          set -euo pipefail
+          hdiutil verify macOS/build/HAUTNetworkGuard.dmg
+          mount_point="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$mount_point" >/dev/null 2>&1 || true
+            rmdir "$mount_point" || true
+          }
+          trap cleanup EXIT
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" macOS/build/HAUTNetworkGuard.dmg >/dev/null
+          test -x "$mount_point/HAUTNetworkGuard.app/Contents/MacOS/HAUTNetworkGuard"
+          codesign --verify --deep --strict "$mount_point/HAUTNetworkGuard.app"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v7

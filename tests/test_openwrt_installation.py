@@ -105,7 +105,7 @@ sys.exit(subprocess.call([os.environ["HAUT_REAL_MV"], *args]))
     def service(self, version):
         return '#!/bin/sh\nVERSION="' + version + r'''"
 printf '%s:%s\n' "$VERSION" "$1" >> "$HAUT_FAKE_EVENTS"
-case "$1" in
+    case "$1" in
     enable)
         if [ "$VERSION" = new ] && [ "$HAUT_FAIL_ENABLE" = 1 ]; then exit 1; fi
         printf enabled > "$HAUT_FAKE_ENABLED" ;;
@@ -113,7 +113,9 @@ case "$1" in
     start)
         if [ "$VERSION" = new ] && [ "$HAUT_FAIL_START" = 1 ]; then exit 1; fi
         printf running > "$HAUT_FAKE_RUNNING" ;;
-    stop) rm -f "$HAUT_FAKE_RUNNING" ;;
+    stop)
+        if [ "$HAUT_FAIL_STOP" = 1 ]; then exit 72; fi
+        rm -f "$HAUT_FAKE_RUNNING" ;;
     status)
         if [ "$VERSION" = new ] && [ "$HAUT_FAIL_HEALTH" = 1 ]; then exit 1; fi
         test -f "$HAUT_FAKE_RUNNING" ;;
@@ -218,6 +220,13 @@ esac
         self.assertFalse(self.program.exists())
         self.assertFalse(self.init.exists())
         self.assertFalse(self.config.exists())
+
+    def test_uninstall_stop_failure_keeps_install(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_STOP"] = "1"
+        self.run_uninstall(success=False)
+        self.assertEqual(self.snapshot(), before)
 
     def test_failed_download_keeps_old_install(self):
         self.seed_old()

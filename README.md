@@ -215,7 +215,15 @@ HAUTNetworkGuard/
 │   ├── fixtures/protocol_vectors.json
 │   ├── test_protocol_contract.py
 │   ├── test_docs_contract.py
-│   └── test_openwrt_modules.lua
+│   ├── test_version_contract.py
+│   ├── test_release_contract.py
+│   ├── test_session_policy.py
+│   ├── test_macos_uninstall.py
+│   ├── test_openwrt_installation.py
+│   ├── test_openwrt_modules.lua
+│   ├── test_openwrt_runtime.lua
+│   ├── test_openwrt_session.lua
+│   └── test_openwrt_log.lua
 │
 ├── .github/workflows/          # GitHub Actions CI/CD
 │   └── build.yml

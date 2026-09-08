@@ -43,6 +43,7 @@ jobs:
           python3 tests/test_protocol_contract.py
           python3 tests/test_docs_contract.py
           python3 tests/test_version_contract.py
+          python3 tests/test_release_contract.py
           python3 tests/test_session_policy.py
 
       - name: Validate OpenWrt Modules

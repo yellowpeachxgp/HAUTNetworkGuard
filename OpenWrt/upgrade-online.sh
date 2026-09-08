@@ -229,6 +229,7 @@ echo ""
 # 下载和校验期间保持旧服务运行。
 echo "[1/4] 准备备份..."
 
+mkdir -p "$ROOT_PREFIX/tmp"
 TMP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-upgrade.XXXXXX")"
 BACKUP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-backup.XXXXXX")"
 prepare_checksums

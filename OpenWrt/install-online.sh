@@ -143,6 +143,7 @@ opkg install lua curl >/dev/null 2>&1 || {
 # 创建同文件系统临时目录，完成全部下载后再切换
 echo "[2/5] 准备临时目录..."
 mkdir -p "$(dirname "$INSTALL_DIR")"
+mkdir -p "$(dirname "$INIT_FILE")" "$(dirname "$CONFIG_FILE")"
 STAGE_DIR="$(mktemp -d "$(dirname "$INSTALL_DIR")/.haut-network-guard-install.XXXXXX")"
 prepare_checksums
 

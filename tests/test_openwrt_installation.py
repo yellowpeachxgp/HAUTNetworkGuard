@@ -178,6 +178,14 @@ esac
     def test_fresh_install(self):
         self.run_script("install-online.sh")
         self.assertEqual(self.events(), ["new:enable"])
+
+    def test_fresh_install_creates_missing_system_directories(self):
+        shutil.rmtree(self.root / "etc")
+        shutil.rmtree(self.root / "tmp")
+        self.run_script("install-online.sh")
+        self.assertEqual(self.events(), ["new:enable"])
+        self.assertTrue(self.init.is_file())
+        self.assertTrue(self.config.is_file())
         self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o600)
         self.assertTrue(os.access(self.init, os.X_OK))
         self.assertEqual((self.program / "main.lua").read_bytes(),

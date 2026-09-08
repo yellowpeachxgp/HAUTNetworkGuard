@@ -6,7 +6,7 @@
 
 - 调研起点及保留的本地 main：`e4f553e6e5bcddd33d644eaa60716d85188a897e`。
 - 远端 main：`51edcd0515a1ffb398e6e1e7bdf3abbefa9aa922`，同为 v1.3.18。原本双方各差 3 个等价提交，快照只差 macOS/build.sh 的执行位。
-- 已建立 `goal/student-ready-integration` 集成分支，将本次增量提交移到 origin/main 之后；实现提交为 `68b6b79`。原始 main 未改写，变基前完整工作树快照保留在 `backup/student-ready-before-rebase`（`35d2b91`），执行位恢复后与该快照逐文件比较一致。
+- 已建立 `goal/student-ready-integration` 集成分支，将本次增量提交移到 origin/main 之后；当前集成提交为 `53a99b3`。原始 main 未改写，变基前完整工作树快照保留在 `backup/student-ready-before-rebase`（`35d2b91`），执行位恢复后与该快照逐文件比较一致。
 - 开始调研时的 14 个未提交文件属于既有工作，已保留；后续代码、测试和文档继续在该工作树演进，不能把当时的文件数量当作当前状态。
 - 已检查的社区 PR 为 #2 和 #3；#3 已进入集成提交，#2 核心修复早已生效，见 [PR 审查记录](PR_REVIEW_2026-09-08.md)。本次原生 CI 将通过集成分支的草稿 PR 验证。
 - 没有发布新版本，没有执行真实校园网登录/注销，也没有运行安装/卸载脚本修改本机服务。
@@ -20,7 +20,7 @@
 
 ## 当前可确认的验证
 
-macOS 主机具备原生 SDK，匹配 Xcode 工具链后，隔离凭据/Keychain、完整应用构建、UI smoke、ad-hoc 签名、DMG 只读挂载及包内文件核对均通过。Lua 5.1/5.3 模块与请求/循环回放均通过；安装/升级使用真实 Lua、临时根目录和模拟 curl/procd 边界，共 26 项故障注入通过。
+macOS 主机具备原生 SDK，匹配 Xcode 工具链后，隔离凭据/Keychain、完整应用构建、UI smoke、ad-hoc 签名、DMG 只读挂载及包内文件核对均通过。Lua 5.1/5.3 模块与请求/循环回放均通过；安装/升级使用真实 Lua、临时根目录和模拟 curl/procd 边界，每种解释器 15 项、共 30 项故障注入通过。
 
 这些验证不等于 Windows 原生执行、OpenWrt 真机运行、Gatekeeper 公证、校园网连接或长期稳定性验收。具体证据与命令见 [验证记录](VALIDATION_2026-09-08.md)。
 

@@ -23,6 +23,16 @@ struct UISmokeTests {
         Logger.isEnabled = false
         let app = NSApplication.shared
         _ = app.setActivationPolicy(.accessory)
+        guard DirectHTTPClient.preferredInterfaceName(from: [
+            (name: "en1", type: .wifi),
+            (name: "en0", type: .wiredEthernet)
+        ]) == "en0" else { fail("有线接口应优先于 Wi-Fi") }
+        guard DirectHTTPClient.preferredInterfaceName(from: [
+            (name: "en1", type: .wifi)
+        ]) == "en1" else { fail("没有有线接口时应回退到 Wi-Fi") }
+        guard DirectHTTPClient.preferredInterfaceName(from: [
+            (name: "utun0", type: .other)
+        ]) == "utun0" else { fail("没有有线或 Wi-Fi 时应使用首个可用接口") }
         guard !SingleInstanceGuard.anotherInstanceExists(testMode: true) else {
             fail("UI smoke 测试模式不应触发生产实例检查")
         }

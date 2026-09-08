@@ -27,23 +27,34 @@ class DirectHTTPClient {
         monitor.cancel()
     }
 
+    static func preferredInterfaceName(
+        from interfaces: [(name: String, type: NWInterface.InterfaceType)]
+    ) -> String? {
+        if let wired = interfaces.first(where: { $0.type == .wiredEthernet }) {
+            return wired.name
+        }
+        if let wifi = interfaces.first(where: { $0.type == .wifi }) {
+            return wifi.name
+        }
+        return interfaces.first?.name
+    }
+
     /// 从网络路径中选取物理接口（优先有线，其次 WiFi）
     private func updateInterface(from path: NWPath) {
         let interfaces = path.availableInterfaces
-        let resolvedName: String?
-        if let wired = interfaces.first(where: { $0.type == .wiredEthernet }) {
-            resolvedName = wired.name
-            Logger.info("[DirectHTTP] 使用有线接口: \(wired.name)")
-        } else if let wifi = interfaces.first(where: { $0.type == .wifi }) {
-            resolvedName = wifi.name
-            Logger.info("[DirectHTTP] 使用 WiFi 接口: \(wifi.name)")
-        } else {
-            resolvedName = interfaces.first?.name
-            if let name = resolvedName {
-                Logger.info("[DirectHTTP] 使用接口: \(name)")
+        let resolvedName = Self.preferredInterfaceName(
+            from: interfaces.map { (name: $0.name, type: $0.type) }
+        )
+        if let resolvedName {
+            if interfaces.first(where: { $0.name == resolvedName })?.type == .wiredEthernet {
+                Logger.info("[DirectHTTP] 使用有线接口: \(resolvedName)")
+            } else if interfaces.first(where: { $0.name == resolvedName })?.type == .wifi {
+                Logger.info("[DirectHTTP] 使用 WiFi 接口: \(resolvedName)")
             } else {
-                Logger.warn("[DirectHTTP] 未找到可用物理接口")
+                Logger.info("[DirectHTTP] 使用接口: \(resolvedName)")
             }
+        } else {
+            Logger.warn("[DirectHTTP] 未找到可用物理接口")
         }
 
         stateQueue.sync {

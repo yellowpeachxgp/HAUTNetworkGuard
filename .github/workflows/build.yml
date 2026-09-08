@@ -137,6 +137,7 @@ jobs:
         run: |
           cd macOS
           chmod +x build.sh create-dmg.sh tests/run_smoke_tests.sh tests/run_ui_smoke_tests.sh
+          python3 ../tests/test_macos_uninstall.py
           python3 ../tests/test_session_policy.py
           ./tests/run_smoke_tests.sh
           ./tests/run_ui_smoke_tests.sh

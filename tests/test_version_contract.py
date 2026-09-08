@@ -19,10 +19,13 @@ def require_version(path: Path, pattern: str):
 
 
 def main():
-    require_version(ROOT / "Windows" / "CMakeLists.txt", r"project\(HAUTNetworkGuard VERSION ([0-9.]+)")
-    require_version(ROOT / "Windows" / "src" / "main.cpp", r'app\.setApplicationVersion\("([0-9.]+)"\)')
-    require_version(ROOT / "Windows" / "src" / "api.cpp", r'HAUTNetworkGuard/([0-9.]+) Qt')
-    require_version(ROOT / "Windows" / "src" / "mainwindow.cpp", r'HAUT Network Guard v([0-9.]+)')
+    cmake = (ROOT / "Windows" / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert 'file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" HAUT_VERSION' in cmake
+    for path in (ROOT / "Windows" / "src" / "main.cpp",
+                 ROOT / "Windows" / "src" / "api.cpp",
+                 ROOT / "Windows" / "src" / "mainwindow.cpp"):
+        content = path.read_text(encoding="utf-8")
+        assert "HAUT_VERSION_STRING" in content, f"{path} must consume generated version"
     require_version(ROOT / "macOS" / "Info.plist", r"<key>CFBundleShortVersionString</key>\s*<string>([0-9.]+)</string>")
     require_version(ROOT / "macOS" / "Sources" / "Config.swift", r'static let version = "([0-9.]+)"')
     require_version(ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "main.lua", r'local VERSION = "([0-9.]+)"')

@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
 
   // 设置应用程序信息
   app.setApplicationName("HAUTNetworkGuard");
-  app.setApplicationVersion("1.3.18");
+  app.setApplicationVersion(QStringLiteral(HAUT_VERSION_STRING));
   app.setOrganizationName("YellowPeach");
   // 使用系统默认图标
   app.setWindowIcon(app.style()->standardIcon(QStyle::SP_ComputerIcon));

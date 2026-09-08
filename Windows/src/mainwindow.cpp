@@ -20,7 +20,7 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
     : QMainWindow(parent), m_config(config), m_now(std::move(now)),
       m_backgroundTasks(backgroundTasks) {
   m_clock.start();
-  setWindowTitle("HAUT Network Guard v1.3.18");
+  setWindowTitle(QStringLiteral("HAUT Network Guard v" HAUT_VERSION_STRING));
   setFixedSize(460, 640);
   Logger::debug("MainWindow 初始化开始");
 
@@ -720,7 +720,7 @@ QString MainWindow::automaticRetryHint() const {
 
 QString MainWindow::diagnosticText() const {
   const QString retry = automaticRetryHint().isEmpty() ? "无" : automaticRetryHint();
-  return QString("HAUT Network Guard v1.3.18\n状态: %1\n%2\n自动登录: %3\n自动重试: %4")
+  return QString("HAUT Network Guard v" HAUT_VERSION_STRING "\n状态: %1\n%2\n自动登录: %3\n自动重试: %4")
       .arg(m_statusLabel->text(), m_lastCheckLabel->text(),
            m_config.autoLogin() ? "开启" : "关闭", retry);
 }

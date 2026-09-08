@@ -37,7 +37,7 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 - 已通过 Homebrew 安装 Qt 6.11.1（qtbase 及依赖）。使用 AppleClang 17 + MacOSX26.2.sdk，Windows 目录的完整应用编译、Qt 元对象信号连接、配置测试和主窗口回放通过。
 - CTest 共 5 项全部通过：`session_policy_tests`、`windows_smoke_tests`、`controller_session_tests`、`credential_failure_tests`、`instance_guard_tests`；正式 MainWindow 的 Qt 信号、按钮和保存失败回放为 62 条断言，另有单实例锁竞争断言。
 - Windows 配置测试及主窗口回放使用随机临时 INI，禁用系统自启动集成、正式日志和桌面通知。覆盖密码回读、取消记住密码、冷启动残留清理，以及点击登录时采用当前复选框；单实例锁测试确认第二个实例无法取得同一用户锁。
-- `Q_OS_WIN` 分支在这台 macOS 主机不执行，因此上述结果不能证明 DPAPI 或注册表自启动通过。
+- `Q_OS_WIN` 分支在这台 macOS 主机不执行，但运行 34232164603 已在 Windows Server 2022 执行实际 DPAPI 保存/解码与独立配置回读；本机结果仍不能证明 Windows 注册表自启动、真实桌面交互或跨账号迁移。
 - 凭据故障回放另有 20 条断言：编码失败、解码不符、真实 QSettings 自定义写入后端拒绝写盘、旧文件逐字节保留、运行配置恢复、同一实例故障恢复后重试、不可读旧凭据的保留与显式清除。测试存储后端使用临时目录。
 - Qt 窗口保存失败会显示错误、保留输入、阻止提交登录；系统自启动变更延迟到配置保存成功之后。真实 Windows 注册表多键写入的失败恢复尚待原生验证。
 - Swift、Qt 和 Lua 日志测试覆盖 JSON、CSV、表单、HTML、非结构化正文中的账号、密码和编码字段；正文只输出长度摘要。Lua 5.1/5.3 还检查传给系统 logger 的参数没有测试凭据。
@@ -60,7 +60,7 @@ codesign --verify --deep --strict macOS/build/session-validation/HAUTNetworkGuar
 
 Qt 原始结果保存在忽略目录 `macOS/tests/build/qt-validation/Testing/Temporary/LastTest.log`；Swift 最新应用构建日志为 `macOS/tests/build/session-build.log`。新的 App 位于 `macOS/build/session-validation/`，没有启动正式应用，没有重新制作该工作树的 DMG。
 
-当前集成验证 App 可执行文件 SHA-256：`66b6721b565425e2daed14b97e28a3bbb0535eba9ebffb433487f404614794f6`；DMG SHA-256：`bbf8f2c51778504558521ee46358f33afe8cadbb8d6c683f1971becb8c29fccf`。产物位于忽略目录 `macOS/build/session-validation/`，包含超大数值解析修复；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
+当前集成验证 App 可执行文件 SHA-256：`6bd25f48714c196a6b2476ace2d72cd6e3fd12924cb49b0f09133b1c0a79f021`；DMG SHA-256：`fe6fe8b41949183daa15a84b0773e3948add76ab2e774ce416197de5b479b9df`。产物位于忽略目录 `macOS/build/session-validation/`，包含超大数值解析修复；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
 
 ## Lua 与 OpenWrt
 
@@ -94,25 +94,15 @@ lua5.3 tests/test_openwrt_runtime.lua
 
 Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff --check 已检查。CI 工作流现已加入 PR/main 触发及 Lua 5.1/5.3 模块、运行和安装故障回归。
 
+尚未达到产品完成门禁的项目：真实 Windows/macOS 桌面重复启动与睡眠唤醒、OpenWrt 路由器重启和真实状态请求、OpenWrt 下载端消费 Release 哈希、Developer ID/公证、跨签名升级、完整日志字段审计、真实校园网首次登录/断线恢复/注销/重启、完整学生旅程和 7 天稳定性。
+
 ## 集成分支与原生 CI
 
-- 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。
-- 首轮提交：`7276a6c1dbc6e1f18fe5492e85e2eac0c91e2443`；推送后本地 HEAD、跟踪分支及 ls-remote 三方一致。
-- [首轮运行 34224354585](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224354585)：macOS 构建、原生测试、DMG 打包和签名通过；Linux OpenWrt 双版本测试通过；Windows 在 CMake 配置阶段失败，未执行编译和测试。
-
-- [第五轮运行 34229762182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34229762182) 对应协议安全范围提交 `66684f3837e67fe241225106af2517816c5ca3a6`：三平台构建、协议契约、OpenWrt 双版本回归和 Windows/macOS 测试全部通过。
-- [第三轮运行 34225154211](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34225154211) 对应超大数值修复：Windows 和 OpenWrt 全部通过；macOS 编译、测试和签名通过，但固定 `tmp.dmg` 路径在创建阶段触发 `Resource busy`。已改为唯一临时目录并在本机验证。
-
-- [第四轮运行 34226445948](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34226445948) 对应提交 `413d4efad1f6789d5e7b0f37a26f91373d306f1a`：macOS、Windows、OpenWrt 三项 job 全部通过。Windows Server 2022 / Qt 6.6 原生构建、4 项 CTest、DPAPI 回读、运行库部署和 ZIP 上传通过；macOS 编译、协议溢出回归、Keychain、UI smoke、DMG 创建、签名和上传通过；Release job 因草稿 PR 按预期跳过。
-
-- 第五轮运行 34229762182 对应协议安全范围提交 `66684f3837e67fe241225106af2517816c5ca3a6`：三平台构建、协议契约、OpenWrt 双版本回归和 Windows/macOS 测试全部通过。
-- Windows 失败原因：实际 `windows-latest` 镜像为 `windows-2025-vs2026`，现有生成器指定 VS 2022，找不到对应实例。已将作业固定到 `windows-2022`，其 [官方软件清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md#visual-studio-enterprise-2022) 包含 VS 2022；该问题已由第四轮 CI 验证通过。
-- 原社区 PR #2/#3 未远程合并或关闭；本集成尚未合并到 main，没有执行 Release。
-
-从第四轮 CI 下载并回读的集成预览资产保存在忽略目录 `macOS/tests/build/ci-34226445948/`：Windows ZIP SHA-256 为 `17c96a7a82040f3d3fdd82131fc2a44c7db50abdfc97c2245b4f82b6b2d30938`，macOS DMG SHA-256 为 `33e4a674cc43db3b1ae67d71428fc41d309416ee977d1a1bb3c183c13e9c4b01`。ZIP 回读确认包含 `HAUTNetworkGuard.exe`、Qt Core/Gui/Network/Widgets DLL 和 `platforms/qwindows.dll`；没有在本机启动 Windows 资产。
-
-[第二轮运行 34224732221](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224732221) 对应 `f4ed6dc3070e5ccdfba5fb42dd6fe72be74a0fee`：Windows、macOS、OpenWrt 全部通过，Release 按预期跳过。Windows Server 2022 上完成 Qt 6.6 原生编译、4 项 CTest、运行库部署和 ZIP 打包；其中 smoke test 真实执行 DPAPI 加密、解码和独立配置回读。该结果仍不能替代真实用户桌面、自启动、跨账号升级和校园网验收。
-
-等待 CI 时另发现并复现 macOS 协议解析缺陷：`sum_bytes=1e100` 在 `Double -> Int64` 转换时使进程以信号退出（本地复现退出码 -5）。已增加有限数及严格上界检查，超范围返回零，并添加正/负溢出、合法 Int64 最大值和超范围数字字符串回归；本地 macOS smoke 通过。该增量将由下一轮 CI 验证。
-
-跨签名/跨账号升级、完整日志隐私审计、单实例/睡眠唤醒、OpenWrt 状态策略及下载清单验证、真实校园网、学生完整旅程与 7 天稳定性仍未完成。不得依据当前测试宣布产品完成。
+- 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支提交与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34232164603](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34232164603) 对应桌面详情改造提交 `bd53b39eb9dc533e28210ffa79885ed22d9b3c2c`：Windows、macOS、OpenWrt 三项 job 和 Release 前置门禁全部通过。
+- [运行 34229762182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34229762182) 对应协议安全范围改造提交 `66684f3837e67fe241225106af2517816c5ca3a6`：三平台构建、协议契约、OpenWrt 双版本回归和桌面测试全部通过。
+- [运行 34231666520](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34231666520) 对应单实例与 OpenWrt 策略提交 `b29aebca796c6dcf0c975349daa9d79f4edf088a`：Windows、macOS、OpenWrt 全部通过。
+- [运行 34226445948](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34226445948) 首次验证唯一 DMG 临时目录修复；Windows Server 2022 / Qt 6.6 原生构建、5 项 CTest、DPAPI 回读、运行库部署和 ZIP 上传均通过，macOS DMG 创建和签名也通过。
+- 更早的 `windows-latest` 运行因镜像为 `windows-2025-vs2026` 而找不到 VS 2022 生成器；现已固定 `windows-2022`，其 [官方软件清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md#visual-studio-enterprise-2022)包含 VS 2022。
+- 从运行 34226445948 下载的预览资产保存在忽略目录 `macOS/tests/build/ci-34226445948/`：Windows ZIP SHA-256 为 `17c96a7a82040f3d3fdd82131fc2a44c7db50abdfc97c2245b4f82b6b2d30938`，macOS DMG SHA-256 为 `33e4a674cc43db3b1ae67d71428fc41d309416ee977d1a1bb3c183c13e9c4b01`。ZIP 回读确认包含可执行文件、Qt Core/Gui/Network/Widgets DLL 和 `platforms/qwindows.dll`；没有在本机启动 Windows 资产。
+- 运行 34225154211 曾在 macOS 打包阶段触发 `Resource busy`，唯一临时目录修复已由后续运行验证。所有 CI 运行的 Release job 因草稿 PR 按预期跳过；没有合并到 `main`，没有发布新版本。

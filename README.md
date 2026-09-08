@@ -29,7 +29,7 @@
 
 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面下载最新版本。
 
-Release 页面同时提供 `SHA256SUMS`。下载完成后可使用 `sha256sum -c SHA256SUMS` 校验 Windows ZIP 和 macOS DMG 的完整性。
+下一版正式 Release 将同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`。已发布的 v1.3.18 是历史资产，当前没有这两个清单；请不要把 v1.3.18 的桌面文件当作已完成的可审计发布。具体回读见 [发布资产审计](docs/RELEASE_ASSET_AUDIT_2026-09-09.md)。
 
 ### macOS
 
@@ -64,6 +64,8 @@ Release 页面同时提供 `SHA256SUMS`。下载完成后可使用 `sha256sum -c
 ```bash
 wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18
 ```
+
+> 当前已发布的 v1.3.18 缺少 `OpenWrt-SHA256SUMS`，安装脚本会在校验阶段安全停止；待下一版正式 Release 上传完整清单后再使用固定版本命令。
 
 **安装最新 main（适合测试）：**
 ```bash

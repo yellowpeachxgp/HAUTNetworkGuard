@@ -21,7 +21,7 @@
 | M5-01 Release 资产安装测试 | 部分实现 | CI 在 Windows Server 2022 解压 ZIP 并检查主程序及 Qt DLL；macOS CI 只读挂载 DMG、检查包内可执行文件并复核签名；OpenWrt 固定版本安装路径由 48 项双 Lua 故障矩阵覆盖 | 干净设备实际安装启动、正式 Release 资产和 OpenWrt 真机启动 |
 | M5-02 原子在线安装 | 本地与在线事务边界已验证 | 离线和在线脚本均先在 staging 目录完成真实 Lua/服务脚本校验，再原子切换；临时根目录测试覆盖中断、启用/切换失败、配置保留、哈希篡改、tag/版本不一致、备份清理失败和缺失系统临时目录；每种 Lua 24 项安装/升级/卸载测试通过 | 路由器存储限制、并发安装和断电恢复 |
 | M5-03 升级健康检查 | 模拟边界已验证 | 下载期间不停旧服务；保持用户停止状态；逐文件清单校验、文件回读与失败恢复；两种 Lua 各 24 个安装/升级/卸载测试通过 | procd 真机和至少一轮校园网状态请求；当前 status 成功不代表联网成功 |
-| M5-04 资产完整性 | 部分实现 | CI 哈希清单已加入；Release job 新增桌面资产 `sha256sum -c` 和 OpenWrt 清单文件覆盖回读；固定版本在线安装/升级消费 `OpenWrt-SHA256SUMS`，并拒绝 tag 与 `version.lua` 不一致；两种 Lua 各 24 项安装/升级/卸载测试通过；本地 macOS DMG 哈希/只读挂载/包内签名核对通过；CI 预览 ZIP/DMG 已下载、回读并核对哈希及关键文件 | OpenWrt 下载端消费清单、正式 Release 产物和来源验证 |
+| M5-04 资产完整性 | 部分实现 | CI 哈希清单已加入；Release job 新增桌面资产 `sha256sum -c` 和 OpenWrt 清单文件覆盖回读；固定版本在线安装/升级消费 `OpenWrt-SHA256SUMS`，并拒绝 tag 与 `version.lua` 不一致；两种 Lua 各 24 项安装/升级/卸载测试通过；本地 macOS DMG 哈希/只读挂载/包内签名核对通过；已审计 v1.3.18 远端桌面资产版本与哈希，但该 Release 缺少两个清单，固定版本 OpenWrt 安装会安全停止 | 下一版正式 Release 上传清单后，回读资产哈希、OpenWrt 覆盖和固定安装链路 |
 | M5-05 macOS 打包 | 本地已验证 | 匹配 Xcode SDK/编译器后构建、ad-hoc 签名、DMG 和窗口测试通过 | Developer ID/公证及干净设备首次启动未验证，ad-hoc 不等于 Gatekeeper 放行 |
 | M5-06 发布说明一致性 | 自动契约已加入 | `tests/test_release_contract.py` 已接入 CI，校验 tag/VERSION、Release 依赖、桌面资产、双哈希清单和 OpenWrt 固定版本安装命令 | 真实 Release tag、资产上传和发布页面回读 |
 | M6 现场和稳定性 | 未完成 | 已新增 [三端真实设备验收矩阵](REAL_DEVICE_ACCEPTANCE_MATRIX.md)，但没有新的校园网请求或 7 天运行证据 | 按矩阵完成 Windows/macOS/OpenWrt 真机、学生完整旅程、稳定性与最终发布门禁 |

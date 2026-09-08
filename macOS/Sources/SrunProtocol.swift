@@ -82,8 +82,11 @@ enum SrunProtocol {
 
     static func parseStatusResponse(_ response: String, callback: String? = nil) -> SrunParsedStatus {
         let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == "not_online" {
+        if trimmed == "not_online" {
             return SrunParsedStatus(online: false, format: "offline", username: "", ip: "", usedBytes: 0, usedSeconds: 0)
+        }
+        if trimmed.isEmpty {
+            return SrunParsedStatus(online: false, format: "unparsed", username: "", ip: "", usedBytes: 0, usedSeconds: 0)
         }
 
         let jsonString: String

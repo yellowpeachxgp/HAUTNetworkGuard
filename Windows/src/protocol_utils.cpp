@@ -112,8 +112,12 @@ StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {
   StatusParseResult result;
   const QString trimmed = response.trimmed();
 
-  if (trimmed.isEmpty() || trimmed == "not_online") {
+  if (trimmed == "not_online") {
     result.format = "offline";
+    return result;
+  }
+  if (trimmed.isEmpty()) {
+    result.format = "unparsed";
     return result;
   }
 

@@ -275,8 +275,11 @@ end
 
 function protocol.parse_status_response(response)
     local body = tostring(response or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if body == "" or body == "not_online" then
+    if body == "not_online" then
         return nil, "offline"
+    end
+    if body == "" then
+        return nil, "unparsed"
     end
 
     local json_body = body:match("^jQuery_%d+%((.+)%)$")

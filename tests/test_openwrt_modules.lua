@@ -121,5 +121,8 @@ assert_equal(null_identity_format, "unparsed", "parse_status_response.null_ident
 local parsed3, format3 = protocol.parse_status_response("not_online")
 assert_equal(parsed3, nil, "parse_status_response.offline.value")
 assert_equal(format3, "offline", "parse_status_response.offline.format")
+local empty_status, empty_status_format = protocol.parse_status_response("  \n\t")
+assert_equal(empty_status, nil, "parse_status_response.empty.value")
+assert_equal(empty_status_format, "unparsed", "parse_status_response.empty.format")
 
 print("openwrt modules ok")

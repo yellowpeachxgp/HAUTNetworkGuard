@@ -134,6 +134,10 @@ int main(int argc, char *argv[]) {
       "\"sum_bytes\":null,\"sum_seconds\":null}");
   expect(!nullIdentityResult.online && nullIdentityResult.format == "unparsed",
          "空身份 JSON 应统一判为异常");
+  const StatusParseResult emptyStatusResult =
+      ProtocolUtils::parseStatusResponse("  \n\t");
+  expect(!emptyStatusResult.online && emptyStatusResult.format == "unparsed",
+         "空状态响应不得误判离线");
 
   QSettings settings(storage.filePath("settings.ini"), QSettings::IniFormat);
 

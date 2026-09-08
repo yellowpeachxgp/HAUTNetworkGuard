@@ -178,6 +178,24 @@
       "ip": "",
       "bytes": 0,
       "seconds": 0
+    },
+    {
+      "input": "",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "  \n\t",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
     }
   ],
   "sanitize_vectors": [

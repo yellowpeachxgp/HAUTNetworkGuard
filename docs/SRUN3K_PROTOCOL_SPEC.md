@@ -91,6 +91,8 @@ username,seconds,ip,bytes,...
 
 CSV 的 `seconds` 和 `bytes` 只接受非负十进制整数；小数、负数、超出安全范围或其他脏字段会使整行标记为 `unparsed`。
 
+空状态响应（包括只含空白字符的响应）标记为 `unparsed`；只有明确的 `not_online` 响应才标记为 `offline`，避免把网关异常或中间网络设备的空响应误认为离线。
+
 ## 6. 登录响应分类
 
 - 包含 `login_ok`:

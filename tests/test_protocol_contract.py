@@ -45,9 +45,18 @@ def classify_login_response(response: str):
 
 def parse_status_response(response: str):
     body = response.strip()
-    if not body or body == "not_online":
+    if body == "not_online":
         return {
             "format": "offline",
+            "online": False,
+            "username": "",
+            "ip": "",
+            "bytes": 0,
+            "seconds": 0,
+        }
+    if not body:
+        return {
+            "format": "unparsed",
             "online": False,
             "username": "",
             "ip": "",

@@ -83,6 +83,9 @@ struct SmokeTests {
         )
         expect(!nullIdentity.online && nullIdentity.format == "unparsed",
                "空身份 JSON 应统一判为异常")
+        let emptyStatus = SrunProtocol.parseStatusResponse("  \n\t")
+        expect(!emptyStatus.online && emptyStatus.format == "unparsed",
+               "空状态响应不得误判离线")
         let integerBoundary = SrunProtocol.parseStatusResponse(
             #"{"user_name":"test-student","sum_bytes":9007199254740991,"sum_seconds":"9007199254740992"}"#
         )

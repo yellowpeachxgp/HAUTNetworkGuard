@@ -75,6 +75,9 @@ check(spaced and spaced.bytes == 512 and spaced.seconds == 321, "JSON 空格和�
 response_body = "not_online"
 local offline, offline_class = api.get_user_info("regression")
 check(offline == nil and offline_class == "offline", "离线分类回归")
+response_body = "   "
+local empty, empty_class = api.get_user_info("regression")
+check(empty == nil and empty_class == "unparsed", "空状态响应不得误判离线")
 response_body = "invalid body"
 local invalid, invalid_class = api.get_user_info("regression")
 check(invalid == nil and invalid_class == "unparsed", "异常响应分类回归")

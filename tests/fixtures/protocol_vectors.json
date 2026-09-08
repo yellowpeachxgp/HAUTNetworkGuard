@@ -139,6 +139,24 @@
       "seconds": 0
     },
     {
+      "input": "{\"error\":\"ok\",\"user_name\":\"\",\"online_ip\":\"not-an-ip\",\"sum_bytes\":0,\"sum_seconds\":0}",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "{\"error\":\"ok\",\"user_name\":null,\"online_ip\":null,\"sum_bytes\":null,\"sum_seconds\":null}",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
       "input": "oops,NaN,not-an-ip,garbage",
       "format": "unparsed",
       "online": false,

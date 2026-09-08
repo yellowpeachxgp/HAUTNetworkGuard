@@ -142,7 +142,7 @@ StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {
     result.bytes = parseCounter(obj.value("sum_bytes"));
     result.seconds = parseCounter(obj.value("sum_seconds"));
     result.username = obj.value("user_name").toString();
-    if (!result.username.isEmpty() || !result.ip.isEmpty()) {
+    if (!result.username.isEmpty() || isValidIpv4(result.ip)) {
       result.online = true;
       return result;
     }

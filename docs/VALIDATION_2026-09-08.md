@@ -31,7 +31,7 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 
 本轮新增的会话策略已接入正式控制器，测试没有调用校园网：
 
-- 最新协议边界回归也通过：JSON 小数、负数和超出 `9007199254740991` 的计数回退为 0；quoted numeric 小数和 CSV 小数/负数标记为 `unparsed`。Swift smoke、Qt CTest、Lua 5.1/5.3 runtime、Python 向量均覆盖这一规则。
+- 最新协议边界回归也通过：JSON 小数、负数和超出 `9007199254740991` 的计数回退为 0；quoted numeric 小数和 CSV 小数/负数标记为 `unparsed`；JSON 非法 IP 与空身份不再判定为在线。Swift smoke、Qt CTest、Lua 5.1/5.3 runtime、Python 向量均覆盖这一规则。
 - Swift / C++ 使用同一份 `tests/fixtures/session_scenarios.txt`：9 个场景、每端 142 条事件断言通过。
 - Swift/C++ 会话策略另完成加速模拟 7 天逐分钟 soak（10,080 次检测），断言无重叠操作、退避有界和最终状态空闲；不代表真实设备 7 天运行。
 - macOS 正式 StatusBarController：26 条回放断言通过，覆盖检测/认证串行、手动失败后的退避、旧回调、注销后暂停和显式恢复；同一入口继续执行窗口生命周期 smoke，通过。

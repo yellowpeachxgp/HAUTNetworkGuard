@@ -71,6 +71,16 @@ struct SmokeTests {
         )
         expect(!malformedJSON.online && malformedJSON.format == "unparsed",
                "非法 JSON 数字语法应统一判为异常")
+        let invalidJSONIP = SrunProtocol.parseStatusResponse(
+            #"{"error":"ok","user_name":"","online_ip":"not-an-ip","sum_bytes":0,"sum_seconds":0}"#
+        )
+        expect(!invalidJSONIP.online && invalidJSONIP.format == "unparsed",
+               "非法 JSON IP 应统一判为异常")
+        let nullIdentity = SrunProtocol.parseStatusResponse(
+            #"{"error":"ok","user_name":null,"online_ip":null,"sum_bytes":null,"sum_seconds":null}"#
+        )
+        expect(!nullIdentity.online && nullIdentity.format == "unparsed",
+               "空身份 JSON 应统一判为异常")
         let integerBoundary = SrunProtocol.parseStatusResponse(
             #"{"user_name":"test-student","sum_bytes":9007199254740991,"sum_seconds":"9007199254740992"}"#
         )

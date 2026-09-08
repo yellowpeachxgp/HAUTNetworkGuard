@@ -103,6 +103,18 @@ local malformed_json, malformed_format = protocol.parse_status_response(
 assert_equal(malformed_json, nil, "parse_status_response.malformed_json.value")
 assert_equal(malformed_format, "unparsed", "parse_status_response.malformed_json.format")
 
+local invalid_json_ip, invalid_json_ip_format = protocol.parse_status_response(
+    "{\"error\":\"ok\",\"user_name\":\"\",\"online_ip\":\"not-an-ip\",\"sum_bytes\":0,\"sum_seconds\":0}"
+)
+assert_equal(invalid_json_ip, nil, "parse_status_response.invalid_json_ip.value")
+assert_equal(invalid_json_ip_format, "unparsed", "parse_status_response.invalid_json_ip.format")
+
+local null_identity, null_identity_format = protocol.parse_status_response(
+    "{\"error\":\"ok\",\"user_name\":null,\"online_ip\":null,\"sum_bytes\":null,\"sum_seconds\":null}"
+)
+assert_equal(null_identity, nil, "parse_status_response.null_identity.value")
+assert_equal(null_identity_format, "unparsed", "parse_status_response.null_identity.format")
+
 local parsed3, format3 = protocol.parse_status_response("not_online")
 assert_equal(parsed3, nil, "parse_status_response.offline.value")
 assert_equal(format3, "offline", "parse_status_response.offline.format")

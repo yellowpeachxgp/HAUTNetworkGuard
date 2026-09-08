@@ -107,7 +107,7 @@ enum SrunProtocol {
             let ip = json["online_ip"] as? String ?? ""
             let usedBytes = parseNumber(json["sum_bytes"])
             let usedSeconds = parseNumber(json["sum_seconds"])
-            if !username.isEmpty || !ip.isEmpty {
+            if !username.isEmpty || isValidIPv4(ip) {
                 return SrunParsedStatus(
                     online: true,
                     format: format,

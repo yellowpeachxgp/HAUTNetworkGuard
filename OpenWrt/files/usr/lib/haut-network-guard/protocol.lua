@@ -297,7 +297,7 @@ function protocol.parse_status_response(response)
         local user_ip = type(decoded.online_ip) == "string" and decoded.online_ip or ""
         local sum_bytes = parse_counter(decoded.sum_bytes, type(decoded.sum_bytes) == "string")
         local sum_seconds = parse_counter(decoded.sum_seconds, type(decoded.sum_seconds) == "string")
-        if username ~= "" or user_ip ~= "" then
+        if username ~= "" or is_valid_ipv4(user_ip) then
             return { username = username, ip = user_ip, bytes = sum_bytes, seconds = sum_seconds }, format
         end
     end

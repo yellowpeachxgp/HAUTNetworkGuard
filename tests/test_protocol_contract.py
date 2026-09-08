@@ -93,11 +93,15 @@ def parse_status_response(response: str):
                 "seconds": 0,
             }
 
-        username = str(obj.get("user_name", ""))
-        ip = str(obj.get("online_ip", ""))
+        username = obj.get("user_name") if isinstance(obj.get("user_name"), str) else ""
+        ip = obj.get("online_ip") if isinstance(obj.get("online_ip"), str) else ""
         bytes_used = parse_number(obj.get("sum_bytes", 0))
         seconds_used = parse_number(obj.get("sum_seconds", 0))
-        if username or ip:
+        ip_parts = ip.split(".")
+        valid_ip = len(ip_parts) == 4 and all(
+            part.isdigit() and 0 <= int(part) <= 255 for part in ip_parts
+        )
+        if username or valid_ip:
             return {
                 "format": fmt,
                 "online": True,

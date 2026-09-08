@@ -121,6 +121,16 @@ int main(int argc, char *argv[]) {
       "\"online_ip\":\"10.10.0.8\",\"sum_bytes\":01,\"sum_seconds\":321})");
   expect(!malformedJsonResult.online && malformedJsonResult.format == "unparsed",
          "非法 JSON 数字语法应统一判为异常");
+  const StatusParseResult invalidJsonIpResult = ProtocolUtils::parseStatusResponse(
+      "{\"error\":\"ok\",\"user_name\":\"\",\"online_ip\":\"not-an-ip\","
+      "\"sum_bytes\":0,\"sum_seconds\":0}");
+  expect(!invalidJsonIpResult.online && invalidJsonIpResult.format == "unparsed",
+         "非法 JSON IP 应统一判为异常");
+  const StatusParseResult nullIdentityResult = ProtocolUtils::parseStatusResponse(
+      "{\"error\":\"ok\",\"user_name\":null,\"online_ip\":null,"
+      "\"sum_bytes\":null,\"sum_seconds\":null}");
+  expect(!nullIdentityResult.online && nullIdentityResult.format == "unparsed",
+         "空身份 JSON 应统一判为异常");
 
   QSettings settings(storage.filePath("settings.ini"), QSettings::IniFormat);
 

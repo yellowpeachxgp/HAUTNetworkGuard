@@ -78,6 +78,8 @@ jQuery_<timestamp>({...})
 
 `sum_bytes` 与 `sum_seconds` 兼容 JSON number 与 quoted numeric string 两种返回形态。三端只保留有限、非负、整数且不超过 `9007199254740991` 的值；无法转换、带小数、负数或超出安全范围的数值按 `0` 处理，但不影响已包含有效账号或 IP 的在线判断。quoted numeric 只接受十进制整数。
 
+JSON 在线身份至少需要非空账号，或有效 IPv4 地址；只有空身份、非法 IP 或非法 JSON 结构时才标记为 `unparsed`。
+
 ### CSV
 
 格式:

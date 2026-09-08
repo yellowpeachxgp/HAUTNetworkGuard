@@ -284,6 +284,17 @@ esac
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.events(), [])
 
+    def test_missing_release_manifest_keeps_install_and_service(self):
+        self.seed_old()
+        before = self.snapshot()
+        (self.remote / "OpenWrt-SHA256SUMS").unlink()
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.events(), [])
+        self.run_script("upgrade-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.events(), [])
+
     def test_upgrade_checksum_mismatch_keeps_old_service(self):
         self.seed_old()
         before = self.snapshot()

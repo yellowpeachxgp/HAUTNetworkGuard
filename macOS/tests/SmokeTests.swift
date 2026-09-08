@@ -19,6 +19,14 @@ struct SmokeTests {
         defer { defaults.removePersistentDomain(forName: namespace) }
         expect(SrunEncryption.encryptUsername("231040600203") == "{SRUN3}\r\n675484:44647", "用户名加密向量不匹配")
         expect(SrunEncryption.encryptPassword("password123") == "6gh>Agg:7gh@<gh=9cc99c", "密码加密向量不匹配")
+        let okHTTP = Data("HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nnot_online".utf8)
+        expect(DirectHTTPClient.responseStatusCode(from: okHTTP) == 200,
+               "HTTP 200 状态行应能被识别")
+        let failedHTTP = Data("HTTP/1.1 503 Service Unavailable\r\n\r\nnot_online".utf8)
+        expect(DirectHTTPClient.responseStatusCode(from: failedHTTP) == 503,
+               "HTTP 503 状态行应能被识别")
+        expect(DirectHTTPClient.responseStatusCode(from: Data("not_online".utf8)) == nil,
+               "缺少 HTTP 状态行的响应应被拒绝")
 
         let login = SrunProtocol.classifyLoginResponse("login_error#E2531:User not found")
         expect(login.category == "error_E2531", "登录响应分类不匹配")

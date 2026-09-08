@@ -194,6 +194,15 @@ class DirectHTTPClient {
                 responseData.append(buffer, count: n)
             }
 
+            guard let statusCode = Self.responseStatusCode(from: responseData) else {
+                completion(.failure(HTTPError.invalidResponse("响应缺少有效 HTTP 状态行")))
+                return
+            }
+            guard (200..<300).contains(statusCode) else {
+                completion(.failure(HTTPError.httpStatus(statusCode)))
+                return
+            }
+
             // 解析 HTTP body
             if let body = self.extractHTTPBody(from: responseData) {
                 Logger.debug("[DirectHTTP] 收到响应 host=\(host) port=\(port) bytes=\(responseData.count) body_chars=\(body.count)")
@@ -246,6 +255,20 @@ class DirectHTTPClient {
             return String(raw[range.upperBound...])
         }
         return raw
+    }
+
+    /// 读取原始 HTTP 响应状态码；非 2xx 由传输层视为失败，不能交给协议层误判。
+    static func responseStatusCode(from data: Data) -> Int? {
+        guard let headerEnd = data.range(of: Data("\r\n".utf8)) else { return nil }
+        guard let statusLine = String(data: data[..<headerEnd.lowerBound], encoding: .ascii) else {
+            return nil
+        }
+        let parts = statusLine.split(separator: " ", omittingEmptySubsequences: true)
+        guard parts.count >= 2, parts[0].hasPrefix("HTTP/"),
+              let code = Int(parts[1]), (100...599).contains(code) else {
+            return nil
+        }
+        return code
     }
 
     // MARK: - URL 解析
@@ -368,6 +391,7 @@ class DirectHTTPClient {
         case invalidURL(String)
         case timeout(phase: String)
         case invalidResponse(String)
+        case httpStatus(Int)
         case socketError(String)
 
         var description: String {
@@ -378,6 +402,7 @@ class DirectHTTPClient {
                 return "请求超时 (\(phase))"
             case .invalidResponse(let message):
                 return message
+            case .httpStatus(let code): return "网关 HTTP 状态异常 (\(code))"
             case .socketError(let msg): return "Socket 错误: \(msg)"
             }
         }

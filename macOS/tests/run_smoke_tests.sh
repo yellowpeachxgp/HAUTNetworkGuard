@@ -13,6 +13,7 @@ SWIFTC=$(xcrun --sdk macosx --find swiftc)
 "$SWIFTC" \
     -sdk "$SDK_PATH" \
     -o "$BUILD_DIR/macos_smoke_tests" \
+    -framework Network \
     -framework Security \
     -framework LocalAuthentication \
     "$BUILD_DIR/GeneratedVersion.swift" \
@@ -20,6 +21,7 @@ SWIFTC=$(xcrun --sdk macosx --find swiftc)
     "$PROJECT_DIR/Sources/Config.swift" \
     "$PROJECT_DIR/Sources/Encryption.swift" \
     "$PROJECT_DIR/Sources/SrunProtocol.swift" \
+    "$PROJECT_DIR/Sources/DirectHTTPClient.swift" \
     "$PROJECT_DIR/tests/CredentialTests.swift" \
     "$PROJECT_DIR/tests/SmokeTests.swift"
 

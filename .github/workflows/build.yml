@@ -209,6 +209,25 @@ jobs:
           sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS
           find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
 
+      - name: Validate Release Assets
+        run: |
+          set -euo pipefail
+          test -s HAUTNetworkGuard-Windows.zip
+          test -s HAUTNetworkGuard.dmg
+          sha256sum -c SHA256SUMS
+          for path in \
+            install.sh install-online.sh upgrade-online.sh uninstall.sh uninstall-online.sh \
+            files/etc/init.d/haut-network-guard files/etc/config/haut-network-guard \
+            files/usr/lib/haut-network-guard/version.lua \
+            files/usr/lib/haut-network-guard/crypto.lua \
+            files/usr/lib/haut-network-guard/api.lua \
+            files/usr/lib/haut-network-guard/log.lua \
+            files/usr/lib/haut-network-guard/protocol.lua \
+            files/usr/lib/haut-network-guard/session.lua \
+            files/usr/lib/haut-network-guard/main.lua; do
+            grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS
+          done
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:

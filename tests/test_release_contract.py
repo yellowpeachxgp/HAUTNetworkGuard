@@ -23,6 +23,9 @@ def main():
     require(workflow, 'test "$VERSION_FILE" = "$TAG_VERSION"', "tag/version equality")
     require(workflow, "sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS", "desktop checksum manifest")
     require(workflow, "find OpenWrt -type f", "OpenWrt checksum manifest")
+    require(workflow, "name: Validate Release Assets", "Release asset validation step")
+    require(workflow, "sha256sum -c SHA256SUMS", "desktop checksum verification")
+    require(workflow, 'grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS', "OpenWrt manifest coverage")
     for asset in (
         "HAUTNetworkGuard-Windows.zip",
         "HAUTNetworkGuard.dmg",

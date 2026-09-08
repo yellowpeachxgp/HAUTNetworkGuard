@@ -27,6 +27,15 @@ local function shell_quote(str)
     return "'" .. tostring(str or ""):gsub("'", "'\\''") .. "'"
 end
 
+local function redact_sensitive_fields(message)
+    local text = tostring(message or "")
+    -- 日志出口再做一层兜底；业务日志仍应优先使用长度摘要和脱敏账号。
+    text = text:gsub("(enc_[Pp]assword=)([^%s&]+)", "%1<redacted>")
+    text = text:gsub("([Pp]assword=)([^%s&]+)", "%1<redacted>")
+    text = text:gsub("([Uu]sername=)([^%s&]+)", "%1<redacted>")
+    return text
+end
+
 local function refresh_level_if_needed(force)
     local now = os.time()
     if force or (now - last_level_refresh) >= LEVEL_REFRESH_SECONDS then
@@ -41,7 +50,7 @@ local function write_log(level, msg)
     sequence = sequence + 1
     local timestamp = os.date("%Y-%m-%d %H:%M:%S")
     local label = LABELS[level]
-    local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, tostring(msg))
+    local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, redact_sensitive_fields(msg))
     print(line)
     os.execute(string.format("logger -t haut-network-guard %s", shell_quote(line)))
 end

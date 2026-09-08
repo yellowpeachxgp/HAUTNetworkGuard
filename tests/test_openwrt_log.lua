@@ -41,5 +41,11 @@ for _, command in ipairs(executed) do
     assert(not command:find("encoded-private", 1, true), "系统 logger 参数不得泄漏编码字段")
 end
 log.info("安全日志")
+log.info("意外字段 username=231040600203 password=test-private enc_password=encoded-private")
 assert(#executed > 0, "日志应调用系统 logger")
+local last_command = executed[#executed]
+assert(not last_command:find("231040600203", 1, true), "日志出口不得泄漏完整账号")
+assert(not last_command:find("test-private", 1, true), "日志出口不得泄漏密码")
+assert(not last_command:find("encoded-private", 1, true), "日志出口不得泄漏编码密码")
+assert(last_command:find("password=<redacted>", 1, true), "日志出口应保留脱敏字段")
 print("OpenWrt 日志脱敏测试通过：" .. _VERSION)

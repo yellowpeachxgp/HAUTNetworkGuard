@@ -241,6 +241,7 @@ void MainWindow::setupUi() {
 
   m_usernameEdit = new QLineEdit();
   m_usernameEdit->setObjectName("usernameInput");
+  m_usernameEdit->setAccessibleName("学号输入框");
   m_usernameEdit->setPlaceholderText("请输入学号");
   m_usernameEdit->setClearButtonEnabled(true);
   m_usernameEdit->setToolTip("校园网登录学号");
@@ -248,6 +249,7 @@ void MainWindow::setupUi() {
 
   m_passwordEdit = new QLineEdit();
   m_passwordEdit->setObjectName("passwordInput");
+  m_passwordEdit->setAccessibleName("密码输入框");
   m_passwordEdit->setEchoMode(QLineEdit::Password);
   m_passwordEdit->setPlaceholderText("请输入密码");
   m_passwordEdit->setClearButtonEnabled(true);
@@ -255,10 +257,13 @@ void MainWindow::setupUi() {
   accountLayout->addRow("密码:", m_passwordEdit);
 
   m_autoSaveCheck = new QCheckBox("记住密码");
+  m_autoSaveCheck->setAccessibleName("记住密码");
   m_autoSaveCheck->setToolTip("勾选后会持久化保存密码，方便重启后自动恢复连接");
   m_autoLaunchCheck = new QCheckBox("开机自启动");
+  m_autoLaunchCheck->setAccessibleName("开机自启动");
   m_autoLaunchCheck->setToolTip("随系统启动并在托盘中保持运行");
   m_autoLoginCheck = new QCheckBox("自动登录 (断线重连)");
+  m_autoLoginCheck->setAccessibleName("自动登录和断线重连");
   m_autoLoginCheck->setToolTip("离线时自动尝试重连，避免频繁手动登录");
   accountLayout->addRow(m_autoSaveCheck);
   accountLayout->addRow(m_autoLaunchCheck);
@@ -271,6 +276,7 @@ void MainWindow::setupUi() {
   // 检测间隔设置
   QHBoxLayout *intervalLayout = new QHBoxLayout();
   m_intervalSpinBox = new QSpinBox();
+  m_intervalSpinBox->setAccessibleName("检测间隔（秒）");
   m_intervalSpinBox->setRange(30, 300);
   m_intervalSpinBox->setSingleStep(15);
   m_intervalSpinBox->setSuffix(" 秒");
@@ -287,23 +293,27 @@ void MainWindow::setupUi() {
 
   m_saveBtn = new QPushButton("保存设置");
   m_saveBtn->setObjectName("secondaryButton");
+  m_saveBtn->setAccessibleName("保存设置");
   connect(m_saveBtn, &QPushButton::clicked, this, &MainWindow::onSaveClicked);
   buttonLayout->addWidget(m_saveBtn);
 
   m_loginBtn = new QPushButton("登录");
   m_loginBtn->setObjectName("primaryButton");
+  m_loginBtn->setAccessibleName("登录");
   m_loginBtn->setDefault(true);
   connect(m_loginBtn, &QPushButton::clicked, this, &MainWindow::onLoginClicked);
   buttonLayout->addWidget(m_loginBtn);
 
   m_logoutBtn = new QPushButton("注销");
   m_logoutBtn->setObjectName("dangerButton");
+  m_logoutBtn->setAccessibleName("注销");
   connect(m_logoutBtn, &QPushButton::clicked, this,
           &MainWindow::onLogoutClicked);
   buttonLayout->addWidget(m_logoutBtn);
 
   QPushButton *diagnosticsBtn = new QPushButton("复制诊断");
   diagnosticsBtn->setObjectName("diagnosticsButton");
+  diagnosticsBtn->setAccessibleName("复制脱敏诊断信息");
   connect(diagnosticsBtn, &QPushButton::clicked, this,
           &MainWindow::onCopyDiagnosticsClicked);
   buttonLayout->addWidget(diagnosticsBtn);
@@ -320,6 +330,17 @@ void MainWindow::setupUi() {
           &MainWindow::updateOptionHint);
   connect(m_autoLoginCheck, &QCheckBox::toggled, this,
           &MainWindow::updateOptionHint);
+
+  // 明确键盘焦点顺序，确保只用键盘也能完成首次配置和登录。
+  QWidget::setTabOrder(m_usernameEdit, m_passwordEdit);
+  QWidget::setTabOrder(m_passwordEdit, m_autoSaveCheck);
+  QWidget::setTabOrder(m_autoSaveCheck, m_autoLaunchCheck);
+  QWidget::setTabOrder(m_autoLaunchCheck, m_autoLoginCheck);
+  QWidget::setTabOrder(m_autoLoginCheck, m_intervalSpinBox);
+  QWidget::setTabOrder(m_intervalSpinBox, m_saveBtn);
+  QWidget::setTabOrder(m_saveBtn, m_loginBtn);
+  QWidget::setTabOrder(m_loginBtn, m_logoutBtn);
+  QWidget::setTabOrder(m_logoutBtn, diagnosticsBtn);
 
   // 底部信息
   QLabel *footerLabel =

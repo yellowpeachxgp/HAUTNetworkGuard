@@ -50,6 +50,11 @@ int main(int argc, char **argv) {
     auto loginButton = window.findChild<QPushButton *>("primaryButton");
     auto logoutButton = window.findChild<QPushButton *>("dangerButton");
     expect(loginButton && logoutButton, "正式登录和注销按钮必须存在");
+    expect(window.findChild<QLineEdit *>("usernameInput")->accessibleName() == "学号输入框" &&
+               window.findChild<QLineEdit *>("passwordInput")->accessibleName() == "密码输入框" &&
+               loginButton->accessibleName() == "登录" &&
+               logoutButton->accessibleName() == "注销",
+           "首次配置和登录控件必须提供无障碍名称");
     const QString diagnostics = window.diagnosticText();
     expect(diagnostics.contains("1.3.18") && !diagnostics.contains("test-student") &&
            !diagnostics.contains("test-only"), "诊断信息不得包含账号或密码");

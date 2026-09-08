@@ -108,7 +108,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
-- [运行 34274060990](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34274060990) 对应提交 `4405ffd`：macOS 关闭“记住密码”时，凭据删除失败不再覆盖旧账号和其他设置；故障注入、原生 Keychain、三端 Build and Release 与资产 dry-run 全部通过。
+- [运行 34274060990](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34274060990) 对应提交 `4405ffd`：首次 macOS DMG 打包遇到 `hdiutil Resource busy`，重跑失败 job 后同一运行已成功；macOS 关闭“记住密码”时，凭据删除失败不再覆盖旧账号和其他设置，故障注入、原生 Keychain、三端 Build and Release 与资产 dry-run 全部通过。失败输出和重跑结果均保留在该运行记录中。
 - [运行 34273259296](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34273259296) 对应提交 `313ff78`：版本契约测试改为读取根目录 `VERSION` 和 Windows 编译宏；三端 Build and Release 与发布资产 dry-run 全部通过，草稿 PR 的正式 Release 按预期跳过。
 - [运行 34272442987](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34272442987) 对应提交 `0f5d020`：正式 tag Release 显式依赖 `release-dry-run` 的工作流契约通过；三端 Build and Release 与资产 dry-run 全部通过，草稿 PR 的正式 Release 按预期跳过。
 - [运行 34272162197](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34272162197) 对应提交 `251fce6`：PR、tag 条件下的发布资产 dry-run 与正式 Release 依赖关系通过契约检查；三端 Build and Release 与 `release-dry-run` 全部通过，草稿 PR 的正式 Release 按预期跳过。

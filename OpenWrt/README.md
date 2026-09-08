@@ -134,6 +134,8 @@ chmod +x uninstall.sh
 ./uninstall.sh --purge-config
 ```
 
+卸载会先停止并禁用服务；默认保留 UCI 配置，只有显式使用 `--purge-config` 才会删除密码配置。
+
 ## 文件结构
 
 ```

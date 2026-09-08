@@ -151,6 +151,16 @@ esac
         self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
         return result
 
+    def run_uninstall(self, script="uninstall.sh", purge=False, success=True):
+        env = dict(self.env)
+        args = ["sh", str(ROOT / "OpenWrt" / script)]
+        if purge:
+            args.append("--purge-config")
+        result = subprocess.run(args, env=env, cwd=ROOT,
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
+
     def events(self):
         path = Path(self.env["HAUT_FAKE_EVENTS"])
         return path.read_text().splitlines() if path.exists() else []
@@ -192,6 +202,22 @@ esac
         self.run_local_script(False)
         self.assertEqual(self.snapshot(), before)
         self.assert_no_temporary_files()
+
+    def test_local_uninstall_preserves_config_by_default(self):
+        self.seed_old()
+        self.run_uninstall()
+        self.assertFalse(self.program.exists())
+        self.assertFalse(self.init.exists())
+        self.assertTrue(self.config.exists())
+        self.assertIn("old:stop", self.events())
+        self.assertIn("old:disable", self.events())
+
+    def test_online_uninstall_purge_removes_config(self):
+        self.seed_old()
+        self.run_uninstall("uninstall-online.sh", purge=True)
+        self.assertFalse(self.program.exists())
+        self.assertFalse(self.init.exists())
+        self.assertFalse(self.config.exists())
 
     def test_failed_download_keeps_old_install(self):
         self.seed_old()

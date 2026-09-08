@@ -25,14 +25,8 @@ bool isValidIpv4(const QString &value) {
 } // namespace
 
 QString ProtocolUtils::responsePreview(const QString &response, int maxLen) {
-  QString normalized = response;
-  normalized.replace('\r', ' ');
-  normalized.replace('\n', ' ');
-  normalized = normalized.simplified();
-  if (normalized.length() > maxLen) {
-    return normalized.left(maxLen) + "...";
-  }
-  return normalized;
+  // 网关可能在任意字段或异常正文中回显凭据，只输出长度摘要。
+  return QString("<redacted> (%1 bytes)").arg(response.toUtf8().size()).left(qMax(0, maxLen));
 }
 
 QString ProtocolUtils::extractErrorCode(const QString &response) {
@@ -66,6 +60,27 @@ QString ProtocolUtils::classifyLoginResponse(const QString &response) {
     return "empty";
   }
   return "unknown";
+}
+
+QString ProtocolUtils::userFacingLoginMessage(const QString &classification) {
+  if (classification == "success")
+    return "登录成功";
+  if (classification == "already_online")
+    return "已经在线";
+  if (classification == "logout_ok")
+    return "注销成功";
+  if (classification == "not_online")
+    return "当前未在线";
+  if (classification == "error_E2531")
+    return "学号或密码错误，请检查后重试。";
+  if (classification == "empty")
+    return "校园网网关返回空响应，请检查网络后重试。";
+  if (classification.startsWith("error_E"))
+    return QString("登录失败（错误码 %1），请稍后重试。")
+        .arg(classification.mid(QString("error_").size()));
+  if (classification == "unknown")
+    return "校园网网关返回了无法识别的结果，请稍后重试。";
+  return "登录失败，请稍后重试。";
 }
 
 StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {

@@ -16,13 +16,34 @@ struct SrunLoginClassification {
 }
 
 enum SrunProtocol {
-    static func preview(_ value: String, limit: Int = 160) -> String {
-        let normalized = value.replacingOccurrences(of: "\r", with: "\\r")
-            .replacingOccurrences(of: "\n", with: "\\n")
-        if normalized.count > limit {
-            return String(normalized.prefix(limit)) + "...(\(normalized.count) chars)"
+    static func userFacingLoginMessage(_ classification: SrunLoginClassification) -> String {
+        switch classification.category {
+        case "error_E2531":
+            return "学号或密码错误，请检查后重试。"
+        case "empty":
+            return "校园网网关返回空响应，请检查网络后重试。"
+        case "unknown":
+            return "校园网网关返回了无法识别的结果，请稍后重试。"
+        case "success":
+            return "登录成功"
+        case "already_online":
+            return "已经在线"
+        case "logout_ok":
+            return "注销成功"
+        case "not_online":
+            return "当前未在线"
+        default:
+            if let errorCode = classification.errorCode {
+                return "登录失败（错误码 \(errorCode)），请稍后重试。"
+            }
+            return "登录失败，请稍后重试。"
         }
-        return normalized
+    }
+
+    static func preview(_ value: String, limit: Int = 160) -> String {
+        // 网关可能在任意字段或异常正文中回显凭据，只输出长度摘要。
+        let summary = "<redacted> (\(value.utf8.count) bytes)"
+        return String(summary.prefix(max(0, limit)))
     }
 
     static func extractErrorCode(_ response: String) -> String? {

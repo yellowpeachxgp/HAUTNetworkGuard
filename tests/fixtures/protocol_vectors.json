@@ -84,6 +84,33 @@
       "seconds": 321
     },
     {
+      "input": "jQuery_1712630100001({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":\"12345678\",\"sum_seconds\":\"321\"})",
+      "format": "jsonp",
+      "online": true,
+      "username": "231040600203",
+      "ip": "10.10.0.8",
+      "bytes": 12345678,
+      "seconds": 321
+    },
+    {
+      "input": "jQuery_1712630100002({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":\"invalid\",\"sum_seconds\":\"321\"})",
+      "format": "jsonp",
+      "online": true,
+      "username": "231040600203",
+      "ip": "10.10.0.8",
+      "bytes": 0,
+      "seconds": 321
+    },
+    {
+      "input": "oops,NaN,not-an-ip,garbage",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
       "input": "not_online",
       "format": "offline",
       "online": false,

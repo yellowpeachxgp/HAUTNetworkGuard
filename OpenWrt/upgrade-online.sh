@@ -8,11 +8,16 @@ set -e
 
 REPO_REF="${1:-main}"
 REPO_URL="https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/${REPO_REF}/OpenWrt"
-INSTALL_DIR="/usr/lib/haut-network-guard"
+ROOT_PREFIX="${HAUT_ROOT:-}"
+case "$ROOT_PREFIX" in ""|/*) ;; *) echo "错误: HAUT_ROOT 必须为绝对路径"; exit 1 ;; esac
+INSTALL_DIR="$ROOT_PREFIX/usr/lib/haut-network-guard"
+INIT_FILE="$ROOT_PREFIX/etc/init.d/haut-network-guard"
 MAIN_LUA="$INSTALL_DIR/main.lua"
 TMP_DIR=""
 BACKUP_DIR=""
 UPGRADE_SUCCESS=0
+SWITCH_STARTED=0
+WAS_RUNNING=0
 
 version_cmp() {
     awk -v a="$1" -v b="$2" '
@@ -33,23 +38,31 @@ version_cmp() {
 
 cleanup() {
     status=$?
-    if [ "$UPGRADE_SUCCESS" -ne 1 ] && [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
+    trap - EXIT
+    set +e
+    rollback_failed=0
+    if [ "$UPGRADE_SUCCESS" -ne 1 ] && [ "$SWITCH_STARTED" -eq 1 ]; then
         echo ""
         echo "升级失败，正在回滚到原版本..."
-        [ -f "$BACKUP_DIR/crypto.lua" ] && cp -f "$BACKUP_DIR/crypto.lua" "$INSTALL_DIR/crypto.lua" || true
-        [ -f "$BACKUP_DIR/api.lua" ] && cp -f "$BACKUP_DIR/api.lua" "$INSTALL_DIR/api.lua" || true
-        [ -f "$BACKUP_DIR/log.lua" ] && cp -f "$BACKUP_DIR/log.lua" "$INSTALL_DIR/log.lua" || true
-        [ -f "$BACKUP_DIR/protocol.lua" ] && cp -f "$BACKUP_DIR/protocol.lua" "$INSTALL_DIR/protocol.lua" || true
-        [ -f "$BACKUP_DIR/main.lua" ] && cp -f "$BACKUP_DIR/main.lua" "$INSTALL_DIR/main.lua" || true
-        if [ -f "$BACKUP_DIR/haut-network-guard.init" ]; then
-            cp -f "$BACKUP_DIR/haut-network-guard.init" /etc/init.d/haut-network-guard || true
-            chmod +x /etc/init.d/haut-network-guard || true
+        if [ "$WAS_RUNNING" -eq 1 ]; then
+            "$INIT_FILE" stop >/dev/null 2>&1
         fi
-        /etc/init.d/haut-network-guard start 2>/dev/null || true
+        for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
+            cp -p "$BACKUP_DIR/$file" "$INSTALL_DIR/$file" || rollback_failed=1
+        done
+        cp -p "$BACKUP_DIR/haut-network-guard.init" "$INIT_FILE" || rollback_failed=1
+        if [ "$WAS_RUNNING" -eq 1 ]; then
+            "$INIT_FILE" start >/dev/null 2>&1 || rollback_failed=1
+        fi
     fi
 
     [ -n "$TMP_DIR" ] && rm -rf "$TMP_DIR"
-    [ -n "$BACKUP_DIR" ] && rm -rf "$BACKUP_DIR"
+    if [ "$rollback_failed" -eq 1 ]; then
+        echo "错误: 自动恢复未完成，备份保留于 $BACKUP_DIR"
+        status=1
+    else
+        [ -n "$BACKUP_DIR" ] && rm -rf "$BACKUP_DIR"
+    fi
     exit "$status"
 }
 
@@ -60,8 +73,38 @@ download_file() {
     dest="$2"
     tmp="${dest}.tmp"
 
-    curl -fsSL "$url" -o "$tmp"
+    curl -fsSL --connect-timeout 10 --max-time 60 "$url" -o "$tmp"
     mv "$tmp" "$dest"
+}
+
+validate_program_dir() {
+    dir="$1"
+    for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
+        if [ ! -s "$dir/$file" ]; then
+            echo "错误: 缺少或为空的程序文件: $file"
+            return 1
+        fi
+        if command -v lua >/dev/null 2>&1; then
+            HAUT_VALIDATE_FILE="$dir/$file" lua -e 'assert(loadfile(os.getenv("HAUT_VALIDATE_FILE")))' </dev/null >/dev/null 2>&1 || {
+                echo "错误: Lua 语法校验失败: $file"
+                return 1
+            }
+        else
+            echo "错误: 未安装 Lua，无法验证程序"
+            return 1
+        fi
+    done
+}
+
+verify_service_health() {
+    attempt=0
+    while [ "$attempt" -lt 5 ]; do
+        if "$INIT_FILE" status >/dev/null 2>&1; then return 0; fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    echo "错误: 升级后服务状态检查失败"
+    return 1
 }
 
 echo "=========================================="
@@ -87,7 +130,7 @@ echo "本地版本: $LOCAL_VERSION"
 
 # 获取远端版本
 echo "正在检查最新版本..."
-REMOTE_MAIN=$(curl -fsSL --connect-timeout 10 "$REPO_URL/files/usr/lib/haut-network-guard/main.lua")
+REMOTE_MAIN=$(curl -fsSL --connect-timeout 10 --max-time 60 "$REPO_URL/files/usr/lib/haut-network-guard/main.lua")
 if [ -z "$REMOTE_MAIN" ]; then
     echo "错误: 无法连接到 GitHub，请检查网络"
     exit 1
@@ -121,19 +164,18 @@ fi
 echo "正在升级..."
 echo ""
 
-# 停止服务
-echo "[1/4] 停止服务..."
-/etc/init.d/haut-network-guard stop 2>/dev/null || true
+# 下载和校验期间保持旧服务运行。
+echo "[1/4] 准备备份..."
 
-TMP_DIR="$(mktemp -d /tmp/haut-network-guard-upgrade.XXXXXX)"
-BACKUP_DIR="$(mktemp -d /tmp/haut-network-guard-backup.XXXXXX)"
+TMP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-upgrade.XXXXXX")"
+BACKUP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-backup.XXXXXX")"
 
-cp -f "$INSTALL_DIR/crypto.lua" "$BACKUP_DIR/crypto.lua"
-cp -f "$INSTALL_DIR/api.lua" "$BACKUP_DIR/api.lua"
-cp -f "$INSTALL_DIR/log.lua" "$BACKUP_DIR/log.lua"
-cp -f "$INSTALL_DIR/protocol.lua" "$BACKUP_DIR/protocol.lua"
-cp -f "$INSTALL_DIR/main.lua" "$BACKUP_DIR/main.lua"
-cp -f /etc/init.d/haut-network-guard "$BACKUP_DIR/haut-network-guard.init"
+cp -p "$INSTALL_DIR/crypto.lua" "$BACKUP_DIR/crypto.lua"
+cp -p "$INSTALL_DIR/api.lua" "$BACKUP_DIR/api.lua"
+cp -p "$INSTALL_DIR/log.lua" "$BACKUP_DIR/log.lua"
+cp -p "$INSTALL_DIR/protocol.lua" "$BACKUP_DIR/protocol.lua"
+cp -p "$INSTALL_DIR/main.lua" "$BACKUP_DIR/main.lua"
+cp -p "$INIT_FILE" "$BACKUP_DIR/haut-network-guard.init"
 
 # 下载新文件（不覆盖配置）
 echo "[2/4] 下载程序文件..."
@@ -146,17 +188,42 @@ download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$TMP_DIR/ma
 echo "[3/4] 更新服务脚本..."
 download_file "$REPO_URL/files/etc/init.d/haut-network-guard" "$TMP_DIR/haut-network-guard.init"
 
+echo "      校验下载文件和 Lua 语法..."
+validate_program_dir "$TMP_DIR"
+test -s "$TMP_DIR/haut-network-guard.init"
+sh -n "$TMP_DIR/haut-network-guard.init"
+STAGED_VERSION=$(sed -n 's/^local VERSION = "\([^"]*\)".*/\1/p' "$TMP_DIR/main.lua")
+if [ "$STAGED_VERSION" != "$REMOTE_VERSION" ]; then
+    echo "错误: 下载期间远端版本发生变化，请重新运行升级"
+    exit 1
+fi
+if "$INIT_FILE" status >/dev/null 2>&1; then WAS_RUNNING=1; fi
+SWITCH_STARTED=1
+if [ "$WAS_RUNNING" -eq 1 ]; then "$INIT_FILE" stop; fi
+
 cp -f "$TMP_DIR/crypto.lua" "$INSTALL_DIR/crypto.lua"
 cp -f "$TMP_DIR/api.lua" "$INSTALL_DIR/api.lua"
 cp -f "$TMP_DIR/log.lua" "$INSTALL_DIR/log.lua"
 cp -f "$TMP_DIR/protocol.lua" "$INSTALL_DIR/protocol.lua"
 cp -f "$TMP_DIR/main.lua" "$INSTALL_DIR/main.lua"
-cp -f "$TMP_DIR/haut-network-guard.init" "/etc/init.d/haut-network-guard"
-chmod +x /etc/init.d/haut-network-guard
+cp -f "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"
+chmod +x "$INIT_FILE"
+
+echo "      校验程序文件和 Lua 语法..."
+validate_program_dir "$INSTALL_DIR"
+for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
+    cmp "$TMP_DIR/$file" "$INSTALL_DIR/$file"
+done
+cmp "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"
 
 # 重启服务
-echo "[4/4] 重启服务..."
-/etc/init.d/haut-network-guard start
+echo "[4/4] 恢复服务状态..."
+if [ "$WAS_RUNNING" -eq 1 ]; then
+    "$INIT_FILE" start
+    verify_service_health
+else
+    echo "      升级前服务已停止，继续保持停止"
+fi
 UPGRADE_SUCCESS=1
 
 echo ""

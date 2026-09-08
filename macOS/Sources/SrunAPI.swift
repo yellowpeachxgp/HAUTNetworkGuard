@@ -70,8 +70,15 @@ enum LoginResult {
     case failed(String)
 }
 
+/// 请求边界可替换，以便在不连接校园网的情况下回放控制器行为。
+protocol SrunService {
+    func checkStatus(completion: @escaping (NetworkStatus) -> Void)
+    func login(completion: @escaping (LoginResult) -> Void)
+    func logout(completion: @escaping (LoginResult) -> Void)
+}
+
 /// SRUN3K API 封装
-class SrunAPI {
+class SrunAPI: SrunService {
     static let serverIP = "172.16.154.130"
     static let loginPort = 69
     static let statusURL = "http://\(serverIP)/cgi-bin/rad_user_info"
@@ -205,7 +212,7 @@ class SrunAPI {
             if classified.category == "not_online" {
                 return .alreadyOnline
             }
-            return .failed(classified.message)
+            return .failed(SrunProtocol.userFacingLoginMessage(classified))
         }
 
         switch classified.category {
@@ -214,7 +221,7 @@ class SrunAPI {
         case "already_online":
             return .alreadyOnline
         default:
-            return .failed(classified.message)
+            return .failed(SrunProtocol.userFacingLoginMessage(classified))
         }
     }
 }

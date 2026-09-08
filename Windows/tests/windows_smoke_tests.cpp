@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QSettings>
+#include <QTemporaryDir>
 #include <cstdlib>
 
 namespace {
@@ -26,6 +27,9 @@ int main(int argc, char *argv[]) {
   QCoreApplication app(argc, argv);
   app.setOrganizationName("YellowPeach");
   app.setApplicationName("HAUTNetworkGuard-SmokeTests");
+  Logger::setEnabled(false);
+  QTemporaryDir storage;
+  expect(storage.isValid(), "无法建立独立测试配置目录");
 
   expect(Encryption::encryptUsername("231040600203") ==
              "{SRUN3}\r\n675484:44647",
@@ -48,6 +52,45 @@ int main(int argc, char *argv[]) {
   expect(jsonResult.bytes == 12345678, "JSONP 状态解析流量不匹配");
   expect(jsonResult.seconds == 321, "JSONP 状态解析时长不匹配");
 
+  const StatusParseResult stringNumberResult = ProtocolUtils::parseStatusResponse(
+      "jQuery_1712630100001({\"error\":\"ok\",\"user_name\":\"231040600203\","
+      "\"online_ip\":\"10.10.0.8\",\"sum_bytes\":\"12345678\","
+      "\"sum_seconds\":\"321\"})");
+  expect(stringNumberResult.online, "字符串数字 JSONP 状态解析应判定为在线");
+  expect(stringNumberResult.bytes == 12345678,
+         "字符串数字 JSONP 状态解析流量不匹配");
+  expect(stringNumberResult.seconds == 321,
+         "字符串数字 JSONP 状态解析时长不匹配");
+
+  expect(ProtocolUtils::userFacingLoginMessage("error_E2531") ==
+             "学号或密码错误，请检查后重试。",
+         "常见登录错误应转换为学生可理解的提示");
+  expect(!ProtocolUtils::responsePreview(
+                  "{\"user_name\":\"231040600203\"}")
+                  .contains("231040600203"),
+         "状态响应预览不得记录完整账号");
+  const QStringList privacyResponses = {
+      "231040600203,321,10.10.0.8,12345678",
+      R"({"user_name":"231040600203","password":"test-private","escaped":"x\"test-private"})",
+      "username=%7BSRUN3%7Dencoded-private&password=test-private",
+      "<html>231040600203 test-private encoded-private</html>",
+      "未知结果：231040600203 test-private"};
+  for (const auto &response : privacyResponses) {
+    const auto summary = ProtocolUtils::responsePreview(response);
+    expect(!summary.contains("231040600203") && !summary.contains("test-private") &&
+           !summary.contains("encoded-private"), "任意格式响应不得泄漏账号或凭据");
+    expect(summary.contains("<redacted>") && summary.contains("bytes"), "日志应保留脱敏标记和长度诊断");
+  }
+  expect(ProtocolUtils::responsePreview("test-private", 0).isEmpty(), "零长度预览不能输出正文");
+
+  const StatusParseResult invalidNumberResult = ProtocolUtils::parseStatusResponse(
+      "jQuery_1712630100002({\"error\":\"ok\",\"user_name\":\"231040600203\","
+      "\"online_ip\":\"10.10.0.8\",\"sum_bytes\":\"invalid\","
+      "\"sum_seconds\":\"321\"})");
+  expect(invalidNumberResult.online, "异常数字 JSONP 状态解析应保留在线状态");
+  expect(invalidNumberResult.bytes == 0, "异常数字 JSONP 流量应回退为 0");
+  expect(invalidNumberResult.seconds == 321, "部分异常数字 JSONP 时长不匹配");
+
   const StatusParseResult csvResult = ProtocolUtils::parseStatusResponse(
       "231040600203,321,10.10.0.8,12345678,0,0");
   expect(csvResult.online, "CSV 状态解析应判定为在线");
@@ -59,11 +102,9 @@ int main(int argc, char *argv[]) {
   expect(invalidCsvResult.format == "unparsed",
          "异常 CSV 响应应标记为 unparsed");
 
-  QSettings settings("HAUTNetworkGuard", "HAUTNetworkGuard");
-  settings.clear();
-  settings.sync();
+  QSettings settings(storage.filePath("settings.ini"), QSettings::IniFormat);
 
-  Config &config = Config::instance();
+  Config config(settings);
   config.setUsername("231040600203");
   config.setPassword("password123");
   config.setAutoSave(false);
@@ -82,6 +123,22 @@ int main(int argc, char *argv[]) {
   settings.sync();
   expect(!settings.value("password").toString().isEmpty(),
          "勾选记住密码后应持久化密码");
+  const QString savedPassword = settings.value("password").toString();
+#ifdef Q_OS_WIN
+  expect(settings.value("password").toString().startsWith("DPAPI:"),
+         "Windows 持久化密码必须使用 DPAPI 格式");
+#endif
+  Config coldStart(settings);
+  expect(coldStart.password() == "password123", "独立实例应能读取持久化密码");
+  config.setAutoSave(false);
+  config.save();
+  Config forgotten(settings);
+  expect(forgotten.password().isEmpty(), "关闭记住密码后冷启动不能读取旧密码");
+  settings.setValue("password", savedPassword);
+  settings.sync();
+  Config residue(settings);
+  expect(residue.password().isEmpty(), "未启用记住密码时不得读取残留凭据");
+  expect(settings.value("password").toString().isEmpty(), "应清理未启用记住密码时的残留凭据");
 
   settings.clear();
   settings.sync();

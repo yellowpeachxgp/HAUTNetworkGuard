@@ -76,6 +76,8 @@ jQuery_<timestamp>({...})
 - `sum_seconds`
 - `error`
 
+`sum_bytes` 与 `sum_seconds` 兼容 JSON number 与 quoted numeric string 两种返回形态；无法转换的数值按 `0` 处理，但不影响已包含有效账号或 IP 的在线判断。
+
 ### CSV
 
 格式:
@@ -100,6 +102,8 @@ username,seconds,ip,bytes,...
   - `empty`
 - 其他:
   - `unknown`
+
+UI 应把协议分类转换为学生可理解的提示；例如 `error_E2531` 显示“学号或密码错误，请检查后重试”，不要直接把网关原始响应当作弹窗内容。原始响应只允许进入经过脱敏和长度限制的调试日志。
 
 ## 7. OpenWrt UCI 清洗规则
 

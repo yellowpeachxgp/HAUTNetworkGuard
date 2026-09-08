@@ -18,6 +18,7 @@ public:
   static QString responsePreview(const QString &response, int maxLen = 160);
   static QString extractErrorCode(const QString &response);
   static QString classifyLoginResponse(const QString &response);
+  static QString userFacingLoginMessage(const QString &classification);
   static StatusParseResult parseStatusResponse(const QString &response);
 };
 

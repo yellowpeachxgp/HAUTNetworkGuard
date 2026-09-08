@@ -9,7 +9,7 @@
 - **开机自启**: 支持开机自动启动，保持网络始终连接
 - **系统托盘**: 最小化到系统托盘/菜单栏，静默运行
 - **系统通知**: 登录/注销状态变化时推送通知
-- **配置保存**: 安全存储凭据，支持记住密码
+- **配置保存**: 按平台使用 Keychain、DPAPI 或受限 UCI 配置存储凭据，支持记住密码
 - **更新检测**: 可视化更新窗口，显示版本号和更新日志
 
 ## 系统要求
@@ -28,6 +28,8 @@
 ## 下载安装
 
 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面下载最新版本。
+
+Release 页面同时提供 `SHA256SUMS`。下载完成后可使用 `sha256sum -c SHA256SUMS` 校验 Windows ZIP 和 macOS DMG 的完整性。
 
 ### macOS
 
@@ -89,6 +91,17 @@ uci commit haut-network-guard
    - 立即检测
    - 修改账号设置
    - 检查更新
+
+### 开发中版本的自动重连行为
+
+当前工作树正在整合下一版，以下行为尚未发布到现有下载资产：
+
+- Windows 和 macOS 启动时先检测校园网状态，检测异常时等待下一轮；确认离线后才尝试自动登录。
+- 登录失败后至少等待 60 秒再自动重试，连续失败时逐步延长至 5 分钟。修改凭据后可以立即手动登录。
+- 手动注销会暂停本次运行期间的自动重连，包括网关返回“当前未在线”的情况。点击“立即登录”解除暂停；自动登录开关仍然有效。
+- 不勾选“记住密码”时，本次会话可以使用已输入密码重连；退出后需要重新输入。Windows 的手动登录也会读取当前“记住密码”选项。
+
+实现与验收范围见 [状态机契约](docs/STATE_MACHINE_CONTRACT.md) 和 [工程台账](docs/IMPLEMENTATION_LEDGER.md)。
 
 ### 更新检测窗口
 
@@ -236,6 +249,7 @@ cd macOS
 或手动删除：
 1. 删除 `/Applications/HAUTNetworkGuard.app`
 2. 删除 `~/Library/LaunchAgents/cn.ehaut.networkguard.plist`
+3. 执行 `macOS/uninstall.sh` 可同时清理 Keychain 凭据和应用配置
 
 ### Windows
 

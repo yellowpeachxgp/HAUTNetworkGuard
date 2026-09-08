@@ -9,7 +9,7 @@ echo "  HAUT Network Guard DMG 打包脚本"
 echo "=========================================="
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_DIR="$PROJECT_DIR/build"
+BUILD_DIR="${HAUT_BUILD_DIR:-$PROJECT_DIR/build}"
 APP_NAME="HAUTNetworkGuard"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 DMG_NAME="$APP_NAME.dmg"
@@ -20,7 +20,7 @@ TMP_DMG="$BUILD_DIR/tmp.dmg"
 # 检查应用是否已构建
 if [ ! -d "$APP_BUNDLE" ]; then
     echo "应用尚未构建，先执行构建..."
-    ./build.sh
+    bash "$PROJECT_DIR/build.sh"
 fi
 
 # 清理旧的 DMG

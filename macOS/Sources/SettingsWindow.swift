@@ -236,6 +236,10 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
 
         message += autoLaunch ? " 已启用开机自启动。" : " 当前未启用开机自启动。"
+        if let warning = AppConfig.shared.credentialWarning {
+            message = warning
+            textColor = .systemRed
+        }
 
         optionHintLabel.stringValue = message
         optionHintLabel.textColor = textColor
@@ -260,13 +264,23 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         let autoLogin = autoLoginCheckbox.state == .on
         let checkInterval = Int(intervalSlider.doubleValue)
         
-        AppConfig.shared.save(
+        let credentialsSaved = AppConfig.shared.save(
             username: username,
             password: password,
             autoSave: autoSave,
             checkInterval: checkInterval,
             autoLogin: autoLogin
         )
+
+        guard credentialsSaved else {
+            let alert = NSAlert()
+            alert.messageText = "密码保存未完成"
+            alert.informativeText = AppConfig.shared.credentialWarning ?? "请稍后重试。"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "返回设置")
+            alert.runModal()
+            return
+        }
 
         // 处理开机自启动
         let autoLaunch = autoLaunchCheckbox.state == .on

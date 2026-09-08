@@ -20,8 +20,10 @@ private func pumpRunLoop(until condition: @escaping () -> Bool, timeout: TimeInt
 @main
 struct UISmokeTests {
     static func main() {
+        Logger.isEnabled = false
         let app = NSApplication.shared
         _ = app.setActivationPolicy(.accessory)
+        runControllerSessionTests()
 
         let controller = StatusBarController()
         var outcome: (Bool, String)?

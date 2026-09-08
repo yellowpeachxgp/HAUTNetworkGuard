@@ -65,12 +65,9 @@ end
 
 function log.preview(value, max_len)
     max_len = max_len or 120
-    if not value then return "(nil)" end
-    value = tostring(value):gsub("\r", "\\r"):gsub("\n", "\\n")
-    if #value > max_len then
-        return value:sub(1, max_len) .. "...(" .. tostring(#value) .. " bytes)"
-    end
-    return value
+    -- 网关或 curl 错误输出可能在任意位置回显凭据，只保留长度摘要。
+    local summary = "<redacted> (" .. tostring(#tostring(value or "")) .. " bytes)"
+    return summary:sub(1, math.max(0, max_len))
 end
 
 function log.bytes_summary(value)

@@ -15,20 +15,20 @@ public:
   ~Api();
 
   // 登录
-  void login(const QString &username, const QString &password);
+  virtual void login(quint64 token, const QString &username, const QString &password);
 
   // 注销
-  void logout();
+  virtual void logout(quint64 token);
 
   // 检测在线状态
-  void checkStatus();
+  virtual void checkStatus(quint64 token);
 
 signals:
-  void loginSuccess(const QString &message);
-  void loginFailed(const QString &error);
-  void logoutSuccess(const QString &resultClass);
-  void logoutFailed(const QString &error);
-  void statusChecked(bool online, const QString &resultClass,
+  void loginSuccess(quint64 token, const QString &message);
+  void loginFailed(quint64 token, const QString &error);
+  void logoutSuccess(quint64 token, const QString &resultClass);
+  void logoutFailed(quint64 token, const QString &error);
+  void statusChecked(quint64 token, bool online, const QString &resultClass,
                      const QString &ip, qint64 bytesUsed,
                      qint64 secondsOnline);
 

@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+"""在临时根目录执行正式安装脚本；Lua 用真实解释器，其余设备边界注入。"""
+
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+LUA = shutil.which(os.environ.get("HAUT_TEST_LUA", "lua"))
+
+
+class InstallationTests(unittest.TestCase):
+    def setUp(self):
+        if not LUA:
+            self.fail("必须提供真实 Lua，示例：HAUT_TEST_LUA=lua5.3")
+        self.temp = tempfile.TemporaryDirectory(prefix="haut-install-test-")
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.root = self.base / "host root"
+        self.remote = self.base / "remote"
+        self.bin = self.base / "bin"
+        self.program = self.root / "usr/lib/haut-network-guard"
+        self.init = self.root / "etc/init.d/haut-network-guard"
+        self.config = self.root / "etc/config/haut-network-guard"
+        for path in (self.program.parent, self.init.parent, self.config.parent,
+                     self.root / "tmp", self.bin):
+            path.mkdir(parents=True, exist_ok=True)
+        self.env = dict(os.environ)
+        self.env.update({
+            "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
+            "HAUT_ROOT": str(self.root), "HAUT_FAKE_REMOTE": str(self.remote),
+            "HAUT_FAKE_EVENTS": str(self.base / "events"),
+            "HAUT_FAKE_RUNNING": str(self.base / "running"),
+            "HAUT_FAKE_ENABLED": str(self.base / "enabled"),
+            "HAUT_REAL_MV": shutil.which("mv"),
+            "HAUT_REAL_RM": shutil.which("rm"),
+        })
+        (self.bin / "lua").symlink_to(LUA)
+        self.write(self.bin / "id", '#!/bin/sh\nprintf "0\\n"\n', executable=True)
+        self.write(self.bin / "opkg", "#!/bin/sh\nexit 0\n", executable=True)
+        self.write(self.bin / "sleep", "#!/bin/sh\nexit 0\n", executable=True)
+        self.write(self.bin / "rm", "#!" + sys.executable + r'''
+import os, subprocess, sys
+if os.environ.get("HAUT_FAIL_BACKUP_CLEANUP") == "1" and any(".backup." in a for a in sys.argv[1:]):
+    sys.exit(73)
+sys.exit(subprocess.call([os.environ["HAUT_REAL_RM"], *sys.argv[1:]]))
+''', executable=True)
+        self.write(self.bin / "curl", "#!" + sys.executable + r'''
+import os, pathlib, sys
+args = iter(sys.argv[1:])
+url = output = None
+for arg in args:
+    if arg == "-o": output = next(args)
+    elif arg in ("--connect-timeout", "--max-time"): next(args)
+    elif arg.startswith("https://"): url = arg
+relative = url.split("/OpenWrt/", 1)[1]
+if os.environ.get("HAUT_FAIL_DOWNLOAD") == relative:
+    if output: pathlib.Path(output).write_text("partial")
+    sys.exit(22)
+data = (pathlib.Path(os.environ["HAUT_FAKE_REMOTE"]) / relative).read_bytes()
+if output: pathlib.Path(output).write_bytes(data)
+else: sys.stdout.buffer.write(data)
+''', executable=True)
+        self.write(self.bin / "mv", "#!" + sys.executable + r'''
+import os, pathlib, subprocess, sys
+args = sys.argv[1:]
+if os.environ.get("HAUT_FAIL_MOVE") == "1":
+    source, target = pathlib.Path(args[-2]), pathlib.Path(args[-1])
+    if source.name.startswith(".haut-network-guard.") and target.name == "haut-network-guard":
+        sys.exit(71)
+sys.exit(subprocess.call([os.environ["HAUT_REAL_MV"], *args]))
+''', executable=True)
+        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua"):
+            self.write(self.remote / "files/usr/lib/haut-network-guard" / name,
+                       'error("语法检查不得执行模块")\nreturn {}\n')
+        self.write(self.remote / "files/usr/lib/haut-network-guard/main.lua",
+                   'local VERSION = "1.3.18"\nerror("语法检查不得启动守护程序")\n')
+        self.write(self.remote / "files/etc/init.d/haut-network-guard", self.service("new"))
+        self.write(self.remote / "files/etc/config/haut-network-guard", "config main\n")
+
+    def write(self, path, content, executable=False):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        path.chmod(0o755 if executable else 0o644)
+
+    def service(self, version):
+        return '#!/bin/sh\nVERSION="' + version + r'''"
+printf '%s:%s\n' "$VERSION" "$1" >> "$HAUT_FAKE_EVENTS"
+case "$1" in
+    enable)
+        if [ "$VERSION" = new ] && [ "$HAUT_FAIL_ENABLE" = 1 ]; then exit 1; fi
+        printf enabled > "$HAUT_FAKE_ENABLED" ;;
+    disable) rm -f "$HAUT_FAKE_ENABLED" ;;
+    start)
+        if [ "$VERSION" = new ] && [ "$HAUT_FAIL_START" = 1 ]; then exit 1; fi
+        printf running > "$HAUT_FAKE_RUNNING" ;;
+    stop) rm -f "$HAUT_FAKE_RUNNING" ;;
+    status)
+        if [ "$VERSION" = new ] && [ "$HAUT_FAIL_HEALTH" = 1 ]; then exit 1; fi
+        test -f "$HAUT_FAKE_RUNNING" ;;
+    *) exit 2 ;;
+esac
+'''
+
+    def seed_old(self, running=True):
+        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua"):
+            self.write(self.program / name, "return { old = true }\n")
+        self.write(self.program / "main.lua", 'local VERSION = "0.9.0"\n')
+        self.write(self.init, self.service("old"), executable=True)
+        self.write(self.config, "config main\n    option password 'test-only'\n")
+        self.config.chmod(0o600)
+        if running:
+            Path(self.env["HAUT_FAKE_RUNNING"]).touch()
+
+    def snapshot(self):
+        return {
+            str(p.relative_to(self.root)): (p.read_bytes(), stat.S_IMODE(p.stat().st_mode))
+            for p in self.root.rglob("*") if p.is_file()
+        }
+
+    def run_script(self, script, success=True):
+        result = subprocess.run(["sh", str(ROOT / "OpenWrt" / script), "v1.3.18"],
+                                env=self.env, cwd=ROOT, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
+
+    def events(self):
+        path = Path(self.env["HAUT_FAKE_EVENTS"])
+        return path.read_text().splitlines() if path.exists() else []
+
+    def assert_no_temporary_files(self):
+        residue = [str(p) for p in self.root.rglob("*")
+                   if ".backup." in p.name or p.name.startswith(".haut-") or p.suffix == ".tmp"]
+        self.assertEqual(residue, [], "安装失败或成功后不应遗留临时文件")
+
+    def test_fresh_install(self):
+        self.run_script("install-online.sh")
+        self.assertEqual(self.events(), ["new:enable"])
+        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o600)
+        self.assertTrue(os.access(self.init, os.X_OK))
+        self.assertEqual((self.program / "main.lua").read_bytes(),
+                         (self.remote / "files/usr/lib/haut-network-guard/main.lua").read_bytes())
+        self.assert_no_temporary_files()
+
+    def test_reinstall_preserves_config(self):
+        self.seed_old()
+        old_config = self.config.read_bytes()
+        self.run_script("install-online.sh")
+        self.assertEqual(self.config.read_bytes(), old_config)
+        self.assert_no_temporary_files()
+
+    def test_failed_download_keeps_old_install(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_DOWNLOAD"] = "files/usr/lib/haut-network-guard/api.lua"
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.events(), [])
+
+    def test_partial_init_download_is_removed(self):
+        self.env["HAUT_FAIL_DOWNLOAD"] = "files/etc/init.d/haut-network-guard"
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), {})
+        self.assert_no_temporary_files()
+
+    def test_invalid_lua_keeps_old_install(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.write(self.remote / "files/usr/lib/haut-network-guard/api.lua", "not valid !")
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_enable_failure_rolls_back_existing(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_ENABLE"] = "1"
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_enable_failure_removes_fresh_install(self):
+        self.env["HAUT_FAIL_ENABLE"] = "1"
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), {})
+
+    def test_commit_failure_restores_old_install(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_MOVE"] = "1"
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_upgrade_success_preserves_config(self):
+        self.seed_old()
+        before = self.config.read_bytes()
+        self.run_script("upgrade-online.sh")
+        self.assertEqual(before, self.config.read_bytes())
+        self.assertIn("new:status", self.events())
+        self.assertTrue(Path(self.env["HAUT_FAKE_RUNNING"]).exists())
+        self.assert_no_temporary_files()
+
+    def test_backup_cleanup_failure_keeps_new_install(self):
+        self.seed_old()
+        self.env["HAUT_FAIL_BACKUP_CLEANUP"] = "1"
+        self.run_script("install-online.sh")
+        self.assertEqual((self.program / "main.lua").read_bytes(),
+                         (self.remote / "files/usr/lib/haut-network-guard/main.lua").read_bytes())
+        self.assertIn('VERSION="new"', self.init.read_text())
+        self.assertTrue(list(self.program.parent.glob("*.backup.*")))
+
+    def test_upgrade_keeps_stopped_service_stopped(self):
+        self.seed_old(running=False)
+        self.run_script("upgrade-online.sh")
+        self.assertFalse(Path(self.env["HAUT_FAKE_RUNNING"]).exists())
+        self.assertNotIn("new:start", self.events())
+
+    def test_upgrade_download_failure_does_not_stop_service(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_DOWNLOAD"] = "files/usr/lib/haut-network-guard/api.lua"
+        self.run_script("upgrade-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertNotIn("old:stop", self.events())
+
+    def test_upgrade_health_failure_restores_old_service(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_HEALTH"] = "1"
+        self.run_script("upgrade-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertIn("old:start", self.events())
+        self.assertTrue(Path(self.env["HAUT_FAKE_RUNNING"]).exists())
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

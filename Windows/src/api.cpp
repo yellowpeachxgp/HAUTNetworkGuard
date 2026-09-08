@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QVariant>
 
 const QString Api::STATUS_URL = "http://172.16.154.130/cgi-bin/rad_user_info";
 const QString Api::LOGIN_URL = "http://172.16.154.130:69/cgi-bin/srun_portal";
@@ -64,7 +65,7 @@ void Api::finishTrackedReply(QNetworkReply *reply, quint64 *requestId,
     *elapsedMs = elapsed;
 }
 
-void Api::login(const QString &username, const QString &password) {
+void Api::login(quint64 token, const QString &username, const QString &password) {
   QString encUsername = Encryption::encryptUsername(username);
   QString encPassword = Encryption::encryptPassword(password);
 
@@ -91,6 +92,7 @@ void Api::login(const QString &username, const QString &password) {
 
   QNetworkReply *reply = m_networkManager->post(request, body.toUtf8());
   const quint64 requestId = trackReply(reply, "login");
+  reply->setProperty("sessionToken", QVariant::fromValue(token));
   Logger::info(QString("[req:%1] action=login phase=request account=%2 "
                        "user_len=%3 pass_len=%4 enc_user_len=%5 enc_pass_len=%6")
                    .arg(requestId)
@@ -102,7 +104,7 @@ void Api::login(const QString &username, const QString &password) {
   connect(reply, &QNetworkReply::finished, this, &Api::onLoginReplyFinished);
 }
 
-void Api::logout() {
+void Api::logout(quint64 token) {
   QString body = "action=logout";
 
   QUrl logoutUrl(LOGIN_URL);
@@ -115,12 +117,13 @@ void Api::logout() {
 
   QNetworkReply *reply = m_networkManager->post(request, body.toUtf8());
   const quint64 requestId = trackReply(reply, "logout");
+  reply->setProperty("sessionToken", QVariant::fromValue(token));
   Logger::info(
       QString("[req:%1] action=logout phase=request").arg(requestId));
   connect(reply, &QNetworkReply::finished, this, &Api::onLogoutReplyFinished);
 }
 
-void Api::checkStatus() {
+void Api::checkStatus(quint64 token) {
   if (m_statusCheckInFlight) {
     Logger::debug("跳过状态检测：上一个状态请求尚未完成");
     return;
@@ -144,6 +147,7 @@ void Api::checkStatus() {
   QNetworkReply *reply = m_networkManager->get(request);
   m_statusCheckInFlight = true;
   const quint64 requestId = trackReply(reply, "status");
+  reply->setProperty("sessionToken", QVariant::fromValue(token));
   Logger::debug(QString("[req:%1] action=status phase=request url=%2")
                     .arg(requestId)
                     .arg(url.toString()));
@@ -168,12 +172,11 @@ void Api::onLoginReplyFinished() {
                       .arg(action)
                       .arg(elapsedMs)
                       .arg(reply->errorString()));
-    emit loginFailed(QString("网络错误: %1").arg(reply->errorString()));
+    emit loginFailed(reply->property("sessionToken").toULongLong(), QString("网络错误: %1").arg(reply->errorString()));
     return;
   }
 
   QString response = QString::fromUtf8(reply->readAll());
-  const QString errCode = ProtocolUtils::extractErrorCode(response);
   const QString classification = ProtocolUtils::classifyLoginResponse(response);
   Logger::info(QString("[req:%1] action=%2 phase=response class=%3 "
                        "elapsed_ms=%4")
@@ -187,16 +190,10 @@ void Api::onLoginReplyFinished() {
 
   // 检查登录结果 (与 Rust 版本一致)
   if (classification == "success" || classification == "already_online") {
-    emit loginSuccess(classification == "already_online" ? "已在线" : "登录成功");
+    emit loginSuccess(reply->property("sessionToken").toULongLong(), classification == "already_online" ? "已在线" : "登录成功");
   } else {
-    QString error = "登录失败";
-    if (!errCode.isEmpty()) {
-      error = QString("登录失败 (错误码: %1)").arg(errCode);
-    }
-    if (!response.isEmpty() && response.length() < 200) {
-      error = response;
-    }
-    emit loginFailed(error);
+    QString error = ProtocolUtils::userFacingLoginMessage(classification);
+    emit loginFailed(reply->property("sessionToken").toULongLong(), error);
   }
 }
 
@@ -218,7 +215,7 @@ void Api::onLogoutReplyFinished() {
                       .arg(action)
                       .arg(elapsedMs)
                       .arg(reply->errorString()));
-    emit logoutFailed(QString("网络错误: %1").arg(reply->errorString()));
+    emit logoutFailed(reply->property("sessionToken").toULongLong(), QString("网络错误: %1").arg(reply->errorString()));
     return;
   }
 
@@ -235,9 +232,9 @@ void Api::onLogoutReplyFinished() {
                     .arg(ProtocolUtils::responsePreview(response)));
 
   if (classification == "logout_ok" || classification == "not_online") {
-    emit logoutSuccess(classification);
+    emit logoutSuccess(reply->property("sessionToken").toULongLong(), classification);
   } else {
-    emit logoutFailed("注销失败");
+    emit logoutFailed(reply->property("sessionToken").toULongLong(), "注销失败");
   }
 }
 
@@ -260,7 +257,7 @@ void Api::onStatusReplyFinished() {
                      .arg(action)
                      .arg(elapsedMs)
                      .arg(reply->errorString()));
-    emit statusChecked(false, "network_error", "", 0, 0);
+    emit statusChecked(reply->property("sessionToken").toULongLong(), false, "network_error", "", 0, 0);
     return;
   }
 
@@ -287,7 +284,7 @@ void Api::onStatusReplyFinished() {
                      .arg(action)
                      .arg(parsed.format)
                      .arg(elapsedMs));
-    emit statusChecked(true, QString("online_%1").arg(parsed.format),
+    emit statusChecked(reply->property("sessionToken").toULongLong(), true, QString("online_%1").arg(parsed.format),
                        parsed.ip, parsed.bytes, parsed.seconds);
     return;
   }
@@ -298,7 +295,7 @@ void Api::onStatusReplyFinished() {
                       .arg(requestId)
                       .arg(action)
                       .arg(elapsedMs));
-    emit statusChecked(false, "offline", "", 0, 0);
+    emit statusChecked(reply->property("sessionToken").toULongLong(), false, "offline", "", 0, 0);
     return;
   }
 
@@ -308,5 +305,5 @@ void Api::onStatusReplyFinished() {
                    .arg(action)
                    .arg(parsed.format)
                    .arg(elapsedMs));
-  emit statusChecked(false, parsed.format, "", 0, 0);
+  emit statusChecked(reply->property("sessionToken").toULongLong(), false, parsed.format, "", 0, 0);
 }

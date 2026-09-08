@@ -32,6 +32,11 @@ local function is_valid_ipv4(value)
     return true
 end
 
+local function extract_json_number(body, field)
+    local pattern = '"' .. field .. '"%s*:%s*"?(%d+)"?'
+    return tonumber(tostring(body or ""):match(pattern)) or 0
+end
+
 function protocol.sanitize_uci_value(raw)
     local original = tostring(raw or "")
     local sanitized = original:gsub("^\239\187\191", "")
@@ -67,19 +72,33 @@ function protocol.has_suspicious_changes(diag)
     return diag.had_cr or diag.had_control or diag.trimmed or diag.unquoted
 end
 
+local function user_facing_login_message(category, error_code)
+    if category == "success" then return "登录成功" end
+    if category == "already_online" then return "已经在线" end
+    if category == "logout_ok" then return "注销成功" end
+    if category == "not_online" then return "当前未在线" end
+    if category == "error_E2531" then return "学号或密码错误，请检查后重试。" end
+    if category == "empty" then return "校园网网关返回空响应，请检查网络后重试。" end
+    if category == "unknown" then return "校园网网关返回了无法识别的结果，请稍后重试。" end
+    if error_code then
+        return "登录失败（错误码 " .. error_code .. "），请稍后重试。"
+    end
+    return "登录失败，请稍后重试。"
+end
+
 function protocol.classify_login_response(response)
     local body = tostring(response or "")
     if body:find("login_ok", 1, true) then
-        return { ok = true, category = "success", message = "登录成功" }
+        return { ok = true, category = "success", message = "登录成功", user_message = "登录成功" }
     end
     if body:find("already_online", 1, true) then
-        return { ok = true, category = "already_online", message = "已在线" }
+        return { ok = true, category = "already_online", message = "已在线", user_message = "已经在线" }
     end
     if body:find("logout_ok", 1, true) then
-        return { ok = true, category = "logout_ok", message = "注销成功" }
+        return { ok = true, category = "logout_ok", message = "注销成功", user_message = "注销成功" }
     end
     if body:find("not_online", 1, true) then
-        return { ok = true, category = "not_online", message = "当前不在线" }
+        return { ok = true, category = "not_online", message = "当前不在线", user_message = "当前未在线" }
     end
 
     local error_code = body:match("E(%d+)")
@@ -88,15 +107,16 @@ function protocol.classify_login_response(response)
             ok = false,
             category = "error_E" .. error_code,
             message = body ~= "" and body or ("登录失败 (E" .. error_code .. ")"),
-            error_code = "E" .. error_code
+            error_code = "E" .. error_code,
+            user_message = user_facing_login_message("error_E" .. error_code, "E" .. error_code)
         }
     end
 
     if body == "" then
-        return { ok = false, category = "empty", message = "空响应" }
+        return { ok = false, category = "empty", message = "空响应", user_message = "校园网网关返回空响应，请检查网络后重试。" }
     end
 
-    return { ok = false, category = "unknown", message = body }
+    return { ok = false, category = "unknown", message = body, user_message = "校园网网关返回了无法识别的结果，请稍后重试。" }
 end
 
 function protocol.parse_status_response(response)
@@ -119,16 +139,16 @@ function protocol.parse_status_response(response)
     end
 
     local username = json_body:match('"user_name"%s*:%s*"([^"]+)"')
-    local sum_bytes = json_body:match('"sum_bytes"%s*:%s*(%d+)')
-    local sum_seconds = json_body:match('"sum_seconds"%s*:%s*(%d+)')
+    local sum_bytes = extract_json_number(json_body, "sum_bytes")
+    local sum_seconds = extract_json_number(json_body, "sum_seconds")
     local user_ip = json_body:match('"online_ip"%s*:%s*"([^"]+)"')
 
     if username or user_ip then
         return {
             username = username or "",
             ip = user_ip or "",
-            bytes = tonumber(sum_bytes) or 0,
-            seconds = tonumber(sum_seconds) or 0
+            bytes = sum_bytes,
+            seconds = sum_seconds
         }, format
     end
 

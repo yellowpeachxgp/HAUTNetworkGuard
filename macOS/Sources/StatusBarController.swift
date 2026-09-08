@@ -10,16 +10,14 @@ class StatusBarController: NSObject {
     private var loginMenuItem: NSMenuItem!
     private var logoutMenuItem: NSMenuItem!
 
-    private let api = SrunAPI()
+    private let api: SrunService
+    private let config: AppConfig
+    private let now: () -> TimeInterval
     private var checkTimer: Timer?
     private var currentStatus: NetworkStatus = .checking
-    private var checkInterval: TimeInterval { TimeInterval(AppConfig.shared.checkInterval) }
-    private var isLoggingIn = false
-    private var isCheckingStatus = false
-    private var startupAutoLoginEvaluated = false
-    private var manualOfflineHold = false
-    private var lastAutoLoginAttemptAt: Date?
-    private let autoLoginRetryInterval: TimeInterval = 30
+    private var checkInterval: TimeInterval { TimeInterval(config.checkInterval) }
+    private var session = SessionPolicy()
+    private var monotonicNow: TimeInterval { now() }
 
     // 状态图标
     private let onlineIcon = "wifi"
@@ -33,7 +31,11 @@ class StatusBarController: NSObject {
     private var aboutWindowController: AboutWindowController?
     private var utilityWindowObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
 
-    override init() {
+    init(api: SrunService = SrunAPI(), config: AppConfig = .shared,
+         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.api = api
+        self.config = config
+        self.now = now
         super.init()
         Logger.debug("初始化菜单栏控制器")
         setupStatusItem()
@@ -48,6 +50,15 @@ class StatusBarController: NSObject {
             setupUpdateChecker()
         }
         setupNotifications()
+    }
+
+    deinit {
+        checkTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
+        for observer in utilityWindowObservers.values {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
     }
     
     private func setupNotifications() {
@@ -336,6 +347,7 @@ extension StatusBarController {
 extension StatusBarController {
     private func setupMenu() {
         menu = NSMenu()
+        menu.autoenablesItems = false
 
         // 状态显示
         statusMenuItem = NSMenuItem(title: "状态: 检测中...", action: nil, keyEquivalent: "")
@@ -435,18 +447,25 @@ extension StatusBarController {
         }
     }
 
-    private func checkStatus(reason: String) {
-        guard !isCheckingStatus else {
-            Logger.debug("跳过状态检测 [\(reason)]：已有状态请求进行中")
+    func checkStatus(reason: String) {
+        guard let token = session.beginStatus() else {
+            Logger.debug("跳过状态检测 [\(reason)]：已有网络操作进行中")
             return
         }
 
-        isCheckingStatus = true
+        updateUI()
         Logger.debug("触发一次网络状态检测 [\(reason)]")
         api.checkStatus { [weak self] status in
             DispatchQueue.main.async {
-                self?.isCheckingStatus = false
-                self?.handleStatusChange(status, reason: reason)
+                guard let self else { return }
+                let observation: SessionPolicy.Observation
+                switch status {
+                case .online: observation = .online
+                case .offline: observation = .offline
+                case .error, .checking: observation = .error
+                }
+                guard self.session.completeStatus(token, observation: observation) else { return }
+                self.handleStatusChange(status, reason: reason)
             }
         }
     }
@@ -456,38 +475,14 @@ extension StatusBarController {
 extension StatusBarController {
     private func handleStatusChange(_ newStatus: NetworkStatus, reason: String) {
         let previousStatus = currentStatus
-        let wasOnline = previousStatus.isOnline
         currentStatus = newStatus
         Logger.info("状态迁移 [\(reason)]: \(previousStatus.kindLabel) -> \(newStatus.kindLabel)")
 
         updateUI()
 
-        if newStatus.isOnline {
-            startupAutoLoginEvaluated = true
-            lastAutoLoginAttemptAt = nil
-            Logger.debug("当前在线，无需自动登录")
-            return
-        }
-
-        guard AppConfig.shared.autoLogin else {
-            Logger.debug("自动登录已关闭，保持当前状态")
-            return
-        }
-
         switch newStatus {
         case .offline:
-            let trigger: String
-            if !startupAutoLoginEvaluated {
-                startupAutoLoginEvaluated = true
-                trigger = "startup_offline"
-            } else if wasOnline {
-                trigger = "disconnect"
-                Logger.warn("检测到掉线，准备自动重连")
-                sendNotification(title: "网络已断开", body: "正在尝试自动重连...")
-            } else {
-                trigger = "offline_retry"
-            }
-            triggerAutoLoginIfNeeded(trigger: trigger)
+            triggerAutoLoginIfNeeded(trigger: reason)
         case .error(let message):
             Logger.warn("状态检测错误，不触发自动登录: \(message)")
         case .checking, .online:
@@ -496,8 +491,8 @@ extension StatusBarController {
     }
 
     private func updateUI() {
-        let iconName: String
-        let statusText: String
+        var iconName: String
+        var statusText: String
 
         switch currentStatus {
         case .online:
@@ -505,7 +500,7 @@ extension StatusBarController {
             statusText = "状态: 已连接"
         case .offline:
             iconName = offlineIcon
-            statusText = "状态: 未连接"
+            statusText = session.manualOfflineHold ? "状态: 已暂停自动重连" : "状态: 未连接"
         case .checking:
             iconName = checkingIcon
             statusText = "状态: 检测中..."
@@ -514,66 +509,59 @@ extension StatusBarController {
             statusText = "状态: 错误 - \(msg)"
         }
 
+        if session.isBusy {
+            iconName = checkingIcon
+            switch session.operation {
+            case .login: statusText = "状态: 正在登录..."
+            case .logout: statusText = "状态: 正在注销..."
+            case .status: statusText = "状态: 正在检测..."
+            case .idle: break
+            }
+        }
+
         statusItem.button?.image = NSImage(
             systemSymbolName: iconName,
             accessibilityDescription: statusText
         )
         statusMenuItem.title = statusText
-        detailMenuItem.title = currentStatus.description
-        loginMenuItem.isEnabled = !currentStatus.isOnline && !isLoggingIn
-        logoutMenuItem.isEnabled = currentStatus.isOnline && !isLoggingIn
+        detailMenuItem.title = session.manualOfflineHold
+            ? "自动重连已暂停；点击「立即登录」解除暂停" : currentStatus.description
+        loginMenuItem.isEnabled = (!currentStatus.isOnline || session.manualOfflineHold) && !session.isBusy
+        logoutMenuItem.isEnabled = currentStatus.isOnline && !session.isBusy
     }
 
     private func triggerAutoLoginIfNeeded(trigger: String) {
-        guard !isLoggingIn else {
-            Logger.debug("跳过自动登录 [\(trigger)]：已有登录请求进行中")
-            return
-        }
-
-        guard !manualOfflineHold else {
-            Logger.info("跳过自动登录 [\(trigger)]：用户手动注销后保持离线")
-            return
-        }
-
-        guard !AppConfig.shared.username.isEmpty, !AppConfig.shared.password.isEmpty else {
-            Logger.warn("跳过自动登录 [\(trigger)]：未配置可用凭据")
-            return
-        }
-
-        let now = Date()
-        if let lastAttempt = lastAutoLoginAttemptAt {
-            let elapsed = now.timeIntervalSince(lastAttempt)
-            if elapsed < autoLoginRetryInterval {
-                Logger.debug("跳过自动登录 [\(trigger)]：退避剩余 \(Int(autoLoginRetryInterval - elapsed))s")
-                return
-            }
-        }
-
-        lastAutoLoginAttemptAt = now
-        performAutoLogin(trigger: trigger)
+        guard let token = session.beginLogin(
+            manual: false, enabled: config.autoLogin,
+            hasCredentials: !config.username.isEmpty && !config.password.isEmpty,
+            now: monotonicNow, interval: checkInterval
+        ) else { return }
+        performLogin(token: token, manual: false, trigger: trigger)
     }
 
-    private func performAutoLogin(trigger: String) {
-        isLoggingIn = true
+    private func performLogin(token: UInt64, manual: Bool, trigger: String) {
         updateUI()
-        Logger.info("执行自动登录流程 [\(trigger)] (account: \(Logger.maskUsername(AppConfig.shared.username)))")
+        Logger.info("执行登录流程 [\(trigger)] (account: \(Logger.maskUsername(config.username)))")
         api.login { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoggingIn = false
+                guard let self else { return }
+                let succeeded: Bool
+                if case .failed = result { succeeded = false } else { succeeded = true }
+                guard self.session.completeLogin(token, succeeded: succeeded, now: self.monotonicNow) else { return }
                 switch result {
                 case .success:
-                    self?.manualOfflineHold = false
-                    Logger.info("自动登录成功 [\(trigger)]")
-                    self?.sendNotification(title: "登录成功", body: "已自动重新连接校园网")
-                    self?.checkStatus(reason: "post_auto_login_success")
+                    Logger.info("登录请求成功 [\(trigger)]，等待状态确认")
+                    self.sendNotification(title: "登录请求成功", body: "正在确认校园网连接状态")
                 case .alreadyOnline:
-                    self?.manualOfflineHold = false
-                    Logger.info("自动登录返回 already_online [\(trigger)]")
-                    self?.checkStatus(reason: "post_auto_login_already_online")
+                    Logger.info("登录返回 already_online [\(trigger)]，等待状态确认")
                 case .failed(let msg):
-                    Logger.warn("自动登录失败 [\(trigger)]: \(msg)")
-                    self?.sendNotification(title: "登录失败", body: msg)
-                    self?.updateUI()
+                    Logger.warn("登录失败 [\(trigger)]: \(msg)")
+                    self.currentStatus = .error(msg)
+                    self.sendNotification(title: "登录失败", body: msg)
+                }
+                self.updateUI()
+                if succeeded || manual {
+                    self.checkStatus(reason: "post_login")
                 }
             }
         }
@@ -582,62 +570,42 @@ extension StatusBarController {
 
 // MARK: - 菜单操作
 extension StatusBarController {
-    @objc private func loginAction() {
-        guard !isLoggingIn else {
-            Logger.debug("忽略手动登录：已有登录请求进行中")
+    @objc func loginAction() {
+        guard !session.isBusy else { return }
+        guard !config.username.isEmpty, !config.password.isEmpty else {
+            settingsAction()
             return
         }
-
-        isLoggingIn = true
-        manualOfflineHold = false
-        updateUI()
-        Logger.info("手动登录")
-        api.login { [weak self] result in
-            DispatchQueue.main.async {
-                self?.isLoggingIn = false
-                switch result {
-                case .success:
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "登录成功", body: "已连接校园网")
-                case .alreadyOnline:
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "提示", body: "已经在线")
-                case .failed(let msg):
-                    self?.sendNotification(title: "登录失败", body: msg)
-                }
-                self?.updateUI()
-                self?.checkStatus(reason: "manual_login")
-            }
-        }
+        guard let token = session.beginLogin(
+            manual: true, enabled: config.autoLogin, hasCredentials: true,
+            now: monotonicNow, interval: checkInterval
+        ) else { return }
+        performLogin(token: token, manual: true, trigger: "manual_login")
     }
 
-    @objc private func logoutAction() {
-        guard !isLoggingIn else {
-            Logger.debug("忽略手动注销：已有登录请求进行中")
-            return
-        }
-
-        manualOfflineHold = true
-        isLoggingIn = true
+    @objc func logoutAction() {
+        guard let token = session.beginLogout() else { return }
         updateUI()
         Logger.info("手动注销")
         api.logout { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoggingIn = false
+                guard let self else { return }
+                let succeeded: Bool
+                if case .failed = result { succeeded = false } else { succeeded = true }
+                guard self.session.completeLogout(token, succeeded: succeeded) else { return }
                 switch result {
                 case .success:
-                    self?.currentStatus = .offline
-                    self?.updateUI()
-                    self?.sendNotification(title: "注销成功", body: "已断开校园网")
+                    self.currentStatus = .offline
+                    self.sendNotification(title: "注销成功", body: "已断开校园网，自动重连已暂停")
                 case .alreadyOnline:
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "提示", body: "当前未在线")
+                    self.currentStatus = .offline
+                    self.sendNotification(title: "提示", body: "当前未在线，自动重连已暂停")
                 case .failed(let msg):
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "注销失败", body: msg)
+                    self.currentStatus = .error(msg)
+                    self.sendNotification(title: "注销失败", body: msg + " 自动重连已暂停，可再次注销。")
                 }
-                self?.updateUI()
-                self?.checkStatus(reason: "manual_logout")
+                self.updateUI()
+                self.checkStatus(reason: "manual_logout")
             }
         }
     }
@@ -692,6 +660,7 @@ extension StatusBarController {
     }
 
     private func sendNotification(title: String, body: String) {
+        guard !AppRuntime.isUISmokeTest else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

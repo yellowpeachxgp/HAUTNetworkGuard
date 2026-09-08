@@ -3,8 +3,11 @@ run-name: ${{ github.workflow }} · ${{ github.ref_name }}
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -28,20 +31,30 @@ jobs:
       - name: Install Lua
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.3
+          sudo apt-get install -y lua5.1 lua5.3
 
       - name: Validate OpenWrt Lua Scripts
         run: |
           find OpenWrt/files/usr/lib/haut-network-guard -name '*.lua' -print -exec luac5.3 -p {} \;
+          find OpenWrt/files/usr/lib/haut-network-guard -name '*.lua' -print -exec luac5.1 -p {} \;
 
       - name: Validate Protocol And Docs Contracts
         run: |
           python3 tests/test_protocol_contract.py
           python3 tests/test_docs_contract.py
+          python3 tests/test_version_contract.py
+          python3 tests/test_session_policy.py
 
       - name: Validate OpenWrt Modules
         run: |
           LUA_PATH="OpenWrt/files/usr/lib/haut-network-guard/?.lua;;" lua5.3 tests/test_openwrt_modules.lua
+          lua5.1 tests/test_openwrt_modules.lua
+          lua5.1 tests/test_openwrt_runtime.lua
+          lua5.3 tests/test_openwrt_runtime.lua
+          lua5.1 tests/test_openwrt_log.lua
+          lua5.3 tests/test_openwrt_log.lua
+          HAUT_TEST_LUA=lua5.1 python3 tests/test_openwrt_installation.py
+          HAUT_TEST_LUA=lua5.3 python3 tests/test_openwrt_installation.py
 
       - name: Validate OpenWrt Shell Scripts
         run: |
@@ -109,6 +122,7 @@ jobs:
         run: |
           cd macOS
           chmod +x build.sh create-dmg.sh tests/run_smoke_tests.sh tests/run_ui_smoke_tests.sh
+          python3 ../tests/test_session_policy.py
           ./tests/run_smoke_tests.sh
           ./tests/run_ui_smoke_tests.sh
           ./build.sh
@@ -152,7 +166,16 @@ jobs:
 
       - name: Get Version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION_FILE="$(cat VERSION)"
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          test "$VERSION_FILE" = "$TAG_VERSION"
+          echo "VERSION=v$VERSION_FILE" >> $GITHUB_OUTPUT
+
+      - name: Generate Asset Checksums
+        run: |
+          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS
+          find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
@@ -192,3 +215,5 @@ jobs:
           files: |
             HAUTNetworkGuard-Windows.zip
             HAUTNetworkGuard.dmg
+            SHA256SUMS
+            OpenWrt-SHA256SUMS

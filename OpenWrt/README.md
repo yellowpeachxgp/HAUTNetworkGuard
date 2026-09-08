@@ -46,6 +46,8 @@ wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main
 curl -sSL https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
 ```
 
+Release 页面同时提供 `OpenWrt-SHA256SUMS`，其中记录固定版本安装脚本和运行文件的哈希，便于发布审计。
+
 升级到固定版本：
 
 ```bash
@@ -61,6 +63,8 @@ chmod +x install.sh
 ```
 
 ## 配置
+
+OpenWrt 密码保存在 `/etc/config/haut-network-guard`，安装脚本会设置文件权限为 `600`。拥有路由器 root 权限的用户仍可读取该配置。
 
 ```bash
 # 设置用户名

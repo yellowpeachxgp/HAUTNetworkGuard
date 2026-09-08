@@ -69,6 +69,12 @@ def parse_status_response(response: str):
     except json.JSONDecodeError:
         obj = None
 
+    def parse_number(value):
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
     if isinstance(obj, dict):
         error = str(obj.get("error", ""))
         if "not_online" in error:
@@ -83,8 +89,8 @@ def parse_status_response(response: str):
 
         username = str(obj.get("user_name", ""))
         ip = str(obj.get("online_ip", ""))
-        bytes_used = int(obj.get("sum_bytes", 0) or 0)
-        seconds_used = int(obj.get("sum_seconds", 0) or 0)
+        bytes_used = parse_number(obj.get("sum_bytes", 0))
+        seconds_used = parse_number(obj.get("sum_seconds", 0))
         if username or ip:
             return {
                 "format": fmt,
@@ -96,14 +102,31 @@ def parse_status_response(response: str):
             }
 
     parts = body.split(",")
-    if len(parts) >= 4:
+    valid_ip = False
+    valid_numbers = False
+    seconds = 0
+    bytes_used = 0
+    if len(parts) >= 4 and parts[0]:
+        ip_parts = parts[2].split(".")
+        valid_ip = len(ip_parts) == 4 and all(
+            part.isdigit() and 0 <= int(part) <= 255 for part in ip_parts
+        )
+        try:
+            seconds = int(parts[1])
+            bytes_used = int(parts[3])
+        except ValueError:
+            pass
+        else:
+            valid_numbers = True
+
+    if len(parts) >= 4 and parts[0] and valid_ip and valid_numbers:
         return {
             "format": "csv",
             "online": True,
             "username": parts[0],
             "ip": parts[2],
-            "bytes": int(parts[3] or 0),
-            "seconds": int(parts[1] or 0),
+            "bytes": bytes_used,
+            "seconds": seconds,
         }
 
     return {

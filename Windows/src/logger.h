@@ -11,6 +11,7 @@ public:
   static Logger &instance();
 
   static void setMinLevel(Level level);
+  static void setEnabled(bool enabled);
   static Level minLevel();
 
   static void debug(const QString &msg);
@@ -32,6 +33,7 @@ private:
 
   QMutex m_mutex;
   Level m_minLevel = DEBUG;
+  bool m_enabled = true;
   static const qint64 MAX_LOG_SIZE = 1024 * 1024; // 1MB
 };
 

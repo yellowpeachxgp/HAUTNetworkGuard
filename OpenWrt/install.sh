@@ -24,6 +24,18 @@ mkdir -p /usr/lib/haut-network-guard
 
 # 复制文件
 echo "[3/5] 复制文件..."
+if ! command -v lua >/dev/null 2>&1; then
+    echo "错误: 未安装 Lua，无法验证程序"
+    exit 1
+fi
+if command -v lua >/dev/null 2>&1; then
+    for file in files/usr/lib/haut-network-guard/*.lua; do
+        HAUT_VALIDATE_FILE="$file" lua -e 'assert(loadfile(os.getenv("HAUT_VALIDATE_FILE")))' </dev/null >/dev/null 2>&1 || {
+            echo "错误: Lua 语法校验失败: $file"
+            exit 1
+        }
+    done
+fi
 cp -f files/usr/lib/haut-network-guard/*.lua /usr/lib/haut-network-guard/
 cp -f files/etc/init.d/haut-network-guard /etc/init.d/
 if [ -f /etc/config/haut-network-guard ]; then

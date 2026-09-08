@@ -47,7 +47,7 @@ enum SrunProtocol {
     }
 
     static func extractErrorCode(_ response: String) -> String? {
-        guard let range = response.range(of: "E\\d+", options: .regularExpression) else {
+        guard let range = response.range(of: "E\\d{4}(?!\\d)", options: .regularExpression) else {
             return nil
         }
         return String(response[range])

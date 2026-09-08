@@ -55,7 +55,7 @@ QString ProtocolUtils::responsePreview(const QString &response, int maxLen) {
 }
 
 QString ProtocolUtils::extractErrorCode(const QString &response) {
-  QRegularExpression errRe("E(\\d+)");
+  QRegularExpression errRe("E([0-9]{4})(?![0-9])");
   QRegularExpressionMatch match = errRe.match(response);
   if (match.hasMatch()) {
     return "E" + match.captured(1);

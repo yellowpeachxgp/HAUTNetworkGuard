@@ -49,6 +49,16 @@
       "message": "login_error#E9999:oops"
     },
     {
+      "input": "login_error#E25:short-code",
+      "class": "unknown",
+      "message": "login_error#E25:short-code"
+    },
+    {
+      "input": "login_error#E12345:long-code",
+      "class": "unknown",
+      "message": "login_error#E12345:long-code"
+    },
+    {
       "input": "logout_ok",
       "class": "logout_ok",
       "message": "注销成功"

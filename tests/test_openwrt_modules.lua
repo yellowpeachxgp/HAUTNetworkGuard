@@ -55,6 +55,10 @@ assert_equal(class2.ok, false, "classify_login_response.e2531.ok")
 local class3 = protocol.classify_login_response("login_error#E9999:oops")
 assert_equal(class3.category, "error_E9999", "classify_login_response.e9999.class")
 assert_equal(class3.message, "login_error#E9999:oops", "classify_login_response.e9999.message")
+local short_code = protocol.classify_login_response("login_error#E25:short-code")
+assert_equal(short_code.category, "unknown", "classify_login_response.short_code.class")
+local long_code = protocol.classify_login_response("login_error#E12345:long-code")
+assert_equal(long_code.category, "unknown", "classify_login_response.long_code.class")
 
 local parsed1, format1 = protocol.parse_status_response(
     "jQuery_1712630100000({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":12345678,\"sum_seconds\":321})"

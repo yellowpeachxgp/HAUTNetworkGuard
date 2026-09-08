@@ -41,6 +41,12 @@ int main(int argc, char *argv[]) {
   expect(ProtocolUtils::classifyLoginResponse(
              "login_error#E2531:User not found") == "error_E2531",
          "登录响应分类不匹配");
+  expect(ProtocolUtils::classifyLoginResponse("login_error#E25:short-code") ==
+             "unknown",
+         "短错误码不应被分类为标准错误");
+  expect(ProtocolUtils::classifyLoginResponse("login_error#E12345:long-code") ==
+             "unknown",
+         "超长错误码不应被分类为标准错误");
 
   const StatusParseResult jsonResult = ProtocolUtils::parseStatusResponse(
       "jQuery_1712630100000({\"error\":\"ok\",\"user_name\":\"231040600203\","

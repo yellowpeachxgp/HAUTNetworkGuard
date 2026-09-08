@@ -26,6 +26,10 @@ struct SmokeTests {
             SrunProtocol.userFacingLoginMessage(login) == "学号或密码错误，请检查后重试。",
             "常见登录错误应转换为学生可理解的提示"
         )
+        expect(SrunProtocol.classifyLoginResponse("login_error#E25:short-code").category == "unknown",
+               "短错误码不应被分类为标准错误")
+        expect(SrunProtocol.classifyLoginResponse("login_error#E12345:long-code").category == "unknown",
+               "超长错误码不应被分类为标准错误")
 
         let parsed = SrunProtocol.parseStatusResponse(
             "jQuery_1712630100000({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":12345678,\"sum_seconds\":321})",

@@ -35,7 +35,7 @@ def classify_login_response(response: str):
 
     import re
 
-    match = re.search(r"E(\d+)", response)
+    match = re.search(r"E(\d{4})(?!\d)", response)
     if match:
         return f"error_E{match.group(1)}", response or f"登录失败 (E{match.group(1)})"
     if not response:

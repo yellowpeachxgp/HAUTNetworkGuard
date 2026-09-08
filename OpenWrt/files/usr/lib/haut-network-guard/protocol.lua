@@ -255,7 +255,7 @@ function protocol.classify_login_response(response)
         return { ok = true, category = "not_online", message = "当前不在线", user_message = "当前未在线" }
     end
 
-    local error_code = body:match("E(%d+)")
+    local error_code = body:match("E(%d%d%d%d)%D") or body:match("E(%d%d%d%d)$")
     if error_code then
         return {
             ok = false,

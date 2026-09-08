@@ -91,6 +91,14 @@ lua5.3 tests/test_openwrt_runtime.lua
 
 ## 契约与仍未验证内容
 
-Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff --check 已检查。CI 工作流现已加入 PR/main 触发及 Lua 5.1/5.3 模块、运行和安装故障回归，但尚未运行远端 CI。
+Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff --check 已检查。CI 工作流现已加入 PR/main 触发及 Lua 5.1/5.3 模块、运行和安装故障回归。
+
+## 集成分支与原生 CI
+
+- 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。
+- 首轮提交：`7276a6c1dbc6e1f18fe5492e85e2eac0c91e2443`；推送后本地 HEAD、跟踪分支及 ls-remote 三方一致。
+- [首轮运行 34224354585](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224354585)：macOS 构建、原生测试、DMG 打包和签名通过；Linux OpenWrt 双版本测试通过；Windows 在 CMake 配置阶段失败，未执行编译和测试。
+- Windows 失败原因：实际 `windows-latest` 镜像为 `windows-2025-vs2026`，现有生成器指定 VS 2022，找不到对应实例。已将作业固定到 `windows-2022`，其 [官方软件清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md#visual-studio-enterprise-2022) 包含 VS 2022；修复后的 CI 结果继续核实。
+- 原社区 PR #2/#3 未远程合并或关闭；本集成尚未合并到 main，没有执行 Release。
 
 Windows Qt/DPAPI 原生执行、跨签名升级、完整日志隐私审计、单实例/睡眠唤醒、OpenWrt 状态策略及下载清单验证、真实校园网、学生完整旅程与 7 天稳定性仍未完成。不得依据当前测试宣布产品完成。

@@ -66,7 +66,8 @@ jobs:
           sh -n OpenWrt/files/etc/init.d/haut-network-guard
 
   build-windows-qt:
-    runs-on: windows-latest
+    # Qt 6.6 的当前构建链使用 VS 2022，固定与生成器配套的镜像。
+    runs-on: windows-2022
     timeout-minutes: 30
     steps:
       - name: Checkout

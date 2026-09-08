@@ -63,6 +63,16 @@ int main(int argc, char **argv) {
       if (checkbox->text() == "记住密码") remember = checkbox;
     }
     expect(remember != nullptr, "记住密码控件必须存在");
+    window.show();
+    QApplication::processEvents();
+    expect(window.isVisible(), "正式主窗口应能显示");
+    QCloseEvent closeEvent;
+    QApplication::sendEvent(&window, &closeEvent);
+    expect(!closeEvent.isAccepted() && !window.isVisible(),
+           "关闭窗口应拦截并隐藏到系统托盘");
+    expect(QMetaObject::invokeMethod(&window, "showWindow", Qt::DirectConnection) &&
+               window.isVisible(),
+           "托盘显示动作应重新显示主窗口");
     remember->setChecked(false);
     expect(api.statusTokens.empty() && api.loginTokens.empty(), "隔离构造不得启动后台请求");
     invoke("checkNetworkStatus");

@@ -36,7 +36,7 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 - Swift/C++ 会话策略另完成加速模拟 7 天逐分钟 soak（10,080 次检测），断言无重叠操作、退避有界和最终状态空闲；不代表真实设备 7 天运行。
 - macOS 正式 StatusBarController：27 条回放断言通过，覆盖检测/认证串行、手动失败后的退避、旧回调、注销后暂停和显式恢复，以及自动重试提示的实际剩余秒数；同一入口继续执行窗口生命周期 smoke，通过。
 - 已通过 Homebrew 安装 Qt 6.11.1（qtbase 及依赖）。使用 AppleClang 17 + MacOSX26.2.sdk，Windows 目录的完整应用编译、Qt 元对象信号连接、配置测试和主窗口回放通过。
-- CTest 共 5 项全部通过：`session_policy_tests`、`windows_smoke_tests`、`controller_session_tests`、`credential_failure_tests`、`instance_guard_tests`；正式 MainWindow 的 Qt 信号、按钮、首次空配置拒绝和保存失败回放为 64 条断言，另有单实例锁竞争断言。
+- CTest 共 5 项全部通过：`session_policy_tests`、`windows_smoke_tests`、`controller_session_tests`、`credential_failure_tests`、`instance_guard_tests`；正式 MainWindow 的 Qt 信号、按钮、关闭隐藏到托盘、托盘重新显示、首次空配置拒绝和保存失败回放为 67 条断言，另有单实例锁竞争断言。
 - Windows 版本治理回归：CMake 从根目录 `VERSION` 读取版本，主程序、窗口和 User-Agent 使用同一编译宏；Qt 5 项 CTest 全部通过。
 - macOS 版本治理回归：构建脚本从根目录 `VERSION` 生成 Swift 版本源并替换 Info.plist；逻辑/UI smoke、严格签名和包内版本回读通过。
 - macOS 卸载脚本回归：临时 LaunchAgent、应用目录、Keychain/defaults 命令均使用隔离替身；停止失败时文件保持不变，成功时清理目标并复核残留。

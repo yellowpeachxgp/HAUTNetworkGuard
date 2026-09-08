@@ -17,10 +17,10 @@ APP_NAME="HAUTNetworkGuard"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 VERSION_FILE="$PROJECT_DIR/../VERSION"
 VERSION="$(cat "$VERSION_FILE")"
-case "$VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) echo "错误: VERSION 文件不是有效语义版本号: $VERSION"; exit 1 ;;
-esac
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "错误: VERSION 文件不是有效语义版本号: $VERSION"
+    exit 1
+fi
 
 # 构建与模块缓存限定在本次输出目录，不清理用户的全局 Xcode 缓存。
 echo "[1/5] 准备构建目录..."

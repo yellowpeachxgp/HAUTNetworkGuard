@@ -91,7 +91,10 @@ for name in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main
     cp "$source" "$target"
 done
 VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$SOURCE_DIR/version.lua")
-[ -n "$VERSION" ] || { echo "错误: 无法读取程序版本"; exit 1; }
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "错误: 无法读取有效程序版本"
+    exit 1
+fi
 
 echo "[4/5] 校验服务和配置..."
 if [ ! -s "$SOURCE_INIT" ] || ! sh -n "$SOURCE_INIT"; then

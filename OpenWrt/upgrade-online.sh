@@ -176,6 +176,9 @@ if [ -f "$MAIN_LUA" ]; then
     fi
     [ -z "$LOCAL_VERSION" ] && LOCAL_VERSION="未知"
 fi
+if [ "$LOCAL_VERSION" != "未安装" ] && ! printf '%s\n' "$LOCAL_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    LOCAL_VERSION="未知"
+fi
 echo "本地版本: $LOCAL_VERSION"
 
 # 获取远端版本
@@ -187,7 +190,7 @@ if [ -z "$REMOTE_VERSION_SOURCE" ]; then
 fi
 
 REMOTE_VERSION=$(echo "$REMOTE_VERSION_SOURCE" | sed -n 's/^return "\([^"]*\)".*/\1/p')
-if [ -z "$REMOTE_VERSION" ]; then
+if ! printf '%s\n' "$REMOTE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo "错误: 无法解析远端版本号"
     exit 1
 fi
@@ -258,7 +261,7 @@ for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main
 done
 verify_checksum "files/etc/init.d/haut-network-guard" "$TMP_DIR/haut-network-guard.init"
 STAGED_VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$TMP_DIR/version.lua")
-if [ "$STAGED_VERSION" != "$REMOTE_VERSION" ]; then
+if ! printf '%s\n' "$STAGED_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || [ "$STAGED_VERSION" != "$REMOTE_VERSION" ]; then
     echo "错误: 下载期间远端版本发生变化，请重新运行升级"
     exit 1
 fi

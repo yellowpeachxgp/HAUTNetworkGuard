@@ -107,6 +107,8 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 - Windows 失败原因：实际 `windows-latest` 镜像为 `windows-2025-vs2026`，现有生成器指定 VS 2022，找不到对应实例。已将作业固定到 `windows-2022`，其 [官方软件清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md#visual-studio-enterprise-2022) 包含 VS 2022；修复后的 CI 结果继续核实。
 - 原社区 PR #2/#3 未远程合并或关闭；本集成尚未合并到 main，没有执行 Release。
 
+从第四轮 CI 下载并回读的集成预览资产保存在忽略目录 `macOS/tests/build/ci-34226445948/`：Windows ZIP SHA-256 为 `17c96a7a82040f3d3fdd82131fc2a44c7db50abdfc97c2245b4f82b6b2d30938`，macOS DMG SHA-256 为 `33e4a674cc43db3b1ae67d71428fc41d309416ee977d1a1bb3c183c13e9c4b01`。ZIP 回读确认包含 `HAUTNetworkGuard.exe`、Qt Core/Gui/Network/Widgets DLL 和 `platforms/qwindows.dll`；没有在本机启动 Windows 资产。
+
 [第二轮运行 34224732221](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224732221) 对应 `f4ed6dc3070e5ccdfba5fb42dd6fe72be74a0fee`：Windows、macOS、OpenWrt 全部通过，Release 按预期跳过。Windows Server 2022 上完成 Qt 6.6 原生编译、4 项 CTest、运行库部署和 ZIP 打包；其中 smoke test 真实执行 DPAPI 加密、解码和独立配置回读。该结果仍不能替代真实用户桌面、自启动、跨账号升级和校园网验收。
 
 等待 CI 时另发现并复现 macOS 协议解析缺陷：`sum_bytes=1e100` 在 `Double -> Int64` 转换时使进程以信号退出（本地复现退出码 -5）。已增加有限数及严格上界检查，超范围返回零，并添加正/负溢出、合法 Int64 最大值和超范围数字字符串回归；本地 macOS smoke 通过。该增量将由下一轮 CI 验证。

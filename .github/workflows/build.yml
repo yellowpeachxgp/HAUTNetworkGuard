@@ -42,6 +42,7 @@ jobs:
         run: |
           python3 tests/test_protocol_contract.py
           python3 tests/test_docs_contract.py
+          python3 tests/test_acceptance_matrix.py
           python3 tests/test_version_contract.py
           python3 tests/test_release_contract.py
           python3 tests/test_logging_contract.py

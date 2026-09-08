@@ -24,7 +24,7 @@
 | M5-04 资产完整性 | 部分实现 | CI 哈希清单已加入；PR/main/手动运行新增发布资产 dry-run，下载桌面构建产物、生成并校验桌面与 OpenWrt 清单及文件覆盖；Release job 新增正式上传前 `sha256sum -c` 和 OpenWrt 清单覆盖回读；固定版本在线安装/升级消费 `OpenWrt-SHA256SUMS`，并拒绝 tag 与 `version.lua` 不一致；两种 Lua 各 25 项安装/升级/卸载测试通过，并验证清单缺失时保持旧安装和服务；本地 macOS DMG 哈希/只读挂载/包内签名核对通过；已审计 v1.3.18 远端桌面资产版本与哈希，但该 Release 缺少两个清单，固定版本 OpenWrt 安装会安全停止 | 下一版正式 Release 上传清单后，回读资产哈希、OpenWrt 覆盖和固定安装链路 |
 | M5-05 macOS 打包 | 本地已验证 | 匹配 Xcode SDK/编译器后构建、ad-hoc 签名、DMG 和窗口测试通过 | Developer ID/公证及干净设备首次启动未验证，ad-hoc 不等于 Gatekeeper 放行 |
 | M5-06 发布说明一致性 | 自动契约已加入 | `tests/test_release_contract.py` 已接入 CI；PR/main/tag/手动 dry-run 与正式 Release 均校验 tag/VERSION、Release 依赖、桌面资产、双哈希清单和 OpenWrt 固定版本安装命令 | 真实 Release tag、资产上传和发布页面回读 |
-| M6 现场和稳定性 | 未完成 | 已新增 [三端真实设备验收矩阵](REAL_DEVICE_ACCEPTANCE_MATRIX.md)，但没有新的校园网请求或 7 天运行证据 | 按矩阵完成 Windows/macOS/OpenWrt 真机、学生完整旅程、稳定性与最终发布门禁 |
+| M6 现场和稳定性 | 未完成 | 已新增 [三端真实设备验收矩阵](REAL_DEVICE_ACCEPTANCE_MATRIX.md) 和 `tests/test_acceptance_matrix.py` 结构契约，CI 校验 A1-A13、状态值、证据列和七天记录字段；但没有新的校园网请求或 7 天运行证据 | 按矩阵完成 Windows/macOS/OpenWrt 真机、学生完整旅程、稳定性与最终发布门禁 |
 | 社区 PR | 已审查并进入集成提交 | [PR 审查记录](PR_REVIEW_2026-09-08.md)：#3 已采纳并复现验证，提交记录保留来源；#2 保留已生效修复 | GitHub 社区 PR 尚未合并/关闭，新版本尚未发布 |
 
 ## 本轮验证

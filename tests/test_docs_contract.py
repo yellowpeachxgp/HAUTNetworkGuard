@@ -25,6 +25,7 @@ def main():
     protocol_spec = ROOT / "docs" / "SRUN3K_PROTOCOL_SPEC.md"
     state_machine = ROOT / "docs" / "STATE_MACHINE_CONTRACT.md"
     ledger = ROOT / "docs" / "IMPLEMENTATION_LEDGER.md"
+    acceptance = ROOT / "docs" / "REAL_DEVICE_ACCEPTANCE_MATRIX.md"
 
     require_contains(readme, "HAUTNetworkGuard-Windows.zip")
     require_contains(readme, "HAUTNetworkGuard.dmg")
@@ -72,6 +73,9 @@ def main():
     require_contains(ledger, "M5-03 升级健康检查")
     require_contains(ledger, "M5-02 原子在线安装")
     require_contains(ledger, "日志脱敏")
+    require_contains(acceptance, "A1")
+    require_contains(acceptance, "A13")
+    require_contains(acceptance, "不得在表格、截图或日志中记录密码")
     require_contains(ROOT / "docs" / "VALIDATION_2026-09-08.md", "实际执行正式 Shell 脚本和真实 Lua")
 
     print("docs contract ok")

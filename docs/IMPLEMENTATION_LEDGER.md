@@ -8,7 +8,7 @@
 |---|---|---|---|
 | M0-01 工作树边界 | 已对齐并推送 | 集成分支基于 origin/main；备份快照 35d2b91；原 main 及既有改动保留；草稿 PR #4 已建立；最新代码提交的三平台 CI 已全绿 | 完成后续任务与正式合并门禁 |
 | M0-02 当前基线 | 已更新 | 当前基线已纠正主机、SDK 和远端旧结论 | 随后续实现继续维护 |
-| M0-03 版本治理 | 部分实现 | Windows CMake 已从根目录 `VERSION` 读取版本并通过 `HAUT_VERSION_STRING` 注入主程序、窗口和 User-Agent；OpenWrt 运行文件统一消费 `version.lua`，安装/升级已纳入该文件；macOS 构建脚本生成 Swift 版本源并替换 Info.plist；VERSION、契约测试、Tag 一致性检查已加入 | README、AIREADME 等文档仍有重复版本字面量，需统一生成或消费机制 |
+| M0-03 版本治理 | 部分实现 | Windows CMake 已从根目录 `VERSION` 读取版本并通过 `HAUT_VERSION_STRING` 注入主程序、窗口和 User-Agent；OpenWrt 运行文件统一消费 `version.lua`，安装/升级已纳入该文件，在线安装完成提示也从下载版本源读取；macOS 构建脚本生成 Swift 版本源并替换 Info.plist；VERSION、契约测试、Tag 一致性检查已加入 | README、AIREADME 等文档仍有重复版本字面量，需统一生成或消费机制 |
 | M0-04/M0-05 仓库与证据 | 进行中 | 构建产物被忽略；测试独立临时目录；新增验证报告和 PR 来源记录 | 发布证据、最终提交和完整审计 |
 | M1-01 至 M1-03 协议 | 部分验证 | 三平台 CI 协议测试通过；PR #3 崩溃已复现并修复；macOS 超大数值转换崩溃已复现并修复；JSON/CSV 小数、负数、超安全范围、非法 IP、空身份和尾随字段边界已加入 Swift/Qt/Lua/Python 回归 | 更多 JSON 编码、错误优先级和真实网关响应的跨端一致性 |
 | M1-04 请求保护 | 部分实现 | 桌面控制器以 SessionPolicy 串行状态/认证；Windows Api 与 macOS SrunAPI 入口增加认证请求闸门；状态请求超时后可恢复；PR #3 修复日志导致请求崩溃 | 完整取消、并发竞态及物理接口切换测试 |

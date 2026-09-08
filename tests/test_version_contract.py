@@ -47,6 +47,11 @@ def main():
         content = path.read_text(encoding="utf-8")
         assert VERSION in content, f"{path} missing current version {VERSION}"
 
+    online_install = (ROOT / "OpenWrt" / "install-online.sh").read_text(encoding="utf-8")
+    assert 'echo "  安装完成! (v$VERSION)"' in online_install, (
+        "OpenWrt 在线安装完成提示必须消费下载程序的版本源"
+    )
+
     print("version contract ok")
 
 

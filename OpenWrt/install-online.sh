@@ -19,6 +19,7 @@ CONFIG_STAGE=""
 CHECKSUM_FILE=""
 OLD_INSTALL_DIR=""
 OLD_INIT_FILE=""
+VERSION=""
 PROGRAM_CREATED=0
 INIT_CREATED=0
 CONFIG_CREATED=0
@@ -169,6 +170,11 @@ fi
 # 校验临时文件后切换程序目录和服务脚本
 echo "[5/5] 设置权限..."
 validate_program_dir "$STAGE_DIR/program"
+VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$STAGE_DIR/program/version.lua")
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "错误: 无法读取有效程序版本"
+    exit 1
+fi
 test -s "$INIT_STAGE"
 sh -n "$INIT_STAGE"
 for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
@@ -218,7 +224,7 @@ OLD_INIT_FILE=""
 
 echo ""
 echo "=========================================="
-echo "  安装完成! (v1.3.18)"
+echo "  安装完成! (v$VERSION)"
 echo "=========================================="
 echo ""
 echo "下一步 - 配置账号:"

@@ -59,9 +59,9 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 codesign --verify --deep --strict macOS/build/session-validation/HAUTNetworkGuard.app
 ```
 
-Qt 原始结果保存在忽略目录 `macOS/tests/build/qt-validation/Testing/Temporary/LastTest.log`；Swift 最新应用构建日志为 `macOS/tests/build/session-build.log`。新的 App 位于 `macOS/build/session-validation/`，没有启动正式应用，没有重新制作该工作树的 DMG。
+Qt 原始结果保存在忽略目录 `macOS/tests/build/qt-validation/Testing/Temporary/LastTest.log`；Swift 最新应用构建日志为 `macOS/tests/build/session-build.log`。新的 App 和 DMG 位于 `macOS/build/session-validation/`，没有启动正式应用。
 
-当前集成验证 App 可执行文件 SHA-256：`6bd25f48714c196a6b2476ace2d72cd6e3fd12924cb49b0f09133b1c0a79f021`；DMG SHA-256：`fe6fe8b41949183daa15a84b0773e3948add76ab2e774ce416197de5b479b9df`。产物位于忽略目录 `macOS/build/session-validation/`，包含超大数值解析修复；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
+当前集成验证 App 可执行文件 SHA-256：`7b0c3db420668779850c37f6e1f8d26d57afe290efe90274820cfb3c0475bff8`；DMG SHA-256：`09acd6ea21b93cb4785b374df778dba38680db4a6bebbb10acfcffe5c936b7ac`。产物位于忽略目录 `macOS/build/session-validation/`，包含认证请求闸门；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
 
 ## Lua 与 OpenWrt
 
@@ -76,7 +76,7 @@ Lua 源码来自 [官方下载区](https://www.lua.org/ftp/)，下载后核对�
 
 1. `tests/test_openwrt_modules.lua`：通过。
 2. `tests/test_openwrt_runtime.lua`：通过，实际执行 API 和一轮 main 循环，curl/UCI/文件边界模拟；覆盖 PR #3 崩溃、小数流量/时长、JSON 空格、URL 编码、登录/注销、异常与网络失败。
-3. `tests/test_openwrt_installation.py`：每种解释器 13 项通过，共 26 项。实际执行正式 Shell 脚本和真实 Lua，只对安装根目录、下载和服务边界注入临时环境。
+3. `tests/test_openwrt_installation.py`：每种解释器 15 项通过，共 30 项。实际执行正式 Shell 脚本和真实 Lua，只对安装根目录、下载和服务边界注入临时环境。
 
 故障注入覆盖：新装、重装保留配置、下载失败、半截 init 文件清理、非法 Lua、启用失败时恢复旧版本或移除新装、切换失败回滚、升级健康失败恢复、保持停止状态、下载失败不停止旧服务、备份清理失败不删除新安装。
 
@@ -99,7 +99,8 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 
 ## 集成分支与原生 CI
 
-- 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支提交与远端跟踪分支一致，`main` 没有被改写。
+- 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支 HEAD `606419d` 与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34234650584](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34234650584) 对应提交 `606419db821ec788cae788fe9a908fb905a6934a`：Windows、macOS、OpenWrt 三项 job 全部通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34234043075](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34234043075) 对应提交 `223251964a9421222b6e53e49d52982f03eeb7bf`：Windows、macOS、OpenWrt 三项 job 全部通过；固定版本 OpenWrt 清单校验、哈希篡改回滚和两种 Lua 安装/升级 15 项矩阵均通过。
 - [运行 34232164603](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34232164603) 对应桌面详情改造提交 `bd53b39eb9dc533e28210ffa79885ed22d9b3c2c`：Windows、macOS、OpenWrt 三项 job 和 Release 前置门禁全部通过。
 - [运行 34229762182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34229762182) 对应协议安全范围改造提交 `66684f3837e67fe241225106af2517816c5ca3a6`：三平台构建、协议契约、OpenWrt 双版本回归和桌面测试全部通过。

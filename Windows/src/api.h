@@ -48,6 +48,7 @@ private:
   QHash<QNetworkReply *, QString> m_requestActions;
   quint64 m_nextRequestId = 0;
   bool m_statusCheckInFlight = false;
+  bool m_authRequestInFlight = false;
 
   static const QString STATUS_URL;
   static const QString LOGIN_URL;

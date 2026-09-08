@@ -66,6 +66,11 @@ void Api::finishTrackedReply(QNetworkReply *reply, quint64 *requestId,
 }
 
 void Api::login(quint64 token, const QString &username, const QString &password) {
+  if (m_authRequestInFlight) {
+    Logger::debug("跳过登录：上一个认证请求尚未完成");
+    return;
+  }
+  m_authRequestInFlight = true;
   QString encUsername = Encryption::encryptUsername(username);
   QString encPassword = Encryption::encryptPassword(password);
 
@@ -105,6 +110,11 @@ void Api::login(quint64 token, const QString &username, const QString &password)
 }
 
 void Api::logout(quint64 token) {
+  if (m_authRequestInFlight) {
+    Logger::debug("跳过注销：上一个认证请求尚未完成");
+    return;
+  }
+  m_authRequestInFlight = true;
   QString body = "action=logout";
 
   QUrl logoutUrl(LOGIN_URL);
@@ -163,6 +173,7 @@ void Api::onLoginReplyFinished() {
   QString action;
   qint64 elapsedMs = -1;
   finishTrackedReply(reply, &requestId, &action, &elapsedMs);
+  m_authRequestInFlight = false;
   reply->deleteLater();
 
   if (reply->error() != QNetworkReply::NoError) {
@@ -206,6 +217,7 @@ void Api::onLogoutReplyFinished() {
   QString action;
   qint64 elapsedMs = -1;
   finishTrackedReply(reply, &requestId, &action, &elapsedMs);
+  m_authRequestInFlight = false;
   reply->deleteLater();
 
   if (reply->error() != QNetworkReply::NoError) {

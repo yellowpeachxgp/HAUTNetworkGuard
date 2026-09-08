@@ -88,6 +88,22 @@ class SrunAPI: SrunService {
     private var username: String { AppConfig.shared.username }
     private var password: String { AppConfig.shared.password }
     private let httpClient = DirectHTTPClient(timeout: 10)
+    private let authLock = NSLock()
+    private var authActionInFlight: String?
+
+    private func beginAuth(_ action: String) -> Bool {
+        authLock.lock()
+        defer { authLock.unlock() }
+        guard authActionInFlight == nil else { return false }
+        authActionInFlight = action
+        return true
+    }
+
+    private func finishAuth() {
+        authLock.lock()
+        authActionInFlight = nil
+        authLock.unlock()
+    }
 
     func checkStatus(completion: @escaping (NetworkStatus) -> Void) {
         let requestID = Logger.makeRequestID(prefix: "status")
@@ -144,6 +160,11 @@ class SrunAPI: SrunService {
             completion(.failed("未配置学号或密码"))
             return
         }
+        guard beginAuth("login") else {
+            Logger.warn("登录已取消：上一个认证请求尚未完成")
+            completion(.failed("上一个认证请求尚未完成"))
+            return
+        }
 
         let requestID = Logger.makeRequestID(prefix: "login")
         let encryptedUsername = SrunEncryption.encryptUsername(username)
@@ -174,6 +195,11 @@ class SrunAPI: SrunService {
     }
 
     func logout(completion: @escaping (LoginResult) -> Void) {
+        guard beginAuth("logout") else {
+            Logger.warn("注销已取消：上一个认证请求尚未完成")
+            completion(.failed("上一个认证请求尚未完成"))
+            return
+        }
         let requestID = Logger.makeRequestID(prefix: "logout")
         sendRequest(params: ["action": "logout"], requestID: requestID, completion: completion)
     }
@@ -195,10 +221,13 @@ class SrunAPI: SrunService {
                 let classified = SrunProtocol.classifyLoginResponse(responseString)
                 Logger.info("[\(requestID)] action=\(action) phase=response class=\(classified.category) elapsed_ms=\(durationMs)")
                 Logger.debug("[\(requestID)] action=\(action) phase=response preview=\(SrunProtocol.preview(responseString))")
-                completion(self.mapLoginResult(action: action, classified: classified))
+                let mapped = self.mapLoginResult(action: action, classified: classified)
+                self.finishAuth()
+                completion(mapped)
             case .failure(let error):
                 let durationMs = Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
                 Logger.error("[\(requestID)] action=\(action) phase=error class=network_error elapsed_ms=\(durationMs) msg=\(error.localizedDescription)")
+                self.finishAuth()
                 completion(.failed(error.localizedDescription))
             }
         }

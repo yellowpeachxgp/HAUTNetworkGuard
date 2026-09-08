@@ -16,6 +16,7 @@ CONFIG_FILE="$ROOT_PREFIX/etc/config/haut-network-guard"
 STAGE_DIR=""
 INIT_STAGE=""
 CONFIG_STAGE=""
+CHECKSUM_FILE=""
 OLD_INSTALL_DIR=""
 OLD_INIT_FILE=""
 PROGRAM_CREATED=0
@@ -78,6 +79,46 @@ validate_program_dir() {
     done
 }
 
+
+sha256_of() {
+    file="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file" | awk '{print $1}'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 "$file" | awk -F'= ' '{print $2}'
+    else
+        echo "错误: 缺少 sha256sum 或 openssl，无法校验发布文件" >&2
+        return 1
+    fi
+}
+
+prepare_checksums() {
+    case "$REPO_REF" in
+        v*)
+            CHECKSUM_FILE="$STAGE_DIR/OpenWrt-SHA256SUMS"
+            download_file "https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/download/$REPO_REF/OpenWrt-SHA256SUMS" "$CHECKSUM_FILE"
+            test -s "$CHECKSUM_FILE"
+            ;;
+        *) ;;
+    esac
+}
+
+verify_checksum() {
+    relative="$1"
+    file="$2"
+    [ -z "$CHECKSUM_FILE" ] && return 0
+    expected=$(awk -v path="OpenWrt/$relative" '$2 == path { print $1; exit }' "$CHECKSUM_FILE")
+    if [ -z "$expected" ]; then
+        echo "错误: Release 清单缺少 OpenWrt/$relative"
+        return 1
+    fi
+    actual=$(sha256_of "$file")
+    if [ "$actual" != "$expected" ]; then
+        echo "错误: 文件校验失败: $relative"
+        return 1
+    fi
+}
+
 echo "=========================================="
 echo "  HAUT Network Guard - OpenWrt 一键安装"
 echo "=========================================="
@@ -102,6 +143,7 @@ opkg install lua curl >/dev/null 2>&1 || {
 echo "[2/5] 准备临时目录..."
 mkdir -p "$(dirname "$INSTALL_DIR")"
 STAGE_DIR="$(mktemp -d "$(dirname "$INSTALL_DIR")/.haut-network-guard-install.XXXXXX")"
+prepare_checksums
 
 # 下载文件
 echo "[3/5] 下载程序文件..."
@@ -128,6 +170,10 @@ echo "[5/5] 设置权限..."
 validate_program_dir "$STAGE_DIR/program"
 test -s "$INIT_STAGE"
 sh -n "$INIT_STAGE"
+for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    verify_checksum "files/usr/lib/haut-network-guard/$file" "$STAGE_DIR/program/$file"
+done
+verify_checksum "files/etc/init.d/haut-network-guard" "$INIT_STAGE"
 chmod +x "$INIT_STAGE"
 
 if [ -d "$INSTALL_DIR" ]; then

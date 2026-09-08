@@ -88,7 +88,7 @@ lua5.1 tests/test_openwrt_runtime.lua
 lua5.3 tests/test_openwrt_runtime.lua
 ```
 
-本地运行时将 lua5.1/lua5.3 替换为上述忽略目录中的绝对路径。路由器 procd、真实 UCI、存储耗尽/断电和校园网接口没有被这些测试替代。
+本地运行时将 lua5.1/lua5.3 替换为上述忽略目录中的绝对路径。固定版本在线安装/升级现在消费 Release 的 `OpenWrt-SHA256SUMS`，并在切换前逐个校验运行文件和 init 脚本；两种解释器下各 15 项故障测试覆盖哈希篡改、下载失败和回滚。路由器 procd、真实 UCI、存储耗尽/断电和校园网接口没有被这些测试替代。
 
 ## 契约与仍未验证内容
 

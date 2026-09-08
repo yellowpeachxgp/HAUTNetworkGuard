@@ -18,6 +18,8 @@ BACKUP_DIR=""
 UPGRADE_SUCCESS=0
 SWITCH_STARTED=0
 WAS_RUNNING=0
+CHECKSUM_FILE=""
+OLD_SESSION_PRESENT=0
 
 version_cmp() {
     awk -v a="$1" -v b="$2" '
@@ -50,6 +52,11 @@ cleanup() {
         for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
             cp -p "$BACKUP_DIR/$file" "$INSTALL_DIR/$file" || rollback_failed=1
         done
+        if [ "$OLD_SESSION_PRESENT" -eq 1 ]; then
+            cp -p "$BACKUP_DIR/session.lua" "$INSTALL_DIR/session.lua" || rollback_failed=1
+        else
+            rm -f "$INSTALL_DIR/session.lua"
+        fi
         cp -p "$BACKUP_DIR/haut-network-guard.init" "$INIT_FILE" || rollback_failed=1
         if [ "$WAS_RUNNING" -eq 1 ]; then
             "$INIT_FILE" start >/dev/null 2>&1 || rollback_failed=1
@@ -79,7 +86,7 @@ download_file() {
 
 validate_program_dir() {
     dir="$1"
-    for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
+    for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
         if [ ! -s "$dir/$file" ]; then
             echo "错误: 缺少或为空的程序文件: $file"
             return 1
@@ -94,6 +101,40 @@ validate_program_dir() {
             return 1
         fi
     done
+}
+
+
+sha256_of() {
+    file="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file" | awk '{print $1}'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 "$file" | awk -F'= ' '{print $2}'
+    else
+        echo "错误: 缺少 sha256sum 或 openssl，无法校验发布文件" >&2
+        return 1
+    fi
+}
+
+prepare_checksums() {
+    case "$REPO_REF" in
+        v*)
+            CHECKSUM_FILE="$TMP_DIR/OpenWrt-SHA256SUMS"
+            download_file "https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/download/$REPO_REF/OpenWrt-SHA256SUMS" "$CHECKSUM_FILE"
+            test -s "$CHECKSUM_FILE"
+            ;;
+        *) ;;
+    esac
+}
+
+verify_checksum() {
+    relative="$1"
+    file="$2"
+    [ -z "$CHECKSUM_FILE" ] && return 0
+    expected=$(awk -v path="OpenWrt/$relative" '$2 == path { print $1; exit }' "$CHECKSUM_FILE")
+    [ -n "$expected" ] || { echo "错误: Release 清单缺少 OpenWrt/$relative"; return 1; }
+    actual=$(sha256_of "$file")
+    [ "$actual" = "$expected" ] || { echo "错误: 文件校验失败: $relative"; return 1; }
 }
 
 verify_service_health() {
@@ -169,12 +210,17 @@ echo "[1/4] 准备备份..."
 
 TMP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-upgrade.XXXXXX")"
 BACKUP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-backup.XXXXXX")"
+prepare_checksums
 
 cp -p "$INSTALL_DIR/crypto.lua" "$BACKUP_DIR/crypto.lua"
 cp -p "$INSTALL_DIR/api.lua" "$BACKUP_DIR/api.lua"
 cp -p "$INSTALL_DIR/log.lua" "$BACKUP_DIR/log.lua"
 cp -p "$INSTALL_DIR/protocol.lua" "$BACKUP_DIR/protocol.lua"
 cp -p "$INSTALL_DIR/main.lua" "$BACKUP_DIR/main.lua"
+if [ -f "$INSTALL_DIR/session.lua" ]; then
+    cp -p "$INSTALL_DIR/session.lua" "$BACKUP_DIR/session.lua"
+    OLD_SESSION_PRESENT=1
+fi
 cp -p "$INIT_FILE" "$BACKUP_DIR/haut-network-guard.init"
 
 # 下载新文件（不覆盖配置）
@@ -183,6 +229,7 @@ download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$TMP_DIR/
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$TMP_DIR/api.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$TMP_DIR/log.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$TMP_DIR/protocol.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/session.lua" "$TMP_DIR/session.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$TMP_DIR/main.lua"
 
 echo "[3/4] 更新服务脚本..."
@@ -192,6 +239,10 @@ echo "      校验下载文件和 Lua 语法..."
 validate_program_dir "$TMP_DIR"
 test -s "$TMP_DIR/haut-network-guard.init"
 sh -n "$TMP_DIR/haut-network-guard.init"
+for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    verify_checksum "files/usr/lib/haut-network-guard/$file" "$TMP_DIR/$file"
+done
+verify_checksum "files/etc/init.d/haut-network-guard" "$TMP_DIR/haut-network-guard.init"
 STAGED_VERSION=$(sed -n 's/^local VERSION = "\([^"]*\)".*/\1/p' "$TMP_DIR/main.lua")
 if [ "$STAGED_VERSION" != "$REMOTE_VERSION" ]; then
     echo "错误: 下载期间远端版本发生变化，请重新运行升级"
@@ -205,13 +256,14 @@ cp -f "$TMP_DIR/crypto.lua" "$INSTALL_DIR/crypto.lua"
 cp -f "$TMP_DIR/api.lua" "$INSTALL_DIR/api.lua"
 cp -f "$TMP_DIR/log.lua" "$INSTALL_DIR/log.lua"
 cp -f "$TMP_DIR/protocol.lua" "$INSTALL_DIR/protocol.lua"
+cp -f "$TMP_DIR/session.lua" "$INSTALL_DIR/session.lua"
 cp -f "$TMP_DIR/main.lua" "$INSTALL_DIR/main.lua"
 cp -f "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"
 chmod +x "$INIT_FILE"
 
 echo "      校验程序文件和 Lua 语法..."
 validate_program_dir "$INSTALL_DIR"
-for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
+for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     cmp "$TMP_DIR/$file" "$INSTALL_DIR/$file"
 done
 cmp "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"

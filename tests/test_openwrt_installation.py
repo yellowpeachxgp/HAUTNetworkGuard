@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """在临时根目录执行正式安装脚本；Lua 用真实解释器，其余设备边界注入。"""
 
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -60,7 +61,10 @@ for arg in args:
     if arg == "-o": output = next(args)
     elif arg in ("--connect-timeout", "--max-time"): next(args)
     elif arg.startswith("https://"): url = arg
-relative = url.split("/OpenWrt/", 1)[1]
+if "/releases/download/" in url:
+    relative = "OpenWrt-SHA256SUMS"
+else:
+    relative = url.split("/OpenWrt/", 1)[1]
 if os.environ.get("HAUT_FAIL_DOWNLOAD") == relative:
     if output: pathlib.Path(output).write_text("partial")
     sys.exit(22)
@@ -84,6 +88,14 @@ sys.exit(subprocess.call([os.environ["HAUT_REAL_MV"], *args]))
                    'local VERSION = "1.3.18"\nerror("语法检查不得启动守护程序")\n')
         self.write(self.remote / "files/etc/init.d/haut-network-guard", self.service("new"))
         self.write(self.remote / "files/etc/config/haut-network-guard", "config main\n")
+        manifest = []
+        for path in sorted(self.remote.rglob("*")):
+            if path.is_file():
+                relative = path.relative_to(self.remote).as_posix()
+                if relative.startswith("files/") or relative.endswith(".sh"):
+                    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                    manifest.append(f"{digest}  OpenWrt/{relative}")
+        self.write(self.remote / "OpenWrt-SHA256SUMS", "\n".join(manifest) + "\n")
 
     def write(self, path, content, executable=False):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -176,6 +188,22 @@ esac
         self.write(self.remote / "files/usr/lib/haut-network-guard/api.lua", "not valid !")
         self.run_script("install-online.sh", False)
         self.assertEqual(self.snapshot(), before)
+
+    def test_checksum_mismatch_keeps_old_install(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.write(self.remote / "files/usr/lib/haut-network-guard/api.lua", "tampered\n")
+        self.run_script("install-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.events(), [])
+
+    def test_upgrade_checksum_mismatch_keeps_old_service(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.write(self.remote / "files/usr/lib/haut-network-guard/api.lua", "tampered\n")
+        self.run_script("upgrade-online.sh", False)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.events(), [])
 
     def test_enable_failure_rolls_back_existing(self):
         self.seed_old()

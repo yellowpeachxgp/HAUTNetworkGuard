@@ -59,6 +59,8 @@ codesign --verify --deep --strict macOS/build/session-validation/HAUTNetworkGuar
 
 Qt 原始结果保存在忽略目录 `macOS/tests/build/qt-validation/Testing/Temporary/LastTest.log`；Swift 最新应用构建日志为 `macOS/tests/build/session-build.log`。新的 App 位于 `macOS/build/session-validation/`，没有启动正式应用，没有重新制作该工作树的 DMG。
 
+该 App 可执行文件 SHA-256：`92304d5ed08771aecc8d6fa644c19e3de877eae84f75c1100e85176bc7b8331c`。本轮代码在提交与基线对齐前验证，通过保留快照的全文件比较确认变基没有改变已验证源码。
+
 ## Lua 与 OpenWrt
 
 Lua 源码来自 [官方下载区](https://www.lua.org/ftp/)，下载后核对官方 SHA-256：

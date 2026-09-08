@@ -11,7 +11,9 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-LUA = shutil.which(os.environ.get("HAUT_TEST_LUA", "lua"))
+requested_lua = os.environ.get("HAUT_TEST_LUA", "lua")
+requested_path = Path(requested_lua).expanduser()
+LUA = str(requested_path.resolve()) if requested_path.exists() else shutil.which(requested_lua)
 
 
 class InstallationTests(unittest.TestCase):
@@ -75,7 +77,7 @@ if os.environ.get("HAUT_FAIL_MOVE") == "1":
         sys.exit(71)
 sys.exit(subprocess.call([os.environ["HAUT_REAL_MV"], *args]))
 ''', executable=True)
-        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua"):
+        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua", "session.lua"):
             self.write(self.remote / "files/usr/lib/haut-network-guard" / name,
                        'error("语法检查不得执行模块")\nreturn {}\n')
         self.write(self.remote / "files/usr/lib/haut-network-guard/main.lua",
@@ -108,7 +110,7 @@ esac
 '''
 
     def seed_old(self, running=True):
-        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua"):
+        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua", "session.lua"):
             self.write(self.program / name, "return { old = true }\n")
         self.write(self.program / "main.lua", 'local VERSION = "0.9.0"\n')
         self.write(self.init, self.service("old"), executable=True)

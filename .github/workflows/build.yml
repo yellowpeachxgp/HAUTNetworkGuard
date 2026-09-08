@@ -51,6 +51,8 @@ jobs:
           lua5.1 tests/test_openwrt_modules.lua
           lua5.1 tests/test_openwrt_runtime.lua
           lua5.3 tests/test_openwrt_runtime.lua
+          lua5.1 tests/test_openwrt_session.lua
+          lua5.3 tests/test_openwrt_session.lua
           lua5.1 tests/test_openwrt_log.lua
           lua5.3 tests/test_openwrt_log.lua
           HAUT_TEST_LUA=lua5.1 python3 tests/test_openwrt_installation.py

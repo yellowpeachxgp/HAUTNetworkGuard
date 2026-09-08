@@ -2,7 +2,7 @@
 
 日期：2026-09-08
 
-适用范围：macOS、Windows；OpenWrt 作为后续统一的目标，当前守护循环尚未接入本策略。
+适用范围：macOS、Windows、OpenWrt。桌面端由控制器串行驱动；OpenWrt 由同步的 `session.lua` 驱动，没有手动注销按钮，因此“手动离线保持”只适用于桌面端。
 
 本契约描述学生能观察到的运行状态和自动登录边界。三端可以使用不同的 UI 实现，但同一事件必须遵循相同的状态语义。
 
@@ -49,7 +49,7 @@
 
 - 正式策略：`macOS/Sources/SessionPolicy.swift`、`Windows/src/session_policy.h`，已被实际菜单栏/主窗口控制器消费。
 - 启动只做状态探测，Windows 原先固定 4 秒后的盲目登录入口已移除。
-- 两份策略共用 `tests/fixtures/session_scenarios.txt` 的 9 个事件场景、142 条断言，覆盖异常、并发、冷却边界、连续失败、注销暂停、旧回调与重新连接。
+- 桌面两份策略共用 `tests/fixtures/session_scenarios.txt` 的 9 个事件场景、142 条断言，覆盖异常、并发、冷却边界、连续失败、注销暂停、旧回调与重新连接；OpenWrt `tests/test_openwrt_session.lua` 另覆盖 19 条同步守护策略断言。
 - macOS 额外执行正式控制器回放，注入网络服务和时钟，共 26 条断言；测试不连接校园网、不访问正式凭据域。
 - Windows 目录已在 macOS ARM64 / Qt 6.11.1 及 Windows Server 2022 / Qt 6.6 CI 下完整构建，CTest 的策略、配置、主窗口回放全部通过；正式主窗口回放覆盖 Qt 信号、按钮和保存失败。实际桌面托盘、自启动及校园网操作仍待验证。
 - OpenWrt、单实例、睡眠唤醒和接口切换未因本轮修改自动完成。

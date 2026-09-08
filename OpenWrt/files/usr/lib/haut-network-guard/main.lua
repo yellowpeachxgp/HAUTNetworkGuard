@@ -9,6 +9,7 @@ package.path = package.path .. ";/usr/lib/haut-network-guard/?.lua"
 local api = require("api")
 local log = require("log")
 local protocol = require("protocol")
+local session = require("session")
 
 local function read_uci_value(key)
     local handle = io.popen("uci -q get " .. key .. " 2>/dev/null")
@@ -91,6 +92,17 @@ local function config_summary(config)
     )
 end
 
+local function monotonic_seconds()
+    local file = io.open("/proc/uptime", "r")
+    if file then
+        local line = file:read("*l") or ""
+        file:close()
+        local uptime = tonumber(line:match("^(%S+)") or "")
+        if uptime then return uptime end
+    end
+    return os.time()
+end
+
 local function log_diagnostics(diagnostics)
     if has_suspicious_changes(diagnostics.username) then
         log.warn(string.format(
@@ -151,9 +163,9 @@ local function main()
 
     local last_signature = nil
     local previous_online = nil
-    local consecutive_failures = 0
     local last_login_error = ""
     local last_status_issue = ""
+    local login_session = session.new(30)
 
     while true do
         log.refresh_level()
@@ -166,16 +178,20 @@ local function main()
             log.info("配置更新: " .. config_summary(config))
             log_diagnostics(diagnostics)
             last_signature = signature
+            login_session:reset(config.interval)
         end
 
         if not config.enabled then
+            login_session:observe("error")
             log.warn("服务已禁用，等待下一轮检测")
         elseif config.username == "" or config.password == "" then
+            login_session:observe("error")
             log.error("未配置用户名或密码，等待下一轮检测")
         else
             local user_info, status_class = api.get_user_info("monitor_loop")
 
             if user_info then
+                login_session:observe("online")
                 if previous_online ~= true then
                     log.info("状态迁移: offline -> online")
                 end
@@ -191,49 +207,47 @@ local function main()
                     format_time(user_info.seconds)
                 ))
             elseif status_class == "offline" then
+                local now = monotonic_seconds()
+                login_session:observe("offline")
                 if previous_online ~= false then
                     log.warn("状态迁移: online -> offline")
                 end
                 previous_online = false
                 last_status_issue = ""
-                log.warn("离线，触发自动登录")
+                if login_session:can_auto_login(now, config.enabled,
+                        config.username ~= "" and config.password ~= "") and login_session:begin_login(now) then
+                    log.warn("离线，触发自动登录")
+                    local success, msg, category = api.login(
+                        config.username,
+                        config.password,
+                        { source = "auto_loop" }
+                    )
+                    login_session:finish_login(success, monotonic_seconds())
 
-                local success, msg, category = api.login(
-                    config.username,
-                    config.password,
-                    { source = "auto_loop" }
-                )
-
-                if success then
-                    consecutive_failures = 0
-                    last_login_error = ""
-                    log.info("登录成功: " .. tostring(msg))
-                else
-                    consecutive_failures = consecutive_failures + 1
-                    local sanitized_msg = log.preview(msg or "登录失败", 180)
-                    if sanitized_msg == last_login_error then
-                        log.warn(string.format(
-                            "登录连续失败(%d次), 分类=%s, msg=%s",
-                            consecutive_failures, tostring(category or "unknown"), sanitized_msg
-                        ))
+                    if success then
+                        last_login_error = ""
+                        log.info("登录成功: " .. tostring(msg))
                     else
-                        log.error(string.format(
-                            "登录失败, 分类=%s, msg=%s",
-                            tostring(category or "unknown"), sanitized_msg
-                        ))
+                        local sanitized_msg = log.preview(msg or "登录失败", 180)
+                        if sanitized_msg == last_login_error then
+                            log.warn(string.format(
+                                "登录连续失败(%d次), 分类=%s, msg=%s",
+                                login_session.failures, tostring(category or "unknown"), sanitized_msg
+                            ))
+                        else
+                            log.error(string.format(
+                                "登录失败, 分类=%s, msg=%s",
+                                tostring(category or "unknown"), sanitized_msg
+                            ))
+                        end
+                        last_login_error = sanitized_msg
                     end
-                    last_login_error = sanitized_msg
-
-                    if consecutive_failures > 1 then
-                        local backoff = math.min(60, (consecutive_failures - 1) * 5)
-                        sleep_seconds = sleep_seconds + backoff
-                        log.warn(string.format(
-                            "应用失败退避: +%ds (连续失败=%d)",
-                            backoff, consecutive_failures
-                        ))
-                    end
+                else
+                    log.warn(string.format("离线，自动登录冷却中: 剩余约 %.0f 秒", login_session:remaining(now)))
+                    sleep_seconds = math.max(sleep_seconds, math.ceil(login_session:remaining(now)))
                 end
             else
+                login_session:observe("error")
                 local issue = tostring(status_class or "unknown")
                 if issue ~= last_status_issue then
                     log.warn(string.format(
@@ -246,6 +260,9 @@ local function main()
                 end
             end
         end
+
+        local remaining = login_session:remaining(monotonic_seconds())
+        if remaining > sleep_seconds then sleep_seconds = math.ceil(remaining) end
 
         log.debug("下次检测等待: " .. tostring(sleep_seconds) .. "秒")
         os.execute("sleep " .. tostring(sleep_seconds))

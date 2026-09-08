@@ -61,7 +61,7 @@ download_file() {
 
 validate_program_dir() {
     dir="$1"
-    for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
+    for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
         if [ ! -s "$dir/$file" ]; then
             echo "错误: 缺少或为空的程序文件: $file"
             return 1
@@ -110,6 +110,7 @@ download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$STAGE_DI
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$STAGE_DIR/program/api.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$STAGE_DIR/program/log.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$STAGE_DIR/program/protocol.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/session.lua" "$STAGE_DIR/program/session.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$STAGE_DIR/program/main.lua"
 
 echo "[4/5] 下载配置文件..."

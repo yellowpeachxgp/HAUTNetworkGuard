@@ -93,6 +93,12 @@ local parsed_invalid, format_invalid = protocol.parse_status_response("oops,NaN,
 assert_equal(parsed_invalid, nil, "parse_status_response.invalid_csv.value")
 assert_equal(format_invalid, "unparsed", "parse_status_response.invalid_csv.format")
 
+local malformed_json, malformed_format = protocol.parse_status_response(
+    "jQuery_1712630100004({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":01,\"sum_seconds\":321})"
+)
+assert_equal(malformed_json, nil, "parse_status_response.malformed_json.value")
+assert_equal(malformed_format, "unparsed", "parse_status_response.malformed_json.format")
+
 local parsed3, format3 = protocol.parse_status_response("not_online")
 assert_equal(parsed3, nil, "parse_status_response.offline.value")
 assert_equal(format3, "offline", "parse_status_response.offline.format")

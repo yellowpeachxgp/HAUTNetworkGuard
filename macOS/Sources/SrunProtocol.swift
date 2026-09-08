@@ -82,7 +82,7 @@ enum SrunProtocol {
 
     static func parseStatusResponse(_ response: String, callback: String? = nil) -> SrunParsedStatus {
         let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed.contains("not_online") {
+        if trimmed.isEmpty || trimmed == "not_online" {
             return SrunParsedStatus(online: false, format: "offline", username: "", ip: "", usedBytes: 0, usedSeconds: 0)
         }
 
@@ -159,21 +159,23 @@ enum SrunProtocol {
     }
 
     private static func parseNumber(_ value: Any?) -> Int64 {
+        let maxCounter = Int64(9_007_199_254_740_991)
         if let intValue = value as? Int64 {
-            return intValue
+            return intValue >= 0 && intValue <= maxCounter ? intValue : 0
         }
         if let intValue = value as? Int {
-            return Int64(intValue)
+            return intValue >= 0 && Int64(intValue) <= maxCounter ? Int64(intValue) : 0
         }
         if let doubleValue = value as? Double {
-            // Double(Int64.max) 会舍入到 2^63，必须使用严格上界避免转换陷阱。
-            guard doubleValue.isFinite,
-                  doubleValue >= Double(Int64.min),
-                  doubleValue < Double(Int64.max) else { return 0 }
+            guard doubleValue.isFinite, doubleValue >= 0,
+                  doubleValue <= Double(maxCounter),
+                  doubleValue.rounded() == doubleValue else { return 0 }
             return Int64(doubleValue)
         }
         if let stringValue = value as? String {
-            return Int64(stringValue) ?? 0
+            guard stringValue.range(of: "^[0-9]+$", options: .regularExpression) != nil,
+                  let parsed = Int64(stringValue), parsed <= maxCounter else { return 0 }
+            return parsed
         }
         return 0
     }

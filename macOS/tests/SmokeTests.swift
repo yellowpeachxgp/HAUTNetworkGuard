@@ -57,11 +57,21 @@ struct SmokeTests {
         )
         expect(overflow.online && overflow.usedBytes == 0 && overflow.usedSeconds == 0,
                "超出 Int64 范围的数值应回退为零，不能导致应用崩溃")
-        let integerBoundary = SrunProtocol.parseStatusResponse(
-            #"{"user_name":"test-student","sum_bytes":9223372036854775807,"sum_seconds":"9223372036854775808"}"#
+        let fractional = SrunProtocol.parseStatusResponse(
+            #"{"user_name":"test-student","sum_bytes":1.5,"sum_seconds":"321.5"}"#
         )
-        expect(integerBoundary.usedBytes == Int64.max && integerBoundary.usedSeconds == 0,
-               "可表示的整数上界应保留，超范围数字字符串应回退")
+        expect(fractional.online && fractional.usedBytes == 0 && fractional.usedSeconds == 0,
+               "JSON 小数指标应在各端安全回退为零")
+        let malformedJSON = SrunProtocol.parseStatusResponse(
+            #"jQuery_1712630100004({"error":"ok","user_name":"231040600203","online_ip":"10.10.0.8","sum_bytes":01,"sum_seconds":321})"#
+        )
+        expect(!malformedJSON.online && malformedJSON.format == "unparsed",
+               "非法 JSON 数字语法应统一判为异常")
+        let integerBoundary = SrunProtocol.parseStatusResponse(
+            #"{"user_name":"test-student","sum_bytes":9007199254740991,"sum_seconds":"9007199254740992"}"#
+        )
+        expect(integerBoundary.usedBytes == 9007199254740991 && integerBoundary.usedSeconds == 0,
+               "跨语言安全范围上界应保留，超范围数字字符串应回退")
         expect(
             !SrunProtocol.preview("{\"user_name\":\"231040600203\"}").contains("231040600203"),
             "状态响应预览不得记录完整账号"

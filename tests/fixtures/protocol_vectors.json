@@ -102,6 +102,33 @@
       "seconds": 321
     },
     {
+      "input": "jQuery_1712630100003({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":1.5,\"sum_seconds\":\"321.5\"})",
+      "format": "jsonp",
+      "online": true,
+      "username": "231040600203",
+      "ip": "10.10.0.8",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "231040600203,321.5,10.10.0.8,12345678",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "jQuery_1712630100004({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":01,\"sum_seconds\":321})",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
       "input": "oops,NaN,not-an-ip,garbage",
       "format": "unparsed",
       "online": false,

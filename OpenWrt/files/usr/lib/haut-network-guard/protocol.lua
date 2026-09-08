@@ -32,9 +32,163 @@ local function is_valid_ipv4(value)
     return true
 end
 
-local function extract_json_number(body, field)
-    local pattern = '"' .. field .. '"%s*:%s*"?(%d+)"?'
-    return tonumber(tostring(body or ""):match(pattern)) or 0
+local MAX_SAFE_COUNTER = 9007199254740991
+
+local function parse_counter(value, quoted)
+    if value == nil then return 0 end
+    if quoted then
+        local text = tostring(value)
+        if not text:match("^[0-9]+$") then return 0 end
+        local number = tonumber(text)
+        return number and number <= MAX_SAFE_COUNTER and number or 0
+    end
+    local number = tonumber(value)
+    if not number or number ~= number or number == math.huge
+        or number < 0 or number > MAX_SAFE_COUNTER
+        or math.floor(number) ~= number then
+        return 0
+    end
+    return number
+end
+
+local function utf8_character(code)
+    if code < 0x80 then return string.char(code) end
+    if code < 0x800 then
+        return string.char(0xC0 + math.floor(code / 0x40), 0x80 + code % 0x40)
+    end
+    if code < 0x10000 then
+        return string.char(0xE0 + math.floor(code / 0x1000),
+            0x80 + math.floor(code / 0x40) % 0x40, 0x80 + code % 0x40)
+    end
+    return string.char(0xF0 + math.floor(code / 0x40000),
+        0x80 + math.floor(code / 0x1000) % 0x40,
+        0x80 + math.floor(code / 0x40) % 0x40, 0x80 + code % 0x40)
+end
+
+-- 小型严格 JSON 解码器：OpenWrt 只依赖 Lua 和 curl，不强制额外 JSON 包。
+local function decode_json(text)
+    local length = #text
+    local function spaces(position)
+        while position <= length and text:sub(position, position):match("%s") do
+            position = position + 1
+        end
+        return position
+    end
+
+    local parse_value
+    local function parse_string(position)
+        if text:sub(position, position) ~= '"' then return nil end
+        position = position + 1
+        local result = {}
+        while position <= length do
+            local character = text:sub(position, position)
+            if character == '"' then
+                return table.concat(result), position + 1
+            end
+            if character == "\\" then
+                local escape = text:sub(position + 1, position + 1)
+                local replacements = { ['"'] = '"', ["\\"] = "\\", ['/'] = '/',
+                    ["b"] = "\b", ["f"] = "\f", ["n"] = "\n", ["r"] = "\r", ["t"] = "\t" }
+                if replacements[escape] then
+                    result[#result + 1] = replacements[escape]
+                    position = position + 2
+                elseif escape == "u" then
+                    local hex = text:sub(position + 2, position + 5)
+                    if not hex:match("^[0-9a-fA-F]+$") or #hex ~= 4 then return nil end
+                    local code = tonumber(hex, 16)
+                    if code >= 0xD800 and code <= 0xDFFF then code = 0xFFFD end
+                    result[#result + 1] = utf8_character(code)
+                    position = position + 6
+                else
+                    return nil
+                end
+            else
+                if string.byte(character) < 0x20 then return nil end
+                result[#result + 1] = character
+                position = position + 1
+            end
+        end
+        return nil
+    end
+
+    local function parse_number(position)
+        local begin = position
+        if text:sub(position, position) == "-" then position = position + 1 end
+        local first = text:sub(position, position)
+        if first == "0" then
+            position = position + 1
+            if text:sub(position, position):match("%d") then return nil end
+        elseif first:match("[1-9]") then
+            repeat position = position + 1 until not text:sub(position, position):match("%d")
+        else
+            return nil
+        end
+        if text:sub(position, position) == "." then
+            position = position + 1
+            if not text:sub(position, position):match("%d") then return nil end
+            repeat position = position + 1 until not text:sub(position, position):match("%d")
+        end
+        local exponent = text:sub(position, position)
+        if exponent == "e" or exponent == "E" then
+            position = position + 1
+            local sign = text:sub(position, position)
+            if sign == "+" or sign == "-" then position = position + 1 end
+            if not text:sub(position, position):match("%d") then return nil end
+            repeat position = position + 1 until not text:sub(position, position):match("%d")
+        end
+        local token = text:sub(begin, position - 1)
+        return tonumber(token), position
+    end
+
+    parse_value = function(position)
+        position = spaces(position)
+        local character = text:sub(position, position)
+        if character == '"' then return parse_string(position) end
+        if character == "{" then
+            local object = {}
+            position = spaces(position + 1)
+            if text:sub(position, position) == "}" then return object, position + 1 end
+            while position <= length do
+                local key, next_position = parse_string(position)
+                if key == nil then return nil end
+                position = spaces(next_position)
+                if text:sub(position, position) ~= ":" then return nil end
+                local value, after_value = parse_value(position + 1)
+                if after_value == nil then return nil end
+                object[key] = value
+                position = spaces(after_value)
+                local delimiter = text:sub(position, position)
+                if delimiter == "}" then return object, position + 1 end
+                if delimiter ~= "," then return nil end
+                position = spaces(position + 1)
+            end
+            return nil
+        end
+        if character == "[" then
+            local array = {}
+            position = spaces(position + 1)
+            if text:sub(position, position) == "]" then return array, position + 1 end
+            while position <= length do
+                local value, after_value = parse_value(position)
+                if after_value == nil then return nil end
+                array[#array + 1] = value
+                position = spaces(after_value)
+                local delimiter = text:sub(position, position)
+                if delimiter == "]" then return array, position + 1 end
+                if delimiter ~= "," then return nil end
+                position = spaces(position + 1)
+            end
+            return nil
+        end
+        if text:sub(position, position + 3) == "true" then return true, position + 4 end
+        if text:sub(position, position + 4) == "false" then return false, position + 5 end
+        if text:sub(position, position + 3) == "null" then return nil, position + 4 end
+        return parse_number(position)
+    end
+
+    local value, position = parse_value(1)
+    if position == nil or spaces(position) <= length then return nil end
+    return value
 end
 
 function protocol.sanitize_uci_value(raw)
@@ -121,7 +275,7 @@ end
 
 function protocol.parse_status_response(response)
     local body = tostring(response or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if body == "" or body:find("not_online", 1, true) then
+    if body == "" or body == "not_online" then
         return nil, "offline"
     end
 
@@ -133,38 +287,30 @@ function protocol.parse_status_response(response)
         json_body = body
     end
 
-    local error_value = json_body:match('"error"%s*:%s*"([^"]+)"')
-    if error_value and error_value:find("not_online", 1, true) then
-        return nil, "offline"
-    end
-
-    local username = json_body:match('"user_name"%s*:%s*"([^"]+)"')
-    local sum_bytes = extract_json_number(json_body, "sum_bytes")
-    local sum_seconds = extract_json_number(json_body, "sum_seconds")
-    local user_ip = json_body:match('"online_ip"%s*:%s*"([^"]+)"')
-
-    if username or user_ip then
-        return {
-            username = username or "",
-            ip = user_ip or "",
-            bytes = sum_bytes,
-            seconds = sum_seconds
-        }, format
+    local decoded = decode_json(json_body)
+    if type(decoded) == "table" then
+        local error_value = decoded.error
+        if type(error_value) == "string" and error_value:find("not_online", 1, true) then
+            return nil, "offline"
+        end
+        local username = type(decoded.user_name) == "string" and decoded.user_name or ""
+        local user_ip = type(decoded.online_ip) == "string" and decoded.online_ip or ""
+        local sum_bytes = parse_counter(decoded.sum_bytes, type(decoded.sum_bytes) == "string")
+        local sum_seconds = parse_counter(decoded.sum_seconds, type(decoded.sum_seconds) == "string")
+        if username ~= "" or user_ip ~= "" then
+            return { username = username, ip = user_ip, bytes = sum_bytes, seconds = sum_seconds }, format
+        end
     end
 
     local csv_username, csv_seconds, csv_ip, csv_bytes =
         body:match("^([^,]+),([^,]+),([^,]+),([^,]+)")
-    if csv_username and csv_ip
-        and tonumber(csv_seconds) ~= nil
-        and tonumber(csv_bytes) ~= nil
-        and csv_username ~= ""
-        and is_valid_ipv4(csv_ip) then
-        return {
-            username = csv_username,
-            ip = csv_ip,
-            bytes = tonumber(csv_bytes) or 0,
-            seconds = tonumber(csv_seconds) or 0
-        }, "csv"
+    if csv_username and csv_ip and csv_seconds:match("^[0-9]+$")
+        and csv_bytes:match("^[0-9]+$")
+        and parse_counter(csv_seconds, true) == tonumber(csv_seconds)
+        and parse_counter(csv_bytes, true) == tonumber(csv_bytes)
+        and csv_username ~= "" and is_valid_ipv4(csv_ip) then
+        return { username = csv_username, ip = csv_ip,
+            bytes = parse_counter(csv_bytes, true), seconds = parse_counter(csv_seconds, true) }, "csv"
     end
 
     return nil, "unparsed"

@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QStringList>
+#include <cmath>
 
 namespace {
 
@@ -20,6 +21,30 @@ bool isValidIpv4(const QString &value) {
     }
   }
   return true;
+}
+
+constexpr qint64 kMaxSafeCounter = 9007199254740991LL;
+
+qint64 parseCounter(const QJsonValue &value) {
+  if (value.isDouble()) {
+    const double number = value.toDouble();
+    if (std::isfinite(number) && number >= 0 &&
+        number <= static_cast<double>(kMaxSafeCounter) &&
+        std::floor(number) == number) {
+      return static_cast<qint64>(number);
+    }
+    return 0;
+  }
+  if (value.isString()) {
+    const QString text = value.toString();
+    bool ok = false;
+    const qint64 number = text.toLongLong(&ok);
+    return ok && number >= 0 && number <= kMaxSafeCounter &&
+                   QRegularExpression("^[0-9]+$").match(text).hasMatch()
+               ? number
+               : 0;
+  }
+  return 0;
 }
 
 } // namespace
@@ -87,7 +112,7 @@ StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {
   StatusParseResult result;
   const QString trimmed = response.trimmed();
 
-  if (trimmed.isEmpty() || trimmed.contains("not_online")) {
+  if (trimmed.isEmpty() || trimmed == "not_online") {
     result.format = "offline";
     return result;
   }
@@ -114,8 +139,8 @@ StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {
     }
 
     result.ip = obj.value("online_ip").toString();
-    result.bytes = obj.value("sum_bytes").toVariant().toLongLong();
-    result.seconds = obj.value("sum_seconds").toVariant().toLongLong();
+    result.bytes = parseCounter(obj.value("sum_bytes"));
+    result.seconds = parseCounter(obj.value("sum_seconds"));
     result.username = obj.value("user_name").toString();
     if (!result.username.isEmpty() || !result.ip.isEmpty()) {
       result.online = true;
@@ -131,7 +156,9 @@ StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {
   const qint64 bytes =
       parts.size() >= 4 ? parts[3].toLongLong(&bytesOk) : 0;
   if (parts.size() >= 4 && !parts[0].isEmpty() && secondsOk &&
-      bytesOk && isValidIpv4(parts[2])) {
+      bytesOk && seconds >= 0 && bytes >= 0 &&
+      seconds <= kMaxSafeCounter && bytes <= kMaxSafeCounter &&
+      isValidIpv4(parts[2])) {
     result.format = "csv";
     result.username = parts[0];
     result.seconds = seconds;

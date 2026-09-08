@@ -45,7 +45,7 @@ def classify_login_response(response: str):
 
 def parse_status_response(response: str):
     body = response.strip()
-    if not body or "not_online" in body:
+    if not body or body == "not_online":
         return {
             "format": "offline",
             "online": False,
@@ -70,10 +70,16 @@ def parse_status_response(response: str):
         obj = None
 
     def parse_number(value):
-        try:
-            return int(value or 0)
-        except (TypeError, ValueError):
+        if isinstance(value, bool):
             return 0
+        if isinstance(value, int):
+            return value if 0 <= value <= 9_007_199_254_740_991 else 0
+        if isinstance(value, float):
+            return int(value) if value.is_integer() and value >= 0 and value <= 9_007_199_254_740_991 else 0
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+            parsed = int(value)
+            return parsed if parsed <= 9_007_199_254_740_991 else 0
+        return 0
 
     if isinstance(obj, dict):
         error = str(obj.get("error", ""))
@@ -111,13 +117,12 @@ def parse_status_response(response: str):
         valid_ip = len(ip_parts) == 4 and all(
             part.isdigit() and 0 <= int(part) <= 255 for part in ip_parts
         )
-        try:
-            seconds = int(parts[1])
-            bytes_used = int(parts[3])
-        except ValueError:
+        if not re.fullmatch(r"[0-9]+", parts[1]) or not re.fullmatch(r"[0-9]+", parts[3]):
             pass
         else:
-            valid_numbers = True
+            seconds = int(parts[1])
+            bytes_used = int(parts[3])
+            valid_numbers = seconds <= 9_007_199_254_740_991 and bytes_used <= 9_007_199_254_740_991
 
     if len(parts) >= 4 and parts[0] and valid_ip and valid_numbers:
         return {

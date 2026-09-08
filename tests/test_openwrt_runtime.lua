@@ -54,10 +54,13 @@ local function check(condition, message)
     assert(condition, message)
 end
 
-response_body = "student-user,321.5,10.10.0.8,512.5,0,0"
+response_body = "student-user,321,10.10.0.8,512,0,0"
 local parsed, class = api.get_user_info("regression")
-check(parsed and class == "online_csv", "小数状态字段不应导致请求日志崩溃")
-check(parsed.bytes == 512.5 and parsed.seconds == 321.5, "日志格式化不得改写协议结果")
+check(parsed and class == "online_csv", "整数状态字段应正常解析")
+check(parsed.bytes == 512 and parsed.seconds == 321, "整数状态字段结果不匹配")
+response_body = "student-user,321.5,10.10.0.8,512.5,0,0"
+local fractional, fractional_class = api.get_user_info("regression")
+check(fractional == nil and fractional_class == "unparsed", "CSV 小数指标应在三端统一判为异常")
 
 response_body = "login_ok"
 local success = api.login("student-user", "test-only")
@@ -80,6 +83,10 @@ local unavailable, unavailable_class = api.get_user_info("regression")
 check(unavailable == nil and unavailable_class == "curl_exit_7", "连接失败不得误判离线，并应保留 curl 错误")
 curl_exit = 0
 
+-- PR #3 的浮点格式修复仍需防御 API 之外的异常调用，直接回放 main 的格式化边界。
+api.get_user_info = function()
+    return { username = "student-user", ip = "10.10.0.8", bytes = 512.5, seconds = 59.8 }, "online_csv"
+end
 for _, seconds in ipairs({0.5, 59.8, 61.5, 3601.5}) do
     response_body = "student-user," .. seconds .. ",10.10.0.8,512.5,0,0"
     local ok, result = pcall(dofile, "OpenWrt/files/usr/lib/haut-network-guard/main.lua")

@@ -101,6 +101,20 @@ int main(int argc, char *argv[]) {
   expect(!invalidCsvResult.online, "异常 CSV 响应不应判定为在线");
   expect(invalidCsvResult.format == "unparsed",
          "异常 CSV 响应应标记为 unparsed");
+  const StatusParseResult fractionalResult = ProtocolUtils::parseStatusResponse(
+      "jQuery_1712630100003({\"error\":\"ok\",\"user_name\":\"231040600203\","
+      "\"online_ip\":\"10.10.0.8\",\"sum_bytes\":1.5,\"sum_seconds\":\"321.5\"})");
+  expect(fractionalResult.online && fractionalResult.bytes == 0 && fractionalResult.seconds == 0,
+         "JSON 小数指标应安全回退为零");
+  const StatusParseResult fractionalCsvResult =
+      ProtocolUtils::parseStatusResponse("231040600203,321.5,10.10.0.8,12345678");
+  expect(!fractionalCsvResult.online && fractionalCsvResult.format == "unparsed",
+         "CSV 小数指标应统一判为异常");
+  const StatusParseResult malformedJsonResult = ProtocolUtils::parseStatusResponse(
+      "jQuery_1712630100004({\"error\":\"ok\",\"user_name\":\"231040600203\","
+      "\"online_ip\":\"10.10.0.8\",\"sum_bytes\":01,\"sum_seconds\":321})");
+  expect(!malformedJsonResult.online && malformedJsonResult.format == "unparsed",
+         "非法 JSON 数字语法应统一判为异常");
 
   QSettings settings(storage.filePath("settings.ini"), QSettings::IniFormat);
 

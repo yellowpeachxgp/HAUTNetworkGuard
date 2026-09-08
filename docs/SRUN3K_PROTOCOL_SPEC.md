@@ -76,7 +76,7 @@ jQuery_<timestamp>({...})
 - `sum_seconds`
 - `error`
 
-`sum_bytes` 与 `sum_seconds` 兼容 JSON number 与 quoted numeric string 两种返回形态；无法转换的数值按 `0` 处理，但不影响已包含有效账号或 IP 的在线判断。
+`sum_bytes` 与 `sum_seconds` 兼容 JSON number 与 quoted numeric string 两种返回形态。三端只保留有限、非负、整数且不超过 `9007199254740991` 的值；无法转换、带小数、负数或超出安全范围的数值按 `0` 处理，但不影响已包含有效账号或 IP 的在线判断。quoted numeric 只接受十进制整数。
 
 ### CSV
 
@@ -85,6 +85,9 @@ jQuery_<timestamp>({...})
 ```text
 username,seconds,ip,bytes,...
 ```
+
+
+CSV 的 `seconds` 和 `bytes` 只接受非负十进制整数；小数、负数、超出安全范围或其他脏字段会使整行标记为 `unparsed`。
 
 ## 6. 登录响应分类
 

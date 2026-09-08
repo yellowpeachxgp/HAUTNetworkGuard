@@ -30,10 +30,15 @@ int main(int argc, char *argv[]) {
   // 加载配置
   Config::instance();
 
-  // 带 --startup 参数时静默启动到托盘（开机自启场景）
+  // 带 --startup 参数时静默启动到托盘（开机自启场景）。
+  // 首次启动尚未配置账号时必须显示窗口，避免开机自启后学生找不到配置入口。
   const QStringList args = app.arguments();
-  const bool startInBackground =
-      args.contains("--startup", Qt::CaseInsensitive);
+  const bool startupRequested = args.contains("--startup", Qt::CaseInsensitive);
+  const bool hasConfigured = Config::instance().hasConfigured();
+  const bool startInBackground = startupRequested && hasConfigured;
+  if (startupRequested && !hasConfigured) {
+    Logger::info("检测到 --startup 但尚未完成首次配置，显示配置窗口");
+  }
   Logger::info(QString("应用启动 (版本: %1, 路径: %2, 参数: %3, 启动模式: %4)")
                    .arg(QCoreApplication::applicationVersion())
                    .arg(QDir::toNativeSeparators(

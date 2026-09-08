@@ -143,6 +143,14 @@ esac
         self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
         return result
 
+    def run_local_script(self, success=True):
+        env = dict(self.env)
+        env["HAUT_SOURCE_ROOT"] = str(self.remote)
+        result = subprocess.run(["sh", str(ROOT / "OpenWrt" / "install.sh")],
+                                env=env, cwd=ROOT, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        return result
+
     def events(self):
         path = Path(self.env["HAUT_FAKE_EVENTS"])
         return path.read_text().splitlines() if path.exists() else []
@@ -166,6 +174,23 @@ esac
         old_config = self.config.read_bytes()
         self.run_script("install-online.sh")
         self.assertEqual(self.config.read_bytes(), old_config)
+        self.assert_no_temporary_files()
+
+    def test_local_fresh_install_is_atomic(self):
+        self.run_local_script()
+        self.assertEqual(self.events(), ["new:enable"])
+        self.assertEqual(stat.S_IMODE(self.config.stat().st_mode), 0o600)
+        self.assertTrue(os.access(self.init, os.X_OK))
+        self.assertEqual((self.program / "main.lua").read_bytes(),
+                         (self.remote / "files/usr/lib/haut-network-guard/main.lua").read_bytes())
+        self.assert_no_temporary_files()
+
+    def test_local_enable_failure_restores_old_install(self):
+        self.seed_old()
+        before = self.snapshot()
+        self.env["HAUT_FAIL_ENABLE"] = "1"
+        self.run_local_script(False)
+        self.assertEqual(self.snapshot(), before)
         self.assert_no_temporary_files()
 
     def test_failed_download_keeps_old_install(self):

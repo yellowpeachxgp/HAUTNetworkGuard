@@ -76,7 +76,7 @@ Lua 源码来自 [官方下载区](https://www.lua.org/ftp/)，下载后核对�
 
 1. `tests/test_openwrt_modules.lua`：通过。
 2. `tests/test_openwrt_runtime.lua`：通过，实际执行 API 和一轮 main 循环，curl/UCI/文件边界模拟；覆盖 PR #3 崩溃、小数流量/时长、JSON 空格、URL 编码、登录/注销、异常与网络失败。
-3. `tests/test_openwrt_installation.py`：每种解释器 15 项通过，共 30 项。实际执行正式 Shell 脚本和真实 Lua，只对安装根目录、下载和服务边界注入临时环境。
+3. `tests/test_openwrt_installation.py`：每种解释器 17 项通过，共 34 项。实际执行正式 Shell 脚本和真实 Lua，覆盖离线与在线安装路径，只对安装根目录、下载和服务边界注入临时环境。
 
 故障注入覆盖：新装、重装保留配置、下载失败、半截 init 文件清理、非法 Lua、启用失败时恢复旧版本或移除新装、切换失败回滚、升级健康失败恢复、保持停止状态、下载失败不停止旧服务、备份清理失败不删除新安装。
 
@@ -89,7 +89,7 @@ lua5.1 tests/test_openwrt_runtime.lua
 lua5.3 tests/test_openwrt_runtime.lua
 ```
 
-本地运行时将 lua5.1/lua5.3 替换为上述忽略目录中的绝对路径。固定版本在线安装/升级现在消费 Release 的 `OpenWrt-SHA256SUMS`，并在切换前逐个校验运行文件和 init 脚本；两种解释器下各 15 项故障测试覆盖哈希篡改、下载失败和回滚。路由器 procd、真实 UCI、存储耗尽/断电和校园网接口没有被这些测试替代。
+本地运行时将 lua5.1/lua5.3 替换为上述忽略目录中的绝对路径。离线安装与固定版本在线安装/升级现在都在切换前完成真实 Lua/服务脚本校验；在线路径消费 Release 的 `OpenWrt-SHA256SUMS`，两种解释器下各 17 项测试覆盖哈希篡改、下载失败、启用失败和回滚。路由器 procd、真实 UCI、存储耗尽/断电和校园网接口没有被这些测试替代。
 
 ## 契约与仍未验证内容
 

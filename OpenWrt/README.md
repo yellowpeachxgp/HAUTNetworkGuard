@@ -46,6 +46,8 @@ wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main
 curl -sSL https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
 ```
 
+离线安装脚本会先在临时目录校验全部 Lua 和服务脚本，再原子切换程序目录；启用失败会恢复旧版本，已有配置会保留。
+
 Release 页面同时提供 `OpenWrt-SHA256SUMS`，其中记录固定版本安装脚本和运行文件的哈希，便于发布审计。 固定 `v*` 安装和升级会在切换前下载该清单并逐个校验；`main` 开发引用不具备 Release 清单。
 
 升级到固定版本：

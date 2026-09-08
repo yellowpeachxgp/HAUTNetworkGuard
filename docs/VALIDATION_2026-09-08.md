@@ -108,6 +108,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34279800412](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34279800412) 对应提交 `8321e7c`：macOS 单实例保护改用用户临时目录原子 `flock`，UI smoke 验证第二个锁竞争失败；三端构建和发布资产 dry-run 全部通过。
 - [运行 34278891511](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34278891511) 对应提交 `d0070c8`：OpenWrt 日志出口新增 `username=`、`password=`、`enc_password=` 兜底脱敏，Lua 5.1/5.3 日志回归均通过，三端构建和发布资产 dry-run 全部通过。
 - [运行 34278024211](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34278024211) 对应提交 `8c6bc59`：macOS DirectHTTPClient 拒绝缺失 HTTP 状态行和非 2xx 响应，新增状态码回归并纳入逻辑 smoke；三端构建和发布资产 dry-run 全部通过。
 - [运行 34277096340](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34277096340) 对应提交 `19749dc`：验收矩阵结构契约校验 A1-A13、三端状态值、证据列和七天记录字段；三端构建与发布资产 dry-run 全部通过。

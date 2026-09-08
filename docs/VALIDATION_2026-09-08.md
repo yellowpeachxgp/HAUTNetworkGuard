@@ -1,6 +1,6 @@
 # 本地验证记录
 
-本记录描述 2026-09-08 工作树的已执行验证，不代表正式 Release 或全部产品路线图完成。
+本记录描述 2026-09-09 工作树的已执行验证，不代表正式 Release 或全部产品路线图完成。
 
 ## macOS
 
@@ -106,6 +106,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34254790864](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34254790864) 对应最新会话策略 7 天加速 soak 提交 `3c1242e2`：Windows、macOS、OpenWrt 三项 job 全部通过；会话策略、安装/升级/卸载矩阵及安装资产回读门禁通过。
 - [运行 34253578251](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34253578251) 对应 Windows 首次空配置拒绝提交（Artifact 首次提交遇到中间层 403 后重跑成功）：Windows、macOS、OpenWrt 三项 job 全部通过；空配置回放、有线优先/Wi‑Fi 回退/其他接口兜底、卸载脚本隔离测试、双 Lua 安装/升级/卸载矩阵和安装资产回读门禁通过。
 - [运行 34240638078](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34240638078) 已执行安装资产回读门禁：Windows ZIP 解压检查、macOS DMG 只读挂载/包内签名检查和 OpenWrt 双 Lua 全量测试均通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34240147670](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34240147670) 对应四端错误码边界提交：Windows、macOS、OpenWrt 三项 job 全部通过；短码和超长码回归已纳入协议契约。

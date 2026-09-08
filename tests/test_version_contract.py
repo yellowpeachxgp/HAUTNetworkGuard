@@ -28,8 +28,10 @@ def main():
         assert "HAUT_VERSION_STRING" in content, f"{path} must consume generated version"
     require_version(ROOT / "macOS" / "Info.plist", r"<key>CFBundleShortVersionString</key>\s*<string>([0-9.]+)</string>")
     require_version(ROOT / "macOS" / "Sources" / "Config.swift", r'static let version = "([0-9.]+)"')
-    require_version(ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "main.lua", r'local VERSION = "([0-9.]+)"')
-    require_version(ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "api.lua", r'HAUTNetworkGuard/([0-9.]+) OpenWrt')
+    require_version(ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "version.lua", r'return "([0-9.]+)"')
+    for path in (ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "main.lua",
+                 ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "api.lua"):
+        assert 'require("version")' in path.read_text(encoding="utf-8"), f"{path} must consume version.lua"
 
     for path in (
         ROOT / "README.md",

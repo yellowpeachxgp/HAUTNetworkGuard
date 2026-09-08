@@ -2,14 +2,13 @@
 -- HAUT Network Guard - OpenWrt 版本
 -- 主程序入口
 
-local VERSION = "1.3.18"
-
 package.path = package.path .. ";/usr/lib/haut-network-guard/?.lua"
 
 local api = require("api")
 local log = require("log")
 local protocol = require("protocol")
 local session = require("session")
+local VERSION = require("version")
 
 local function read_uci_value(key)
     local handle = io.popen("uci -q get " .. key .. " 2>/dev/null")

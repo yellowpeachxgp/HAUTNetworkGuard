@@ -140,6 +140,7 @@ chmod +x uninstall.sh
 
 ```
 /usr/lib/haut-network-guard/
+├── version.lua   # 运行时版本唯一来源
 ├── main.lua      # 主程序
 ├── api.lua       # API 模块
 ├── log.lua       # 日志与脱敏

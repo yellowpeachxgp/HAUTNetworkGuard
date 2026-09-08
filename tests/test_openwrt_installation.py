@@ -81,6 +81,8 @@ if os.environ.get("HAUT_FAIL_MOVE") == "1":
         sys.exit(71)
 sys.exit(subprocess.call([os.environ["HAUT_REAL_MV"], *args]))
 ''', executable=True)
+        self.write(self.remote / "files/usr/lib/haut-network-guard/version.lua",
+                   'return "1.3.18"\n')
         for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua", "session.lua"):
             self.write(self.remote / "files/usr/lib/haut-network-guard" / name,
                        'error("语法检查不得执行模块")\nreturn {}\n')
@@ -124,6 +126,7 @@ esac
 '''
 
     def seed_old(self, running=True):
+        self.write(self.program / "version.lua", 'return "0.9.0"\n')
         for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua", "session.lua"):
             self.write(self.program / name, "return { old = true }\n")
         self.write(self.program / "main.lua", 'local VERSION = "0.9.0"\n')

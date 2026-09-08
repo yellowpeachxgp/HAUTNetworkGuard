@@ -20,6 +20,7 @@ SWITCH_STARTED=0
 WAS_RUNNING=0
 CHECKSUM_FILE=""
 OLD_SESSION_PRESENT=0
+OLD_VERSION_PRESENT=0
 
 version_cmp() {
     awk -v a="$1" -v b="$2" '
@@ -49,8 +50,12 @@ cleanup() {
         if [ "$WAS_RUNNING" -eq 1 ]; then
             "$INIT_FILE" stop >/dev/null 2>&1
         fi
-        for file in crypto.lua api.lua log.lua protocol.lua main.lua; do
-            cp -p "$BACKUP_DIR/$file" "$INSTALL_DIR/$file" || rollback_failed=1
+        for file in version.lua crypto.lua api.lua log.lua protocol.lua main.lua; do
+            if [ "$file" = "version.lua" ] && [ "$OLD_VERSION_PRESENT" -eq 0 ]; then
+                rm -f "$INSTALL_DIR/$file"
+            else
+                cp -p "$BACKUP_DIR/$file" "$INSTALL_DIR/$file" || rollback_failed=1
+            fi
         done
         if [ "$OLD_SESSION_PRESENT" -eq 1 ]; then
             cp -p "$BACKUP_DIR/session.lua" "$INSTALL_DIR/session.lua" || rollback_failed=1
@@ -86,7 +91,7 @@ download_file() {
 
 validate_program_dir() {
     dir="$1"
-    for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
         if [ ! -s "$dir/$file" ]; then
             echo "错误: 缺少或为空的程序文件: $file"
             return 1
@@ -164,20 +169,24 @@ fi
 # 获取本地版本
 LOCAL_VERSION="未安装"
 if [ -f "$MAIN_LUA" ]; then
-    LOCAL_VERSION=$(grep -o 'VERSION = "[^"]*"' "$MAIN_LUA" 2>/dev/null | grep -o '"[^"]*"' | tr -d '"')
+    if [ -f "$INSTALL_DIR/version.lua" ]; then
+        LOCAL_VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$INSTALL_DIR/version.lua")
+    else
+        LOCAL_VERSION=$(grep -o 'VERSION = "[^"]*"' "$MAIN_LUA" 2>/dev/null | grep -o '"[^"]*"' | tr -d '"')
+    fi
     [ -z "$LOCAL_VERSION" ] && LOCAL_VERSION="未知"
 fi
 echo "本地版本: $LOCAL_VERSION"
 
 # 获取远端版本
 echo "正在检查最新版本..."
-REMOTE_MAIN=$(curl -fsSL --connect-timeout 10 --max-time 60 "$REPO_URL/files/usr/lib/haut-network-guard/main.lua")
-if [ -z "$REMOTE_MAIN" ]; then
+REMOTE_VERSION_SOURCE=$(curl -fsSL --connect-timeout 10 --max-time 60 "$REPO_URL/files/usr/lib/haut-network-guard/version.lua")
+if [ -z "$REMOTE_VERSION_SOURCE" ]; then
     echo "错误: 无法连接到 GitHub，请检查网络"
     exit 1
 fi
 
-REMOTE_VERSION=$(echo "$REMOTE_MAIN" | grep -o 'VERSION = "[^"]*"' | grep -o '"[^"]*"' | tr -d '"')
+REMOTE_VERSION=$(echo "$REMOTE_VERSION_SOURCE" | sed -n 's/^return "\([^"]*\)".*/\1/p')
 if [ -z "$REMOTE_VERSION" ]; then
     echo "错误: 无法解析远端版本号"
     exit 1
@@ -212,6 +221,10 @@ TMP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-upgrade.XXXXXX")"
 BACKUP_DIR="$(mktemp -d "$ROOT_PREFIX/tmp/haut-network-guard-backup.XXXXXX")"
 prepare_checksums
 
+if [ -f "$INSTALL_DIR/version.lua" ]; then
+    cp -p "$INSTALL_DIR/version.lua" "$BACKUP_DIR/version.lua"
+    OLD_VERSION_PRESENT=1
+fi
 cp -p "$INSTALL_DIR/crypto.lua" "$BACKUP_DIR/crypto.lua"
 cp -p "$INSTALL_DIR/api.lua" "$BACKUP_DIR/api.lua"
 cp -p "$INSTALL_DIR/log.lua" "$BACKUP_DIR/log.lua"
@@ -225,6 +238,7 @@ cp -p "$INIT_FILE" "$BACKUP_DIR/haut-network-guard.init"
 
 # 下载新文件（不覆盖配置）
 echo "[2/4] 下载程序文件..."
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/version.lua" "$TMP_DIR/version.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$TMP_DIR/crypto.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$TMP_DIR/api.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$TMP_DIR/log.lua"
@@ -239,11 +253,11 @@ echo "      校验下载文件和 Lua 语法..."
 validate_program_dir "$TMP_DIR"
 test -s "$TMP_DIR/haut-network-guard.init"
 sh -n "$TMP_DIR/haut-network-guard.init"
-for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     verify_checksum "files/usr/lib/haut-network-guard/$file" "$TMP_DIR/$file"
 done
 verify_checksum "files/etc/init.d/haut-network-guard" "$TMP_DIR/haut-network-guard.init"
-STAGED_VERSION=$(sed -n 's/^local VERSION = "\([^"]*\)".*/\1/p' "$TMP_DIR/main.lua")
+STAGED_VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$TMP_DIR/version.lua")
 if [ "$STAGED_VERSION" != "$REMOTE_VERSION" ]; then
     echo "错误: 下载期间远端版本发生变化，请重新运行升级"
     exit 1
@@ -252,6 +266,7 @@ if "$INIT_FILE" status >/dev/null 2>&1; then WAS_RUNNING=1; fi
 SWITCH_STARTED=1
 if [ "$WAS_RUNNING" -eq 1 ]; then "$INIT_FILE" stop; fi
 
+cp -f "$TMP_DIR/version.lua" "$INSTALL_DIR/version.lua"
 cp -f "$TMP_DIR/crypto.lua" "$INSTALL_DIR/crypto.lua"
 cp -f "$TMP_DIR/api.lua" "$INSTALL_DIR/api.lua"
 cp -f "$TMP_DIR/log.lua" "$INSTALL_DIR/log.lua"
@@ -263,7 +278,7 @@ chmod +x "$INIT_FILE"
 
 echo "      校验程序文件和 Lua 语法..."
 validate_program_dir "$INSTALL_DIR"
-for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     cmp "$TMP_DIR/$file" "$INSTALL_DIR/$file"
 done
 cmp "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"

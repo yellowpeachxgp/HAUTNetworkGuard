@@ -77,7 +77,7 @@ STAGE_DIR="$(mktemp -d "$(dirname "$INSTALL_DIR")/.haut-network-guard-install.XX
 mkdir -p "$STAGE_DIR/program"
 
 echo "[3/5] 校验并复制程序文件..."
-for name in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for name in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     source="$SOURCE_DIR/$name"
     target="$STAGE_DIR/program/$name"
     if [ ! -s "$source" ]; then
@@ -90,7 +90,7 @@ for name in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     }
     cp "$source" "$target"
 done
-VERSION=$(sed -n 's/^local VERSION = "\([^"]*\)".*/\1/p' "$SOURCE_DIR/main.lua")
+VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$SOURCE_DIR/version.lua")
 [ -n "$VERSION" ] || { echo "错误: 无法读取程序版本"; exit 1; }
 
 echo "[4/5] 校验服务和配置..."

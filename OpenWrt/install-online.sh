@@ -62,7 +62,7 @@ download_file() {
 
 validate_program_dir() {
     dir="$1"
-    for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
         if [ ! -s "$dir/$file" ]; then
             echo "错误: 缺少或为空的程序文件: $file"
             return 1
@@ -148,6 +148,7 @@ prepare_checksums
 # 下载文件
 echo "[3/5] 下载程序文件..."
 mkdir -p "$STAGE_DIR/program"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/version.lua" "$STAGE_DIR/program/version.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$STAGE_DIR/program/crypto.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$STAGE_DIR/program/api.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$STAGE_DIR/program/log.lua"
@@ -170,7 +171,7 @@ echo "[5/5] 设置权限..."
 validate_program_dir "$STAGE_DIR/program"
 test -s "$INIT_STAGE"
 sh -n "$INIT_STAGE"
-for file in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     verify_checksum "files/usr/lib/haut-network-guard/$file" "$STAGE_DIR/program/$file"
 done
 verify_checksum "files/etc/init.d/haut-network-guard" "$INIT_STAGE"

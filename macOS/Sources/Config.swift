@@ -188,6 +188,13 @@ class AppConfig {
     @discardableResult
     func save(username: String, password: String, autoSave: Bool,
               checkInterval: Int = 30, autoLogin: Bool = true) -> Bool {
+        // 关闭持久化时先落下安全开关并删除旧条目；删除失败不得继续提交账号和其他设置。
+        if !autoSave {
+            sessionPassword = password
+            defaults.set(false, forKey: autoSaveKey)
+            if !removePersistentPassword() { return false }
+        }
+
         if autoSave {
             let previous = self.password
             sessionPassword = previous
@@ -201,7 +208,6 @@ class AppConfig {
         self.autoLogin = autoLogin
         hasConfigured = true
         sessionPassword = password
-        if !autoSave && !removePersistentPassword() { return false }
         credentialWarning = nil
         Logger.info("配置已保存 account=\(Logger.maskUsername(self.username)) remember_password=\(autoSave)")
         return true

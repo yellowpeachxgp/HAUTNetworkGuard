@@ -71,6 +71,8 @@ func runCredentialFailureTests() {
     store.failDelete = true
     expect(!config.save(username: "session-user", password: "session-password", autoSave: false), "删除失败必须对用户可见")
     expect(!config.autoSave, "删除失败也必须停止使用持久化密码")
+    expect(config.username == "old-user", "删除失败不得提交新账号")
+    expect(defaults.string(forKey: "haut_username") == "old-user", "删除失败不得覆盖磁盘账号")
     expect(config.password == "session-password", "本次会话应使用明确输入的新密码")
     let optedOut = AppConfig(defaults: defaults, credentialStore: store)
     let before = store.readCount

@@ -84,7 +84,7 @@ Lua 源码来自 [官方下载区](https://www.lua.org/ftp/)，下载后核对�
 
 1. `tests/test_openwrt_modules.lua`：通过。
 2. `tests/test_openwrt_runtime.lua`：通过，实际执行 API 和一轮 main 循环，curl/UCI/文件边界模拟；覆盖 PR #3 崩溃、小数流量/时长、JSON 空格、URL 编码、登录/注销、异常与网络失败。
-3. `tests/test_openwrt_installation.py`：每种解释器 23 项通过，共 46 项，新增安装和升级固定 tag 与 `version.lua` 不一致拒绝。实际执行正式 Shell 脚本和真实 Lua 的安装/卸载路径，覆盖离线与在线场景，只对安装根目录、下载和服务边界注入临时环境。
+3. `tests/test_openwrt_installation.py`：每种解释器 24 项通过，共 48 项，新增精简根目录目录准备和安装、升级固定 tag 与 `version.lua` 不一致拒绝。实际执行正式 Shell 脚本和真实 Lua 的安装/卸载路径，覆盖离线与在线场景，只对安装根目录、下载和服务边界注入临时环境。
 
 故障注入覆盖：新装、重装保留配置、下载失败、半截 init 文件清理、非法 Lua、启用失败时恢复旧版本或移除新装、切换失败回滚、升级健康失败恢复、保持停止状态、下载失败不停止旧服务、备份清理失败不删除新安装。
 
@@ -97,7 +97,7 @@ lua5.1 tests/test_openwrt_runtime.lua
 lua5.3 tests/test_openwrt_runtime.lua
 ```
 
-本地运行时将 lua5.1/lua5.3 替换为上述忽略目录中的绝对路径。离线安装与固定版本在线安装/升级现在都在切换前完成真实 Lua/服务脚本校验；卸载路径显式停止并禁用服务，默认保留配置并支持清除配置，停止失败时不会删除文件。在线路径消费 Release 的 `OpenWrt-SHA256SUMS`，两种解释器下各 23 项测试覆盖哈希篡改、下载失败、启用失败、回滚、tag/版本不一致和卸载语义。在线安装完成提示从下载的 `version.lua` 读取，并由版本契约测试保护。路由器 procd、真实 UCI、存储耗尽/断电和校园网接口没有被这些测试替代。
+本地运行时将 lua5.1/lua5.3 替换为上述忽略目录中的绝对路径。离线安装与固定版本在线安装/升级现在都在切换前完成真实 Lua/服务脚本校验；卸载路径显式停止并禁用服务，默认保留配置并支持清除配置，停止失败时不会删除文件。在线路径消费 Release 的 `OpenWrt-SHA256SUMS`，两种解释器下各 24 项测试覆盖精简根目录目录准备、哈希篡改、下载失败、启用失败、回滚、tag/版本不一致和卸载语义。在线安装完成提示从下载的 `version.lua` 读取，并由版本契约测试保护。路由器 procd、真实 UCI、存储耗尽/断电和校园网接口没有被这些测试替代。
 
 ## 契约与仍未验证内容
 
@@ -108,9 +108,9 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
-- [运行 34266916182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34266916182) 对应提交 `eb25257`：三端 Build and Release job 全部通过；新增精简根目录下 `/etc/init.d`、`/etc/config` 和自定义 `/tmp` 的目录准备回归，双 Lua 安装/升级/卸载共 46 项通过；Release job 因草稿 PR 按预期跳过。
+- [运行 34266916182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34266916182) 对应提交 `eb25257`：三端 Build and Release job 全部通过；新增精简根目录下 `/etc/init.d`、`/etc/config` 的目录准备回归，双 Lua 安装/升级/卸载共 46 项通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34264582228](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34264582228) 对应真实设备验收矩阵入口提交 `3f3d8f0`：Windows、macOS、OpenWrt 三项 job 全部通过；文档契约确认矩阵、A1–A13 场景和证据规则存在。
-- [运行 34263735831](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34263735831) 对应 OpenWrt 回归计数提交 `96b9f57`：Windows、macOS、OpenWrt 三项 job 全部通过；每种解释器 23 项、共 46 项安装/升级/卸载测试记录一致。
+- [运行 34263735831](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34263735831) 对应 OpenWrt 回归计数提交 `96b9f57`：Windows、macOS、OpenWrt 三项 job 全部通过；每种解释器 22 项、共 44 项安装/升级/卸载测试记录一致。
 - [运行 34256596956](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34256596956) 对应协议身份边界提交 `4fd5634`：Windows、macOS、OpenWrt 三项 job 全部通过；非法 JSON IP 与空身份回归、Qt/macOS/Lua 协议测试、安装资产回读门禁通过。
 - [运行 34254790864](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34254790864) 对应最新会话策略 7 天加速 soak 提交 `3c1242e2`：Windows、macOS、OpenWrt 三项 job 全部通过；会话策略、安装/升级/卸载矩阵及安装资产回读门禁通过。
 - [运行 34253578251](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34253578251) 对应 Windows 首次空配置拒绝提交（Artifact 首次提交遇到中间层 403 后重跑成功）：Windows、macOS、OpenWrt 三项 job 全部通过；空配置回放、有线优先/Wi‑Fi 回退/其他接口兜底、卸载脚本隔离测试、双 Lua 安装/升级/卸载矩阵和安装资产回读门禁通过。

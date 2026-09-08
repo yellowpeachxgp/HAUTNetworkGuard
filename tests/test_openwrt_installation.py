@@ -320,6 +320,14 @@ esac
         self.assertTrue(Path(self.env["HAUT_FAKE_RUNNING"]).exists())
         self.assert_no_temporary_files()
 
+    def test_upgrade_creates_missing_custom_tmp_directory(self):
+        self.seed_old()
+        shutil.rmtree(self.root / "tmp")
+        self.run_script("upgrade-online.sh")
+        self.assertIn("new:status", self.events())
+        self.assertTrue((self.root / "tmp").is_dir())
+        self.assert_no_temporary_files()
+
     def test_backup_cleanup_failure_keeps_new_install(self):
         self.seed_old()
         self.env["HAUT_FAIL_BACKUP_CLEANUP"] = "1"

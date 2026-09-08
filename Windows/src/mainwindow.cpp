@@ -480,6 +480,10 @@ void MainWindow::onSaveClicked() {
   if (m_trayIcon) {
     m_trayIcon->showMessage("设置已保存", "新的配置已应用");
   }
+  // 首次完成配置后立即确认网络状态，避免学生还要额外点击一次登录。
+  if (m_backgroundTasks) {
+    QTimer::singleShot(0, this, &MainWindow::checkNetworkStatus);
+  }
 }
 
 void MainWindow::onCopyDiagnosticsClicked() {

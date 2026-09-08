@@ -194,6 +194,18 @@ int main(int argc, char **argv) {
       firstRunError = firstRunError || label->text().contains("请输入学号和密码");
     }
     expect(firstRunError, "空首次配置必须显示可理解的提示");
+
+    QSettings configuredSettings(directory.filePath("configured-run.ini"), QSettings::IniFormat);
+    Config configuredConfig(configuredSettings);
+    ReplayApi configuredApi;
+    MainWindow configuredWindow(configuredConfig, &configuredApi, [&] { return clock; }, true);
+    configuredWindow.findChild<QLineEdit *>("usernameInput")->setText("new-student");
+    configuredWindow.findChild<QLineEdit *>("passwordInput")->setText("new-password");
+    expect(QMetaObject::invokeMethod(&configuredWindow, "onSaveClicked", Qt::DirectConnection),
+           "无法调用配置保存操作");
+    QApplication::processEvents();
+    expect(configuredApi.statusTokens.size() == 1,
+           "首次配置保存成功后应立即发起一次状态检测");
   } catch (const std::exception &error) {
     qCritical().noquote() << "Qt 控制器回放失败：" << error.what();
     return 1;

@@ -34,6 +34,11 @@
       "message": "登录成功"
     },
     {
+      "input": "login_ok already_online",
+      "class": "success",
+      "message": "登录成功"
+    },
+    {
       "input": "already_online",
       "class": "already_online",
       "message": "已在线"

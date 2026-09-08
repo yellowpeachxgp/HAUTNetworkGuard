@@ -30,6 +30,8 @@ struct SmokeTests {
                "短错误码不应被分类为标准错误")
         expect(SrunProtocol.classifyLoginResponse("login_error#E12345:long-code").category == "unknown",
                "超长错误码不应被分类为标准错误")
+        expect(SrunProtocol.classifyLoginResponse("login_ok already_online").category == "success",
+               "多个登录标记同时出现时应遵循 success 优先级")
 
         let parsed = SrunProtocol.parseStatusResponse(
             "jQuery_1712630100000({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":12345678,\"sum_seconds\":321})",

@@ -51,6 +51,9 @@ assert_equal(class2.category, "error_E2531", "classify_login_response.e2531.clas
 assert_equal(class2.message, "login_error#E2531:User not found", "classify_login_response.e2531.message")
 assert_equal(class2.user_message, "学号或密码错误，请检查后重试。", "classify_login_response.e2531.user_message")
 assert_equal(class2.ok, false, "classify_login_response.e2531.ok")
+local priority = protocol.classify_login_response("login_ok already_online")
+assert_equal(priority.category, "success", "classify_login_response.priority.class")
+assert_equal(priority.user_message, "登录成功", "classify_login_response.priority.message")
 
 local class3 = protocol.classify_login_response("login_error#E9999:oops")
 assert_equal(class3.category, "error_E9999", "classify_login_response.e9999.class")

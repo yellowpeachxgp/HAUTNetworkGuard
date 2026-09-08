@@ -104,7 +104,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
-- [运行 34249142049](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34249142049) 对应 macOS 卸载失败保护提交（首次上传遇到中间层 403 后重跑成功）：Windows、macOS、OpenWrt 三项 job 全部通过；Windows 原生 CMake 版本消费、OpenWrt `version.lua` 安装/升级校验、macOS Swift/Info.plist 版本生成、macOS 卸载脚本隔离测试、双 Lua 安装/升级/卸载矩阵和安装资产回读门禁通过。
+- [运行 34250402386](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34250402386) 对应严格版本格式提交：Windows、macOS、OpenWrt 三项 job 全部通过；macOS 构建和 OpenWrt 安装/升级均拒绝非语义版本格式，卸载脚本隔离测试、双 Lua 安装/升级/卸载矩阵和安装资产回读门禁通过。
 - [运行 34240638078](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34240638078) 已执行安装资产回读门禁：Windows ZIP 解压检查、macOS DMG 只读挂载/包内签名检查和 OpenWrt 双 Lua 全量测试均通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34240147670](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34240147670) 对应四端错误码边界提交：Windows、macOS、OpenWrt 三项 job 全部通过；短码和超长码回归已纳入协议契约。
 - [运行 34237976134](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34237976134) 对应提交 `5bdb6ffad52d86debfc1c6715fc36fef13c229bc`：Windows、macOS、OpenWrt 三项 job 全部通过；Release job 因草稿 PR 按预期跳过。

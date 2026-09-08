@@ -15,7 +15,7 @@ def write(path: Path, text: str, mode: int = 0o755):
     path.chmod(mode)
 
 
-def run_case(fail_unload: bool):
+def run_case(fail_unload: bool, fail_security: bool = False):
     with tempfile.TemporaryDirectory(prefix="haut-macos-uninstall-") as raw:
         base = Path(raw)
         bin_dir = base / "bin"
@@ -27,7 +27,7 @@ def run_case(fail_unload: bool):
         app.mkdir()
         events = base / "events"
         write(bin_dir / "launchctl", "#!/bin/sh\nprintf 'launchctl:%s\\n' \"$*\" >> \"$HAUT_EVENTS\"\nif [ \"${HAUT_FAIL_UNLOAD:-0}\" = 1 ]; then exit 7; fi\nexit 0\n")
-        write(bin_dir / "security", "#!/bin/sh\nprintf 'security:%s\\n' \"$*\" >> \"$HAUT_EVENTS\"\n")
+        write(bin_dir / "security", "#!/bin/sh\nprintf 'security:%s\\n' \"$*\" >> \"$HAUT_EVENTS\"\nif [ \"$1\" = find-generic-password ]; then exit 0; fi\nif [ \"${HAUT_FAIL_SECURITY:-0}\" = 1 ]; then exit 8; fi\n")
         write(bin_dir / "defaults", "#!/bin/sh\nprintf 'defaults:%s\\n' \"$*\" >> \"$HAUT_EVENTS\"\n")
         env = os.environ.copy()
         env.update({
@@ -39,10 +39,11 @@ def run_case(fail_unload: bool):
             "HAUT_CONFIG_DOMAIN": "test-domain",
             "HAUT_EVENTS": str(events),
             "HAUT_FAIL_UNLOAD": "1" if fail_unload else "0",
+            "HAUT_FAIL_SECURITY": "1" if fail_security else "0",
         })
         result = subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True)
-        assert (result.returncode != 0) == fail_unload, result.stdout + result.stderr
-        if fail_unload:
+        assert (result.returncode != 0) == (fail_unload or fail_security), result.stdout + result.stderr
+        if fail_unload or fail_security:
             assert launch.exists() and app.exists(), "停止失败时不得删除用户文件"
         else:
             assert not launch.exists() and not app.exists(), "成功卸载后残留文件"
@@ -54,4 +55,5 @@ def run_case(fail_unload: bool):
 
 run_case(False)
 run_case(True)
+run_case(False, True)
 print("macOS uninstall script tests passed")

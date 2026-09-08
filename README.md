@@ -62,10 +62,10 @@
 
 **固定版本安装（推荐生产环境）：**
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.19/OpenWrt/install-online.sh | sh -s -- v1.3.19
 ```
 
-> 当前已发布的 v1.3.18 缺少 `OpenWrt-SHA256SUMS`，安装脚本会在校验阶段安全停止；待下一版正式 Release 上传完整清单后再使用固定版本命令。
+> v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，固定版本安装会在切换前校验完整清单。
 
 **安装最新 main（适合测试）：**
 ```bash
@@ -278,6 +278,11 @@ cd OpenWrt
 ```
 
 ## 版本历史
+
+### v1.3.19 (2026-09)
+
+- **Windows**: 修复开机自启未配置账号时隐藏配置窗口；保存账号后立即开始状态检测。
+- **全平台**: 发布资产提供 SHA-256 校验清单，统一版本源为 1.3.19。
 
 ### v1.3.18 (2026-04)
 - **macOS**: 修复菜单栏“账号设置”窗口无法稳定打开的问题

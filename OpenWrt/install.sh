@@ -14,7 +14,7 @@ CONFIG_FILE="$ROOT_PREFIX/etc/config/haut-network-guard"
 SOURCE_DIR="$SOURCE_ROOT/files/usr/lib/haut-network-guard"
 SOURCE_INIT="$SOURCE_ROOT/files/etc/init.d/haut-network-guard"
 SOURCE_CONFIG="$SOURCE_ROOT/files/etc/config/haut-network-guard"
-# 当前发布基线为 v1.3.18；安装提示从主程序版本字段读取。
+# 当前发布基线为 v1.3.19；安装提示从主程序版本字段读取。
 VERSION=""
 STAGE_DIR=""
 INIT_STAGE=""

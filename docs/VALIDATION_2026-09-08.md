@@ -100,6 +100,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34240147670](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34240147670) 对应四端错误码边界提交：Windows、macOS、OpenWrt 三项 job 全部通过；短码和超长码回归已纳入协议契约。
 - [运行 34237976134](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34237976134) 对应提交 `5bdb6ffad52d86debfc1c6715fc36fef13c229bc`：Windows、macOS、OpenWrt 三项 job 全部通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34235952524](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34235952524) 对应提交 `53a99b30bb446481a6722d2bbf3ddc5a03354e3f`：Windows、macOS、OpenWrt 三项 job 全部通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34234650584](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34234650584) 对应提交 `606419db821ec788cae788fe9a908fb905a6934a`：Windows、macOS、OpenWrt 三项 job 全部通过；Release job 因草稿 PR 按预期跳过。

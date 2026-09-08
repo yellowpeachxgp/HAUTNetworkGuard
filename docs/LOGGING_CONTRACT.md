@@ -81,7 +81,7 @@
 
 - `success`
 - `already_online`
-- `error_E####`
+- `error_E####`（错误码必须为恰好四位数字）
 - `empty`
 - `unknown`
 - `network_error`

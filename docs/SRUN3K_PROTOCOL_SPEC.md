@@ -100,7 +100,7 @@ CSV 的 `seconds` 和 `bytes` 只接受非负十进制整数；小数、负数�
 - 包含 `not_online`:
   - `not_online`
 - 包含任意 `E####`:
-  - `error_E####`
+  - `error_E####`（错误码必须为恰好四位数字；其他位数归为 `unknown`）
 - 空响应:
   - `empty`
 - 其他:

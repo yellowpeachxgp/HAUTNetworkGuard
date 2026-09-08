@@ -375,6 +375,10 @@ bool MainWindow::saveSettings() {
   Config &config = m_config;
 
   const QString trimmedUsername = m_usernameEdit->text().trimmed();
+  if (trimmedUsername.isEmpty() || m_passwordEdit->text().isEmpty()) {
+    Logger::warn("设置保存已拒绝：学号或密码为空");
+    return false;
+  }
   m_usernameEdit->setText(trimmedUsername);
   config.setUsername(trimmedUsername);
   config.setPassword(m_passwordEdit->text());
@@ -465,8 +469,11 @@ void MainWindow::onLogoutClicked() {
 
 void MainWindow::onSaveClicked() {
   if (!saveSettings()) {
-    setStatusDetail(m_config.lastError(), true);
-    if (m_backgroundTasks) QMessageBox::warning(this, "保存失败", m_config.lastError());
+    const QString error = m_config.lastError().isEmpty()
+                              ? "请输入学号和密码。"
+                              : m_config.lastError();
+    setStatusDetail(error, true);
+    if (m_backgroundTasks) QMessageBox::warning(this, "保存失败", error);
     return;
   }
   setStatusDetail("设置已保存，新的检测间隔和运行策略已立即生效。");

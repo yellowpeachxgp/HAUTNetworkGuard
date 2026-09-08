@@ -169,6 +169,21 @@ int main(int argc, char **argv) {
     expect(QMetaObject::invokeMethod(&faultWindow, "onLoginClicked", Qt::DirectConnection), "无法重试登录");
     expect(faultApi.loginTokens.size() == 1 && faultConfig.lastError().isEmpty(), "故障恢复后可重试并清除错误");
     emit faultApi.loginFailed(faultApi.loginTokens.back(), "模拟结束");
+
+    QSettings firstRunSettings(directory.filePath("first-run.ini"), QSettings::IniFormat);
+    Config firstRunConfig(firstRunSettings);
+    ReplayApi firstRunApi;
+    MainWindow firstRunWindow(firstRunConfig, &firstRunApi, [&] { return clock; }, false);
+    expect(QMetaObject::invokeMethod(&firstRunWindow, "onSaveClicked", Qt::DirectConnection),
+           "无法调用首次配置保存操作");
+    expect(!firstRunConfig.hasConfigured() && firstRunConfig.username().isEmpty() &&
+               firstRunConfig.password().isEmpty(),
+           "空学号或密码不得提交首次配置");
+    bool firstRunError = false;
+    for (auto label : firstRunWindow.findChildren<QLabel *>()) {
+      firstRunError = firstRunError || label->text().contains("请输入学号和密码");
+    }
+    expect(firstRunError, "空首次配置必须显示可理解的提示");
   } catch (const std::exception &error) {
     qCritical().noquote() << "Qt 控制器回放失败：" << error.what();
     return 1;

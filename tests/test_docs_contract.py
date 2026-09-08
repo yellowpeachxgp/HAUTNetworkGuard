@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def require_contains(path: Path, needle: str):
@@ -29,7 +30,7 @@ def main():
 
     require_contains(readme, "HAUTNetworkGuard-Windows.zip")
     require_contains(readme, "HAUTNetworkGuard.dmg")
-    require_contains(readme, "sh -s -- v1.3.18")
+    require_contains(readme, f"sh -s -- v{VERSION}")
     require_contains(readme, "protocol_utils.h/cpp")
     require_contains(readme, "SrunProtocol.swift")
     require_contains(readme, "tests/")
@@ -39,20 +40,20 @@ def main():
     require_not_contains(readme, "HAUTNetworkGuard-macOS.dmg")
 
     require_contains(openwrt_readme, "HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh")
-    require_contains(openwrt_readme, "HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18")
+    require_contains(openwrt_readme, f"HAUTNetworkGuard/v{VERSION}/OpenWrt/install-online.sh | sh -s -- v{VERSION}")
     require_contains(openwrt_readme, "upgrade-online.sh | sh")
     require_contains(openwrt_readme, "log.lua")
     require_contains(openwrt_readme, "../docs/LOGGING_CONTRACT.md")
     require_contains(openwrt_readme, "权限为 `600`")
     require_contains(openwrt_readme, "OpenWrt-SHA256SUMS")
 
-    require_contains(windows_ai, "版本号**: 1.3.18")
+    require_contains(windows_ai, f"版本号**: {VERSION}")
     require_contains(windows_ai, "172.16.154.130")
     require_contains(windows_ai, "protocol_utils.cpp")
     require_not_contains(windows_ai, "172.20.255.2")
     require_not_contains(windows_ai, "版本号**: 1.3.0")
 
-    require_contains(macos_ai, "版本号**: 1.3.18")
+    require_contains(macos_ai, f"版本号**: {VERSION}")
     require_contains(macos_ai, "run_ui_smoke_tests.sh")
     require_contains(macos_ai, "Logger.swift")
     require_contains(macos_ai, "SrunProtocol.swift")

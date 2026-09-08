@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
                logoutButton->accessibleName() == "注销",
            "首次配置和登录控件必须提供无障碍名称");
     const QString diagnostics = window.diagnosticText();
-    expect(diagnostics.contains("1.3.18") && !diagnostics.contains("test-student") &&
+    expect(diagnostics.contains(HAUT_VERSION_STRING) && !diagnostics.contains("test-student") &&
            !diagnostics.contains("test-only"), "诊断信息不得包含账号或密码");
     QCheckBox *remember = nullptr;
     for (auto checkbox : window.findChildren<QCheckBox *>()) {

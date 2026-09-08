@@ -39,6 +39,15 @@ struct UISmokeTests {
         guard !SingleInstanceGuard.anotherInstanceExists(testMode: true) else {
             fail("UI smoke 测试模式不应触发生产实例检查")
         }
+        let lockPath = NSTemporaryDirectory() + "haut-instance-test-" + UUID().uuidString
+        guard let firstLock = SingleInstanceGuard.tryAcquireLock(at: lockPath) else {
+            fail("测试实例锁无法取得")
+        }
+        guard SingleInstanceGuard.tryAcquireLock(at: lockPath) == nil else {
+            Darwin.close(firstLock)
+            fail("第二个实例错误取得文件锁")
+        }
+        Darwin.close(firstLock)
         runControllerSessionTests()
 
         let controller = StatusBarController()

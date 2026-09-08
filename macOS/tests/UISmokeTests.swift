@@ -23,6 +23,9 @@ struct UISmokeTests {
         Logger.isEnabled = false
         let app = NSApplication.shared
         _ = app.setActivationPolicy(.accessory)
+        guard !SingleInstanceGuard.anotherInstanceExists(testMode: true) else {
+            fail("UI smoke 测试模式不应触发生产实例检查")
+        }
         runControllerSessionTests()
 
         let controller = StatusBarController()

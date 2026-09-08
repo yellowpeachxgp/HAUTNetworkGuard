@@ -20,6 +20,7 @@ set(SOURCES
     src/protocol_utils.cpp
     src/trayicon.cpp
     src/logger.cpp
+    src/instance_guard.cpp
 )
 
 # 头文件
@@ -32,6 +33,7 @@ set(HEADERS
     src/session_policy.h
     src/trayicon.h
     src/logger.h
+    src/instance_guard.h
 )
 
 enable_testing()
@@ -96,12 +98,19 @@ set_target_properties(haut_credential_tests PROPERTIES AUTOMOC OFF AUTORCC OFF A
 add_test(NAME credential_failure_tests COMMAND haut_credential_tests)
 set_tests_properties(credential_failure_tests PROPERTIES TIMEOUT 30)
 
+add_executable(haut_instance_guard_tests
+    tests/instance_guard_tests.cpp src/instance_guard.cpp)
+target_link_libraries(haut_instance_guard_tests PRIVATE Qt6::Core)
+add_test(NAME instance_guard_tests COMMAND haut_instance_guard_tests)
+set_tests_properties(instance_guard_tests PROPERTIES TIMEOUT 10)
+
 # Windows 特定设置
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE Crypt32)
     target_link_libraries(haut_smoke_tests PRIVATE Crypt32)
     target_link_libraries(haut_controller_tests PRIVATE Crypt32)
     target_link_libraries(haut_credential_tests PRIVATE Crypt32)
+    target_link_libraries(haut_instance_guard_tests PRIVATE Crypt32)
 
     # 静态链接运行时
     set_property(TARGET ${PROJECT_NAME} PROPERTY
@@ -111,6 +120,8 @@ if(WIN32)
     set_property(TARGET haut_controller_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET haut_credential_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET haut_instance_guard_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     
     # 添加版本信息

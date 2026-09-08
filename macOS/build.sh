@@ -43,6 +43,7 @@ echo "[2/5] 编译 Swift 源文件..."
     "$SOURCES_DIR/Encryption.swift" \
     "$SOURCES_DIR/SrunProtocol.swift" \
     "$SOURCES_DIR/SessionPolicy.swift" \
+    "$SOURCES_DIR/SingleInstanceGuard.swift" \
     "$SOURCES_DIR/DirectHTTPClient.swift" \
     "$SOURCES_DIR/SrunAPI.swift" \
     "$SOURCES_DIR/UpdateChecker.swift" \

@@ -1,6 +1,7 @@
 #include "config.h"
 #include "logger.h"
 #include "mainwindow.h"
+#include "instance_guard.h"
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -19,6 +20,12 @@ int main(int argc, char *argv[]) {
 
   // 设置关闭最后窗口时不退出应用（托盘常驻）
   app.setQuitOnLastWindowClosed(false);
+
+  InstanceGuard instanceGuard;
+  if (!instanceGuard.acquire()) {
+    qWarning("检测到 HAUTNetworkGuard 已在运行，当前启动请求退出");
+    return 0;
+  }
 
   // 加载配置
   Config::instance();

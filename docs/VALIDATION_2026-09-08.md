@@ -35,8 +35,8 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 - Swift / C++ 使用同一份 `tests/fixtures/session_scenarios.txt`：9 个场景、每端 142 条事件断言通过。
 - macOS 正式 StatusBarController：26 条回放断言通过，覆盖检测/认证串行、手动失败后的退避、旧回调、注销后暂停和显式恢复；同一入口继续执行窗口生命周期 smoke，通过。
 - 已通过 Homebrew 安装 Qt 6.11.1（qtbase 及依赖）。使用 AppleClang 17 + MacOSX26.2.sdk，Windows 目录的完整应用编译、Qt 元对象信号连接、配置测试和主窗口回放通过。
-- CTest 共 4 项全部通过：`session_policy_tests`、`windows_smoke_tests`、`controller_session_tests`、`credential_failure_tests`；正式 MainWindow 的 Qt 信号、按钮和保存失败回放为 62 条断言。
-- Windows 配置测试及主窗口回放使用随机临时 INI，禁用系统自启动集成、正式日志和桌面通知。覆盖密码回读、取消记住密码、冷启动残留清理，以及点击登录时采用当前复选框。
+- CTest 共 5 项全部通过：`session_policy_tests`、`windows_smoke_tests`、`controller_session_tests`、`credential_failure_tests`、`instance_guard_tests`；正式 MainWindow 的 Qt 信号、按钮和保存失败回放为 62 条断言，另有单实例锁竞争断言。
+- Windows 配置测试及主窗口回放使用随机临时 INI，禁用系统自启动集成、正式日志和桌面通知。覆盖密码回读、取消记住密码、冷启动残留清理，以及点击登录时采用当前复选框；单实例锁测试确认第二个实例无法取得同一用户锁。
 - `Q_OS_WIN` 分支在这台 macOS 主机不执行，因此上述结果不能证明 DPAPI 或注册表自启动通过。
 - 凭据故障回放另有 20 条断言：编码失败、解码不符、真实 QSettings 自定义写入后端拒绝写盘、旧文件逐字节保留、运行配置恢复、同一实例故障恢复后重试、不可读旧凭据的保留与显式清除。测试存储后端使用临时目录。
 - Qt 窗口保存失败会显示错误、保留输入、阻止提交登录；系统自启动变更延迟到配置保存成功之后。真实 Windows 注册表多键写入的失败恢复尚待原生验证。
@@ -60,7 +60,7 @@ codesign --verify --deep --strict macOS/build/session-validation/HAUTNetworkGuar
 
 Qt 原始结果保存在忽略目录 `macOS/tests/build/qt-validation/Testing/Temporary/LastTest.log`；Swift 最新应用构建日志为 `macOS/tests/build/session-build.log`。新的 App 位于 `macOS/build/session-validation/`，没有启动正式应用，没有重新制作该工作树的 DMG。
 
-当前集成验证 App 可执行文件 SHA-256：`8f637be683a892908ddc30ee88639047877ea92c0a59b2b435b1082655fc682c`；DMG SHA-256：`9f6e7e0e1fdc4c72f3a3c70d672bab46a755ba1fcb44ad76e44e1f3e90a9d388`。产物位于忽略目录 `macOS/build/session-validation/`，包含超大数值解析修复；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
+当前集成验证 App 可执行文件 SHA-256：`66b6721b565425e2daed14b97e28a3bbb0535eba9ebffb433487f404614794f6`；DMG SHA-256：`bbf8f2c51778504558521ee46358f33afe8cadbb8d6c683f1971becb8c29fccf`。产物位于忽略目录 `macOS/build/session-validation/`，包含超大数值解析修复；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
 
 ## Lua 与 OpenWrt
 

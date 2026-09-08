@@ -464,7 +464,8 @@ void MainWindow::onLoginFailed(quint64 token, const QString &error) {
   const bool wasManual = m_isManualLogin;
   m_isManualLogin = false;
   m_loginBtn->setText("登录");
-  setStatusDetail(QString("登录失败：%1").arg(error), true);
+  const QString retry = automaticRetryHint();
+  setStatusDetail(QString("登录失败：%1%2").arg(error, retry.isEmpty() ? "" : "；" + retry), true);
   refreshActionState();
 
   Logger::warn(QString("登录失败: %1").arg(error));
@@ -665,11 +666,21 @@ void MainWindow::updateStatusDisplay(bool online, const QString &ip,
     if (m_session.manualOfflineHold()) {
       setStatusDetail("自动重连已暂停；点击登录可解除暂停。", true);
     } else if (m_config.autoLogin()) {
-      setStatusDetail("当前离线，程序会按照检测节奏自动尝试重连。");
+      const QString retry = automaticRetryHint();
+      setStatusDetail(retry.isEmpty()
+                          ? "当前离线，程序会按照检测节奏自动尝试重连。"
+                          : QString("当前离线，%1。自动重连仍在运行。" ).arg(retry));
     } else {
       setStatusDetail("当前离线，自动登录已关闭，请按需手动登录。");
     }
   }
+}
+
+QString MainWindow::automaticRetryHint() const {
+  if (!m_config.autoLogin() || m_session.manualOfflineHold()) return {};
+  const double remaining = m_session.nextAutomaticAttempt() - monotonicNow();
+  if (remaining <= 0) return {};
+  return QString("自动重试约 %1 秒后").arg(qCeil(remaining));
 }
 
 void MainWindow::checkNetworkStatus() {

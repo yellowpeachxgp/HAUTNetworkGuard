@@ -62,6 +62,7 @@ private:
                            qint64 bytes = 0, qint64 seconds = 0);
   QString formatBytes(qint64 bytes);
   QString formatTime(qint64 seconds);
+  QString automaticRetryHint() const;
 
   // UI 组件
   QWidget *m_centralWidget;

@@ -72,6 +72,11 @@ int main(int argc, char **argv) {
     expect(api.loginTokens.size() == 1, "用户可主动登录");
     clock = 10;
     emit api.loginFailed(api.loginTokens.back(), "模拟密码错误");
+    bool retryHintVisible = false;
+    for (auto label : window.findChildren<QLabel *>()) {
+      retryHintVisible = retryHintVisible || label->text().contains("自动重试");
+    }
+    expect(retryHintVisible, "登录失败时应显示下一次自动重试提示");
     status(false, "offline");
     expect(api.loginTokens.size() == 1, "手动失败后不得立即自动重试");
     clock = 69.9;

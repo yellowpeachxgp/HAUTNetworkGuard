@@ -15,6 +15,7 @@ class StatusBarController: NSObject {
     private let now: () -> TimeInterval
     private var checkTimer: Timer?
     private var currentStatus: NetworkStatus = .checking
+    private var lastStatusAt: Date?
     private var checkInterval: TimeInterval { TimeInterval(config.checkInterval) }
     private var session = SessionPolicy()
     private var monotonicNow: TimeInterval { now() }
@@ -476,6 +477,7 @@ extension StatusBarController {
     private func handleStatusChange(_ newStatus: NetworkStatus, reason: String) {
         let previousStatus = currentStatus
         currentStatus = newStatus
+        lastStatusAt = Date()
         Logger.info("状态迁移 [\(reason)]: \(previousStatus.kindLabel) -> \(newStatus.kindLabel)")
 
         updateUI()
@@ -524,10 +526,25 @@ extension StatusBarController {
             accessibilityDescription: statusText
         )
         statusMenuItem.title = statusText
-        detailMenuItem.title = session.manualOfflineHold
-            ? "自动重连已暂停；点击「立即登录」解除暂停" : currentStatus.description
+        if session.manualOfflineHold {
+            detailMenuItem.title = "自动重连已暂停；点击「立即登录」解除暂停"
+        } else {
+            let hint = automaticRetryHint()
+            let checkedAt = lastStatusAt.map {
+                "最近检测 \(DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .medium))"
+            }
+            detailMenuItem.title = [currentStatus.description, hint, checkedAt]
+                .compactMap { $0 }.joined(separator: "；")
+        }
         loginMenuItem.isEnabled = (!currentStatus.isOnline || session.manualOfflineHold) && !session.isBusy
         logoutMenuItem.isEnabled = currentStatus.isOnline && !session.isBusy
+    }
+
+    private func automaticRetryHint() -> String? {
+        guard config.autoLogin else { return nil }
+        let remaining = session.nextAutomaticAttempt - monotonicNow
+        guard remaining > 0 else { return nil }
+        return "自动重试约 (Int(ceil(remaining))) 秒后"
     }
 
     private func triggerAutoLoginIfNeeded(trigger: String) {

@@ -108,6 +108,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34277096340](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34277096340) 对应提交 `19749dc`：验收矩阵结构契约校验 A1-A13、三端状态值、证据列和七天记录字段；三端构建与发布资产 dry-run 全部通过。
 - [运行 34276137626](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34276137626) 对应提交 `d82c306`：macOS 卸载在 Keychain 条目无法确认或删除失败时安全中止并保留应用和 LaunchAgent；新增故障注入通过，三端 Build and Release 与资产 dry-run 全部通过。
 - [运行 34275341236](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34275341236) 对应提交 `755a247`：新增 Release 清单缺失时安装/升级安全失败回归，确认旧程序、配置和运行服务保持不变；两种 Lua 各 25 项、共 50 项通过，三端构建和发布资产 dry-run 全部通过。
 - [运行 34274060990](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34274060990) 对应提交 `4405ffd`：首次 macOS DMG 打包遇到 `hdiutil Resource busy`，重跑失败 job 后同一运行已成功；macOS 关闭“记住密码”时，凭据删除失败不再覆盖旧账号和其他设置，故障注入、原生 Keychain、三端 Build and Release 与资产 dry-run 全部通过。失败输出和重跑结果均保留在该运行记录中。

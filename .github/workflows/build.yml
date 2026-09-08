@@ -174,11 +174,11 @@ jobs:
           retention-days: 7
 
   release-dry-run:
-    # PR、main 和手动运行只验证发布资产事务，不创建或修改 GitHub Release。
+    # PR、main、tag 和手动运行都验证发布资产事务；该 job 本身不创建或修改 GitHub Release。
     needs: [validate-openwrt, build-windows-qt, build-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -223,7 +223,7 @@ jobs:
           echo "发布资产 dry-run 通过: v$VERSION_FILE"
 
   release:
-    needs: [validate-openwrt, build-windows-qt, build-macos]
+    needs: [validate-openwrt, build-windows-qt, build-macos, release-dry-run]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/v')

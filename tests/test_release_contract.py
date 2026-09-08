@@ -17,7 +17,7 @@ def main():
     openwrt_readme = (ROOT / "OpenWrt/README.md").read_text(encoding="utf-8")
 
     require(workflow, "tags:\n      - 'v*'", "Release tag trigger")
-    require(workflow, "needs: [validate-openwrt, build-windows-qt, build-macos]", "Release dependencies")
+    require(workflow, "needs: [validate-openwrt, build-windows-qt, build-macos, release-dry-run]", "Release dependencies")
     require(workflow, "if: startsWith(github.ref, 'refs/tags/v')", "Release guard")
     require(workflow, 'VERSION_FILE="$(cat VERSION)"', "VERSION source")
     require(workflow, 'test "$VERSION_FILE" = "$TAG_VERSION"', "tag/version equality")
@@ -25,6 +25,7 @@ def main():
     require(workflow, "find OpenWrt -type f", "OpenWrt checksum manifest")
     require(workflow, "name: Validate Release Assets", "Release asset validation step")
     require(workflow, "release-dry-run:", "PR 发布资产 dry-run job")
+    require(workflow, "startsWith(github.ref, 'refs/tags/v')", "tag 发布资产 dry-run 条件")
     require(workflow, "name: Generate And Validate Release Bundle", "发布资产 dry-run 校验步骤")
     require(workflow, "unzip -t HAUTNetworkGuard-Windows.zip", "发布资产 dry-run ZIP 校验")
     require(workflow, "sha256sum -c SHA256SUMS", "发布资产 dry-run 哈希校验")

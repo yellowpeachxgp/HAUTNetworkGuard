@@ -108,6 +108,8 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34264582228](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34264582228) 对应真实设备验收矩阵入口提交 `3f3d8f0`：Windows、macOS、OpenWrt 三项 job 全部通过；文档契约确认矩阵、A1–A13 场景和证据规则存在。
+- [运行 34263735831](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34263735831) 对应 OpenWrt 回归计数提交 `96b9f57`：Windows、macOS、OpenWrt 三项 job 全部通过；每种解释器 22 项、共 44 项安装/升级/卸载测试记录一致。
 - [运行 34256596956](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34256596956) 对应协议身份边界提交 `4fd5634`：Windows、macOS、OpenWrt 三项 job 全部通过；非法 JSON IP 与空身份回归、Qt/macOS/Lua 协议测试、安装资产回读门禁通过。
 - [运行 34254790864](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34254790864) 对应最新会话策略 7 天加速 soak 提交 `3c1242e2`：Windows、macOS、OpenWrt 三项 job 全部通过；会话策略、安装/升级/卸载矩阵及安装资产回读门禁通过。
 - [运行 34253578251](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34253578251) 对应 Windows 首次空配置拒绝提交（Artifact 首次提交遇到中间层 403 后重跑成功）：Windows、macOS、OpenWrt 三项 job 全部通过；空配置回放、有线优先/Wi‑Fi 回退/其他接口兜底、卸载脚本隔离测试、双 Lua 安装/升级/卸载矩阵和安装资产回读门禁通过。

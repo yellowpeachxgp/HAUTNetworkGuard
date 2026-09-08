@@ -217,6 +217,7 @@ HAUTNetworkGuard/
 │   ├── test_docs_contract.py
 │   ├── test_version_contract.py
 │   ├── test_release_contract.py
+│   ├── test_logging_contract.py
 │   ├── test_session_policy.py
 │   ├── test_macos_uninstall.py
 │   ├── test_openwrt_installation.py

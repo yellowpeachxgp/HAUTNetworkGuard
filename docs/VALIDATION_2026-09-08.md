@@ -101,7 +101,9 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 
 - [第二轮运行 34224732221](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224732221) 对应 `f4ed6dc3070e5ccdfba5fb42dd6fe72be74a0fee`：Windows、macOS、OpenWrt 全部通过，Release 按预期跳过。Windows Server 2022 上完成 Qt 6.6 原生编译、4 项 CTest、运行库部署和 ZIP 打包；其中 smoke test 真实执行 DPAPI 加密、解码和独立配置回读。该结果仍不能替代真实用户桌面、自启动、跨账号升级和校园网验收。
 
-- [第三轮运行 34225154211](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34225154211) 对应超大数值修复：Windows 和 OpenWrt 全部通过；macOS 编译、测试和签名通过，但固定 `tmp.dmg` 路径在创建阶段触发 `Resource busy`。已改为唯一临时目录并在本机验证；第四轮 CI 将确认打包修复。
+- [第三轮运行 34225154211](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34225154211) 对应超大数值修复：Windows 和 OpenWrt 全部通过；macOS 编译、测试和签名通过，但固定 `tmp.dmg` 路径在创建阶段触发 `Resource busy`。已改为唯一临时目录并在本机验证。
+
+- [第四轮运行 34226445948](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34226445948) 对应提交 `413d4efad1f6789d5e7b0f37a26f91373d306f1a`：macOS、Windows、OpenWrt 三项 job 全部通过。Windows Server 2022 / Qt 6.6 原生构建、4 项 CTest、DPAPI 回读、运行库部署和 ZIP 上传通过；macOS 编译、协议溢出回归、Keychain、UI smoke、DMG 创建、签名和上传通过；Release job 因草稿 PR 按预期跳过。
 - Windows 失败原因：实际 `windows-latest` 镜像为 `windows-2025-vs2026`，现有生成器指定 VS 2022，找不到对应实例。已将作业固定到 `windows-2022`，其 [官方软件清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md#visual-studio-enterprise-2022) 包含 VS 2022；修复后的 CI 结果继续核实。
 - 原社区 PR #2/#3 未远程合并或关闭；本集成尚未合并到 main，没有执行 Release。
 

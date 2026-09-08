@@ -37,6 +37,7 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 - 已通过 Homebrew 安装 Qt 6.11.1（qtbase 及依赖）。使用 AppleClang 17 + MacOSX26.2.sdk，Windows 目录的完整应用编译、Qt 元对象信号连接、配置测试和主窗口回放通过。
 - CTest 共 5 项全部通过：`session_policy_tests`、`windows_smoke_tests`、`controller_session_tests`、`credential_failure_tests`、`instance_guard_tests`；正式 MainWindow 的 Qt 信号、按钮和保存失败回放为 62 条断言，另有单实例锁竞争断言。
 - Windows 版本治理回归：CMake 从根目录 `VERSION` 读取版本，主程序、窗口和 User-Agent 使用同一编译宏；Qt 5 项 CTest 全部通过。
+- macOS 版本治理回归：构建脚本从根目录 `VERSION` 生成 Swift 版本源并替换 Info.plist；逻辑/UI smoke、严格签名和包内版本回读通过。
 - Qt 主窗口回放同时核对学号、密码、登录和注销控件的无障碍名称；设置了从凭据到诊断复制的明确 Tab 顺序。
 - Windows 配置测试及主窗口回放使用随机临时 INI，禁用系统自启动集成、正式日志和桌面通知。覆盖密码回读、取消记住密码、冷启动残留清理，以及点击登录时采用当前复选框；单实例锁测试确认第二个实例无法取得同一用户锁。
 - `Q_OS_WIN` 分支在这台 macOS 主机不执行，但运行 34232164603 已在 Windows Server 2022 执行实际 DPAPI 保存/解码与独立配置回读；本机结果仍不能证明 Windows 注册表自启动、真实桌面交互或跨账号迁移。

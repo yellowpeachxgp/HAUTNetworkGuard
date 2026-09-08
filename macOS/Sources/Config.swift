@@ -86,7 +86,7 @@ class AppConfig {
     }()
 
     static let appName = "HAUT Network Guard"
-    static let version = "1.3.18"
+    static let version = BuildVersion.value
     static let author = "YellowPeach"
     static let website = "https://github.com/yellowpeachxgp/HAUTNetworkGuard"
     static let qqGroup = "789860526"

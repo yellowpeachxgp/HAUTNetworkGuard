@@ -15,11 +15,22 @@ SOURCES_DIR="$PROJECT_DIR/Sources"
 BUILD_DIR="${HAUT_BUILD_DIR:-$PROJECT_DIR/build}"
 APP_NAME="HAUTNetworkGuard"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
+VERSION_FILE="$PROJECT_DIR/../VERSION"
+VERSION="$(cat "$VERSION_FILE")"
+case "$VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) echo "错误: VERSION 文件不是有效语义版本号: $VERSION"; exit 1 ;;
+esac
 
 # 构建与模块缓存限定在本次输出目录，不清理用户的全局 Xcode 缓存。
 echo "[1/5] 准备构建目录..."
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
+cat > "$BUILD_DIR/GeneratedVersion.swift" <<EOF_VERSION
+enum BuildVersion {
+    static let value = "$VERSION"
+}
+EOF_VERSION
 
 # 获取 SDK 路径
 SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
@@ -37,6 +48,7 @@ echo "[2/5] 编译 Swift 源文件..."
     -framework Network \
     -framework Security \
     -framework LocalAuthentication \
+    "$BUILD_DIR/GeneratedVersion.swift" \
     "$SOURCES_DIR/AppRuntime.swift" \
     "$SOURCES_DIR/Logger.swift" \
     "$SOURCES_DIR/Config.swift" \
@@ -64,7 +76,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/"
 
 # 复制 Info.plist
-cp "$PROJECT_DIR/Info.plist" "$APP_BUNDLE/Contents/"
+sed "s/@VERSION@/$VERSION/g" "$PROJECT_DIR/Info.plist" > "$APP_BUNDLE/Contents/Info.plist"
 
 # 创建 PkgInfo
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"

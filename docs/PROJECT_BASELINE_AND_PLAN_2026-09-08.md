@@ -30,7 +30,7 @@ macOS 主机具备原生 SDK，匹配 Xcode 工具链后，隔离凭据/Keychain
 2. Windows 目录已在 macOS / Qt 6.11.1 与 Windows Server 2022 / Qt 6.6 CI 原生编译并执行 CTest，包含实际 DPAPI 回读。真实 Windows 桌面、原生自启动和跨账号迁移，以及 macOS 分发升级和卸载仍需端到端检查。
 3. 响应正文已统一改为长度摘要，并通过三端多格式隐私测试；其他日志字段及卸载输出的全路径审计尚未完成。
 4. OpenWrt 离线与在线安装事务均已通过故障注入，但仍需并发/磁盘限制/真机验证；固定版本下载端已消费 Release 哈希清单，正式 Release 仍未发布。
-5. Windows 已改为从 `VERSION` 生成编译版本宏，OpenWrt 运行文件已统一消费 `version.lua`；macOS 和文档仍与多个源码字面量共存，需要完整生成或直接消费机制。
+5. Windows 已改为从 `VERSION` 生成编译版本宏，OpenWrt 运行文件已统一消费 `version.lua`，macOS 构建脚本已生成 Swift 版本源并替换 Info.plist；README、AIREADME 等文档仍与多个版本字面量共存，需要完整生成或直接消费机制。
 6. 完整学生旅程、跨端自启动、单实例、无障碍及 7 天稳定性尚未完成。
 
 保留 2026-04-11 文档作为历史快照。当前进度按台账持续推进，不能通过缩小路线图范围宣布产品完成。

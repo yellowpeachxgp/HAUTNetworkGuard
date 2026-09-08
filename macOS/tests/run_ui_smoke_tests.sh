@@ -5,6 +5,8 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/haut-ui-smoke.XXXXXX")"
 trap 'rm -r "$BUILD_DIR"' EXIT
+VERSION="$(cat "$PROJECT_DIR/../VERSION")"
+printf 'enum BuildVersion { static let value = "%s" }\n' "$VERSION" > "$BUILD_DIR/GeneratedVersion.swift"
 
 SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
 SWIFTC=$(xcrun --sdk macosx --find swiftc)
@@ -18,6 +20,7 @@ SWIFTC=$(xcrun --sdk macosx --find swiftc)
     -framework Network \
     -framework Security \
     -framework LocalAuthentication \
+    "$BUILD_DIR/GeneratedVersion.swift" \
     "$PROJECT_DIR/Sources/AppRuntime.swift" \
     "$PROJECT_DIR/Sources/Logger.swift" \
     "$PROJECT_DIR/Sources/Config.swift" \

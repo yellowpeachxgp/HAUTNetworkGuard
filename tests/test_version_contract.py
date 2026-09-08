@@ -26,8 +26,10 @@ def main():
                  ROOT / "Windows" / "src" / "mainwindow.cpp"):
         content = path.read_text(encoding="utf-8")
         assert "HAUT_VERSION_STRING" in content, f"{path} must consume generated version"
-    require_version(ROOT / "macOS" / "Info.plist", r"<key>CFBundleShortVersionString</key>\s*<string>([0-9.]+)</string>")
-    require_version(ROOT / "macOS" / "Sources" / "Config.swift", r'static let version = "([0-9.]+)"')
+    info_plist = (ROOT / "macOS" / "Info.plist").read_text(encoding="utf-8")
+    assert "<string>@VERSION@</string>" in info_plist, "macOS Info.plist must consume generated VERSION"
+    config_swift = (ROOT / "macOS" / "Sources" / "Config.swift").read_text(encoding="utf-8")
+    assert "static let version = BuildVersion.value" in config_swift, "macOS Swift must consume generated VERSION"
     require_version(ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "version.lua", r'return "([0-9.]+)"')
     for path in (ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "main.lua",
                  ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "api.lua"):

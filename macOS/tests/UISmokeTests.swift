@@ -33,6 +33,9 @@ struct UISmokeTests {
         guard DirectHTTPClient.preferredInterfaceName(from: [
             (name: "utun0", type: .other)
         ]) == "utun0" else { fail("没有有线或 Wi-Fi 时应使用首个可用接口") }
+        guard DirectHTTPClient.preferredInterfaceName(from: []) == nil else {
+            fail("没有可用接口时应返回 nil")
+        }
         guard !SingleInstanceGuard.anotherInstanceExists(testMode: true) else {
             fail("UI smoke 测试模式不应触发生产实例检查")
         }

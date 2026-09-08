@@ -40,7 +40,7 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 - Windows 版本治理回归：CMake 从根目录 `VERSION` 读取版本，主程序、窗口和 User-Agent 使用同一编译宏；Qt 5 项 CTest 全部通过。
 - macOS 版本治理回归：构建脚本从根目录 `VERSION` 生成 Swift 版本源并替换 Info.plist；逻辑/UI smoke、严格签名和包内版本回读通过。
 - macOS 卸载脚本回归：临时 LaunchAgent、应用目录、Keychain/defaults 命令均使用隔离替身；停止失败时文件保持不变，成功时清理目标并复核残留。
-- macOS 网络接口选择回归：UI smoke 覆盖有线优先、Wi‑Fi 回退和其他接口兜底；未连接真实校园网。
+- macOS 网络接口选择回归：UI smoke 覆盖有线优先、Wi‑Fi 回退、其他接口兜底和空接口返回 nil；未连接真实校园网。
 - Qt 主窗口回放同时核对学号、密码、登录和注销控件的无障碍名称；设置了从凭据到诊断复制的明确 Tab 顺序。
 - macOS 设置窗口为学号、密码、检测间隔、记住密码、开机自启动、自动登录和保存控件设置无障碍名称，并显式串联键盘焦点和首次焦点；完整编译与 UI smoke 通过，仍需人工辅助功能检查。
 - Windows 配置测试及主窗口回放使用随机临时 INI，禁用系统自启动集成、正式日志和桌面通知。覆盖密码回读、取消记住密码、冷启动残留清理，以及点击登录时采用当前复选框；单实例锁测试确认第二个实例无法取得同一用户锁。

@@ -52,6 +52,16 @@ struct SmokeTests {
         expect(parsedInvalidNumber.online, "异常数字 JSONP 状态解析应保留在线状态")
         expect(parsedInvalidNumber.usedBytes == 0, "异常数字 JSONP 流量应回退为 0")
         expect(parsedInvalidNumber.usedSeconds == 321, "部分异常数字 JSONP 时长不匹配")
+        let overflow = SrunProtocol.parseStatusResponse(
+            #"{"user_name":"test-student","sum_bytes":1e100,"sum_seconds":-1e100}"#
+        )
+        expect(overflow.online && overflow.usedBytes == 0 && overflow.usedSeconds == 0,
+               "超出 Int64 范围的数值应回退为零，不能导致应用崩溃")
+        let integerBoundary = SrunProtocol.parseStatusResponse(
+            #"{"user_name":"test-student","sum_bytes":9223372036854775807,"sum_seconds":"9223372036854775808"}"#
+        )
+        expect(integerBoundary.usedBytes == Int64.max && integerBoundary.usedSeconds == 0,
+               "可表示的整数上界应保留，超范围数字字符串应回退")
         expect(
             !SrunProtocol.preview("{\"user_name\":\"231040600203\"}").contains("231040600203"),
             "状态响应预览不得记录完整账号"

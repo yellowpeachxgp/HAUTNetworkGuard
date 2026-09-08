@@ -166,6 +166,10 @@ enum SrunProtocol {
             return Int64(intValue)
         }
         if let doubleValue = value as? Double {
+            // Double(Int64.max) 会舍入到 2^63，必须使用严格上界避免转换陷阱。
+            guard doubleValue.isFinite,
+                  doubleValue >= Double(Int64.min),
+                  doubleValue < Double(Int64.max) else { return 0 }
             return Int64(doubleValue)
         }
         if let stringValue = value as? String {

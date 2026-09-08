@@ -108,6 +108,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34269491106](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34269491106) 对应提交 `24c67c4`：三端 Build and Release job 全部通过；空状态响应在 Swift、Qt、Lua、Python 统一标记为 `unparsed`，新增协议向量、Lua runtime、macOS/Qt smoke 回归；Release job 因草稿 PR 按预期跳过。
 - [运行 34268224092](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34268224092) 对应提交 `35655aa`：三端 Build and Release job 全部通过；验证记录提交本身通过协议、文档、Release、日志和 macOS 核心回归，Release job 因草稿 PR 按预期跳过。
 - [运行 34267916918](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34267916918) 对应提交 `1bbfd26`：三端 Build and Release job 全部通过；新增已有安装在自定义根目录缺少 `/tmp` 时的升级目录准备回归，双 Lua 安装/升级/卸载各 24 项、共 48 项通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34266916182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34266916182) 对应提交 `eb25257`：三端 Build and Release job 全部通过；新增精简根目录下 `/etc/init.d`、`/etc/config` 的目录准备回归，双 Lua 安装/升级/卸载共 46 项通过；Release job 因草稿 PR 按预期跳过。

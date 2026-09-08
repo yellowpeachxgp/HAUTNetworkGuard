@@ -393,6 +393,16 @@ extension StatusBarController {
 
         menu.addItem(NSMenuItem.separator())
 
+        let diagnosticsItem = NSMenuItem(
+            title: "复制诊断信息",
+            action: #selector(copyDiagnosticsAction),
+            keyEquivalent: "d"
+        )
+        diagnosticsItem.target = self
+        menu.addItem(diagnosticsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         // 账号设置
         let settingsItem = NSMenuItem(
             title: "账号设置...",
@@ -659,6 +669,27 @@ extension StatusBarController {
     @objc private func checkUpdateAction() {
         Logger.info("手动检查更新")
         UpdateChecker.shared.checkForUpdate(isManual: true, force: true)
+    }
+
+    @objc func copyDiagnosticsAction() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(diagnosticText(), forType: .string)
+        detailMenuItem.title = "诊断信息已复制；内容不含账号和密码"
+        Logger.info("已复制脱敏诊断信息")
+    }
+
+    func diagnosticText() -> String {
+        let checkedAt = lastStatusAt.map {
+            DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .medium)
+        } ?? "尚未检测"
+        let retry = automaticRetryHint() ?? "无"
+        return [
+            "\(AppConfig.appName) v\(AppConfig.version)",
+            "状态分类: \(currentStatus.kindLabel)",
+            "最近检测: \(checkedAt)",
+            "自动登录: \(config.autoLogin ? "开启" : "关闭")",
+            "自动重试: \(retry)"
+        ].joined(separator: "\n")
     }
 }
 

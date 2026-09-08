@@ -41,6 +41,7 @@ hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 - 凭据故障回放另有 20 条断言：编码失败、解码不符、真实 QSettings 自定义写入后端拒绝写盘、旧文件逐字节保留、运行配置恢复、同一实例故障恢复后重试、不可读旧凭据的保留与显式清除。测试存储后端使用临时目录。
 - Qt 窗口保存失败会显示错误、保留输入、阻止提交登录；系统自启动变更延迟到配置保存成功之后。真实 Windows 注册表多键写入的失败恢复尚待原生验证。
 - Swift、Qt 和 Lua 日志测试覆盖 JSON、CSV、表单、HTML、非结构化正文中的账号、密码和编码字段；正文只输出长度摘要。Lua 5.1/5.3 还检查传给系统 logger 的参数没有测试凭据。
+- macOS 菜单和 Windows 主窗口提供脱敏诊断复制；本地控制器测试检查诊断文本包含版本/状态信息且不含测试账号或密码。
 
 执行入口（仓库根目录）：
 
@@ -99,6 +100,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支提交与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34234043075](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34234043075) 对应提交 `223251964a9421222b6e53e49d52982f03eeb7bf`：Windows、macOS、OpenWrt 三项 job 全部通过；固定版本 OpenWrt 清单校验、哈希篡改回滚和两种 Lua 安装/升级 15 项矩阵均通过。
 - [运行 34232164603](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34232164603) 对应桌面详情改造提交 `bd53b39eb9dc533e28210ffa79885ed22d9b3c2c`：Windows、macOS、OpenWrt 三项 job 和 Release 前置门禁全部通过。
 - [运行 34229762182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34229762182) 对应协议安全范围改造提交 `66684f3837e67fe241225106af2517816c5ca3a6`：三平台构建、协议契约、OpenWrt 双版本回归和桌面测试全部通过。
 - [运行 34231666520](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34231666520) 对应单实例与 OpenWrt 策略提交 `b29aebca796c6dcf0c975349daa9d79f4edf088a`：Windows、macOS、OpenWrt 全部通过。

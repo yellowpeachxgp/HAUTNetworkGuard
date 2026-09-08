@@ -49,6 +49,10 @@ func runControllerSessionTests() {
         settle()
     }
     let online = NetworkStatus.online(username: "test-student", ip: "10.0.0.1", usedBytes: 0, usedSeconds: 0)
+    let diagnostics = controller.diagnosticText()
+    precondition(diagnostics.contains(AppConfig.version) &&
+                 !diagnostics.contains("test-student") && !diagnostics.contains("test-only"),
+                 "诊断信息不得包含账号或密码")
 
     expect(service.statusReplies.isEmpty && service.loginReplies.isEmpty, "测试初始化不得启动真实后台任务")
     controller.checkStatus(reason: "startup")

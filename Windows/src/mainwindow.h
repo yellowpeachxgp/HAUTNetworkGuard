@@ -25,6 +25,7 @@ public:
   // 注入存储、网络和时钟；隔离测试关闭后台任务与桌面通知。
   MainWindow(Config &config, Api *api, std::function<double()> now,
              bool backgroundTasks, QWidget *parent = nullptr);
+  QString diagnosticText() const;
   ~MainWindow();
 
 protected:
@@ -34,6 +35,7 @@ private slots:
   void onLoginClicked();
   void onLogoutClicked();
   void onSaveClicked();
+  void onCopyDiagnosticsClicked();
 
   void onLoginSuccess(quint64 token, const QString &message);
   void onLoginFailed(quint64 token, const QString &error);

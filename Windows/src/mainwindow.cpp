@@ -2,6 +2,7 @@
 #include "config.h"
 #include "logger.h"
 #include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
 #include <QFrame>
 #include <QFormLayout>
@@ -301,6 +302,12 @@ void MainWindow::setupUi() {
           &MainWindow::onLogoutClicked);
   buttonLayout->addWidget(m_logoutBtn);
 
+  QPushButton *diagnosticsBtn = new QPushButton("复制诊断");
+  diagnosticsBtn->setObjectName("diagnosticsButton");
+  connect(diagnosticsBtn, &QPushButton::clicked, this,
+          &MainWindow::onCopyDiagnosticsClicked);
+  buttonLayout->addWidget(diagnosticsBtn);
+
   mainLayout->addLayout(buttonLayout);
 
   connect(m_usernameEdit, &QLineEdit::returnPressed, this,
@@ -445,6 +452,13 @@ void MainWindow::onSaveClicked() {
   if (m_trayIcon) {
     m_trayIcon->showMessage("设置已保存", "新的配置已应用");
   }
+}
+
+void MainWindow::onCopyDiagnosticsClicked() {
+  if (m_session.isBusy()) return;
+  QApplication::clipboard()->setText(diagnosticText());
+  setStatusDetail("诊断信息已复制；内容不含账号、密码或网关正文。");
+  Logger::info("已复制脱敏诊断信息");
 }
 
 void MainWindow::onLoginSuccess(quint64 token, const QString &message) {
@@ -681,6 +695,13 @@ QString MainWindow::automaticRetryHint() const {
   const double remaining = m_session.nextAutomaticAttempt() - monotonicNow();
   if (remaining <= 0) return {};
   return QString("自动重试约 %1 秒后").arg(qCeil(remaining));
+}
+
+QString MainWindow::diagnosticText() const {
+  const QString retry = automaticRetryHint().isEmpty() ? "无" : automaticRetryHint();
+  return QString("HAUT Network Guard v1.3.18\n状态: %1\n%2\n自动登录: %3\n自动重试: %4")
+      .arg(m_statusLabel->text(), m_lastCheckLabel->text(),
+           m_config.autoLogin() ? "开启" : "关闭", retry);
 }
 
 void MainWindow::checkNetworkStatus() {

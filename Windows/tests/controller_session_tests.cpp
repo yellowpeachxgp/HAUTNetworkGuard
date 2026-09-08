@@ -50,6 +50,9 @@ int main(int argc, char **argv) {
     auto loginButton = window.findChild<QPushButton *>("primaryButton");
     auto logoutButton = window.findChild<QPushButton *>("dangerButton");
     expect(loginButton && logoutButton, "正式登录和注销按钮必须存在");
+    const QString diagnostics = window.diagnosticText();
+    expect(diagnostics.contains("1.3.18") && !diagnostics.contains("test-student") &&
+           !diagnostics.contains("test-only"), "诊断信息不得包含账号或密码");
     QCheckBox *remember = nullptr;
     for (auto checkbox : window.findChildren<QCheckBox *>()) {
       if (checkbox->text() == "记住密码") remember = checkbox;

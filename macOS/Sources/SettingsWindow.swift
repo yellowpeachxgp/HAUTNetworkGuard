@@ -88,6 +88,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         usernameField.placeholderString = "请输入学号"
         usernameField.stringValue = AppConfig.shared.username
         usernameField.toolTip = "校园网登录学号"
+        usernameField.setAccessibilityLabel("学号")
         contentView.addSubview(usernameField)
 
         // 密码标签
@@ -101,6 +102,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         passwordField.placeholderString = "请输入密码"
         passwordField.stringValue = AppConfig.shared.password
         passwordField.toolTip = "不会在界面明文显示"
+        passwordField.setAccessibilityLabel("密码")
         contentView.addSubview(passwordField)
 
         // 分割线
@@ -119,6 +121,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         intervalSlider.frame = NSRect(x: 92, y: 236, width: 250, height: 20)
         intervalSlider.altIncrementValue = 15
         intervalSlider.toolTip = "建议 30-60 秒，兼顾响应速度和请求频率"
+        intervalSlider.setAccessibilityLabel("检测间隔（秒）")
         contentView.addSubview(intervalSlider)
         
         intervalLabel = NSTextField(labelWithString: "\(AppConfig.shared.checkInterval) 秒")
@@ -138,6 +141,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         autoSaveCheckbox.frame = NSRect(x: 92, y: 176, width: 130, height: 20)
         autoSaveCheckbox.state = AppConfig.shared.autoSave ? .on : .off
         autoSaveCheckbox.toolTip = "勾选后会保存密码，便于系统重启后自动恢复登录"
+        autoSaveCheckbox.setAccessibilityLabel("记住密码")
         contentView.addSubview(autoSaveCheckbox)
 
         // 开机自启动复选框
@@ -145,6 +149,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         autoLaunchCheckbox.frame = NSRect(x: 240, y: 176, width: 130, height: 20)
         autoLaunchCheckbox.state = LaunchManager.shared.isEnabled ? .on : .off
         autoLaunchCheckbox.toolTip = "登录系统后自动拉起应用并在菜单栏保持守护"
+        autoLaunchCheckbox.setAccessibilityLabel("开机自启动")
         contentView.addSubview(autoLaunchCheckbox)
         
         // 自动登录复选框
@@ -152,6 +157,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         autoLoginCheckbox.frame = NSRect(x: 92, y: 146, width: 220, height: 20)
         autoLoginCheckbox.state = AppConfig.shared.autoLogin ? .on : .off
         autoLoginCheckbox.toolTip = "检测到离线后自动尝试恢复网络连接"
+        autoLoginCheckbox.setAccessibilityLabel("自动登录和断线重连")
         contentView.addSubview(autoLoginCheckbox)
 
         // 提示信息
@@ -183,6 +189,7 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         )
         saveButton.bezelStyle = .rounded
         saveButton.keyEquivalent = "\r"
+        saveButton.setAccessibilityLabel(requiresInitialConfiguration ? "保存并启动" : "保存设置")
         saveButton.frame = NSRect(x: 330, y: 20, width: 110, height: 32)
         contentView.addSubview(saveButton)
 
@@ -199,6 +206,16 @@ class SettingsWindowController: NSWindowController, NSWindowDelegate {
         versionLabel.textColor = .tertiaryLabelColor
         versionLabel.frame = NSRect(x: 20, y: 20, width: 200, height: 16)
         contentView.addSubview(versionLabel)
+
+        // 明确键盘焦点顺序，首次配置无需鼠标即可完成。
+        usernameField.nextKeyView = passwordField
+        passwordField.nextKeyView = intervalSlider
+        intervalSlider.nextKeyView = autoSaveCheckbox
+        autoSaveCheckbox.nextKeyView = autoLaunchCheckbox
+        autoLaunchCheckbox.nextKeyView = autoLoginCheckbox
+        autoLoginCheckbox.nextKeyView = saveButton
+        saveButton.nextKeyView = usernameField
+        window.initialFirstResponder = usernameField
 
         updateOptionHint()
     }

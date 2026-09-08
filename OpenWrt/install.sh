@@ -14,6 +14,8 @@ CONFIG_FILE="$ROOT_PREFIX/etc/config/haut-network-guard"
 SOURCE_DIR="$SOURCE_ROOT/files/usr/lib/haut-network-guard"
 SOURCE_INIT="$SOURCE_ROOT/files/etc/init.d/haut-network-guard"
 SOURCE_CONFIG="$SOURCE_ROOT/files/etc/config/haut-network-guard"
+# 当前发布基线为 v1.3.18；安装提示从主程序版本字段读取。
+VERSION=""
 STAGE_DIR=""
 INIT_STAGE=""
 CONFIG_STAGE=""
@@ -88,6 +90,8 @@ for name in crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
     }
     cp "$source" "$target"
 done
+VERSION=$(sed -n 's/^local VERSION = "\([^"]*\)".*/\1/p' "$SOURCE_DIR/main.lua")
+[ -n "$VERSION" ] || { echo "错误: 无法读取程序版本"; exit 1; }
 
 echo "[4/5] 校验服务和配置..."
 if [ ! -s "$SOURCE_INIT" ] || ! sh -n "$SOURCE_INIT"; then
@@ -147,7 +151,7 @@ OLD_INIT_FILE=""
 
 echo ""
 echo "=========================================="
-echo "  安装完成!"
+echo "  安装完成! (v$VERSION)"
 echo "=========================================="
 echo "配置账号: uci set haut-network-guard.main.username='你的学号'"
 echo "启动服务: /etc/init.d/haut-network-guard start"

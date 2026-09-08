@@ -191,6 +191,15 @@ esac
         self.assertIn("tag 与程序版本不一致", result.stdout)
         self.assert_no_temporary_files()
 
+    def test_upgrade_tag_version_mismatch_is_rejected(self):
+        self.seed_old()
+        version_file = self.remote / "files/usr/lib/haut-network-guard/version.lua"
+        version_file.write_text('return "1.3.19"\n')
+        result = self.run_script("upgrade-online.sh", False)
+        self.assertIn("tag 与远端程序版本不一致", result.stdout)
+        self.assertEqual(self.events(), [])
+        self.assertEqual((self.program / "version.lua").read_text(), 'return "0.9.0"\n')
+
     def test_reinstall_preserves_config(self):
         self.seed_old()
         old_config = self.config.read_bytes()

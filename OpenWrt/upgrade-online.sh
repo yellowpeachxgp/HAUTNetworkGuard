@@ -194,6 +194,15 @@ if ! printf '%s\n' "$REMOTE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo "错误: 无法解析远端版本号"
     exit 1
 fi
+case "$REPO_REF" in
+    v*)
+        EXPECTED_VERSION="${REPO_REF#v}"
+        if [ "$REMOTE_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "错误: tag 与远端程序版本不一致: $REPO_REF -> $REMOTE_VERSION"
+            exit 1
+        fi
+        ;;
+esac
 echo "最新版本: $REMOTE_VERSION"
 echo ""
 

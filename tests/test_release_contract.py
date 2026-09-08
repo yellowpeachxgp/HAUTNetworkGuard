@@ -29,6 +29,9 @@ def main():
     online_install = (ROOT / "OpenWrt/install-online.sh").read_text(encoding="utf-8")
     require(online_install, 'EXPECTED_VERSION="${REPO_REF#v}"', "OpenWrt tag/version guard")
     require(online_install, '"$VERSION" != "$EXPECTED_VERSION"', "OpenWrt tag/version equality")
+    online_upgrade = (ROOT / "OpenWrt/upgrade-online.sh").read_text(encoding="utf-8")
+    require(online_upgrade, 'EXPECTED_VERSION="${REPO_REF#v}"', "OpenWrt upgrade tag/version guard")
+    require(online_upgrade, '"$REMOTE_VERSION" != "$EXPECTED_VERSION"', "OpenWrt upgrade tag/version equality")
     for asset in (
         "HAUTNetworkGuard-Windows.zip",
         "HAUTNetworkGuard.dmg",

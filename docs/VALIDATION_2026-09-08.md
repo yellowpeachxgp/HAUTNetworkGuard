@@ -108,6 +108,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34267916918](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34267916918) 对应提交 `1bbfd26`：三端 Build and Release job 全部通过；新增已有安装在自定义根目录缺少 `/tmp` 时的升级目录准备回归，双 Lua 安装/升级/卸载各 24 项、共 48 项通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34266916182](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34266916182) 对应提交 `eb25257`：三端 Build and Release job 全部通过；新增精简根目录下 `/etc/init.d`、`/etc/config` 的目录准备回归，双 Lua 安装/升级/卸载共 46 项通过；Release job 因草稿 PR 按预期跳过。
 - [运行 34264582228](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34264582228) 对应真实设备验收矩阵入口提交 `3f3d8f0`：Windows、macOS、OpenWrt 三项 job 全部通过；文档契约确认矩阵、A1–A13 场景和证据规则存在。
 - [运行 34263735831](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34263735831) 对应 OpenWrt 回归计数提交 `96b9f57`：Windows、macOS、OpenWrt 三项 job 全部通过；每种解释器 22 项、共 44 项安装/升级/卸载测试记录一致。

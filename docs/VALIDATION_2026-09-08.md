@@ -24,7 +24,7 @@ codesign --verify --strict macOS/build/goal-validation/HAUTNetworkGuard.app
 hdiutil verify macOS/build/goal-validation/HAUTNetworkGuard.dmg
 ```
 
-DMG SHA-256：`8805c182ef14c6d67406aeedccdb3c9a262b765d4ac1bed37113cc0eba35dd32`。
+历史基线 DMG SHA-256：`8805c182ef14c6d67406aeedccdb3c9a262b765d4ac1bed37113cc0eba35dd32`。
 产物位于忽略目录 `macOS/build/goal-validation/`，对应状态机改造前的工作树，不包含本轮新的会话策略。它不是 GitHub Release 资产；ad-hoc 签名不代表 Developer ID 公证或 Gatekeeper 自动放行。
 
 ## 桌面会话策略与 Qt 本地验证
@@ -59,7 +59,7 @@ codesign --verify --deep --strict macOS/build/session-validation/HAUTNetworkGuar
 
 Qt 原始结果保存在忽略目录 `macOS/tests/build/qt-validation/Testing/Temporary/LastTest.log`；Swift 最新应用构建日志为 `macOS/tests/build/session-build.log`。新的 App 位于 `macOS/build/session-validation/`，没有启动正式应用，没有重新制作该工作树的 DMG。
 
-该 App 可执行文件 SHA-256：`92304d5ed08771aecc8d6fa644c19e3de877eae84f75c1100e85176bc7b8331c`。本轮代码在提交与基线对齐前验证，通过保留快照的全文件比较确认变基没有改变已验证源码。
+当前集成验证 App 可执行文件 SHA-256：`8f637be683a892908ddc30ee88639047877ea92c0a59b2b435b1082655fc682c`；DMG SHA-256：`9f6e7e0e1fdc4c72f3a3c70d672bab46a755ba1fcb44ad76e44e1f3e90a9d388`。产物位于忽略目录 `macOS/build/session-validation/`，包含超大数值解析修复；已通过严格签名和 `hdiutil verify`，不是 GitHub Release 资产。
 
 ## Lua 与 OpenWrt
 
@@ -98,6 +98,10 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。
 - 首轮提交：`7276a6c1dbc6e1f18fe5492e85e2eac0c91e2443`；推送后本地 HEAD、跟踪分支及 ls-remote 三方一致。
 - [首轮运行 34224354585](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224354585)：macOS 构建、原生测试、DMG 打包和签名通过；Linux OpenWrt 双版本测试通过；Windows 在 CMake 配置阶段失败，未执行编译和测试。
+
+- [第二轮运行 34224732221](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34224732221) 对应 `f4ed6dc3070e5ccdfba5fb42dd6fe72be74a0fee`：Windows、macOS、OpenWrt 全部通过，Release 按预期跳过。Windows Server 2022 上完成 Qt 6.6 原生编译、4 项 CTest、运行库部署和 ZIP 打包；其中 smoke test 真实执行 DPAPI 加密、解码和独立配置回读。该结果仍不能替代真实用户桌面、自启动、跨账号升级和校园网验收。
+
+- [第三轮运行 34225154211](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34225154211) 对应超大数值修复：Windows 和 OpenWrt 全部通过；macOS 编译、测试和签名通过，但固定 `tmp.dmg` 路径在创建阶段触发 `Resource busy`。已改为唯一临时目录并在本机验证；第四轮 CI 将确认打包修复。
 - Windows 失败原因：实际 `windows-latest` 镜像为 `windows-2025-vs2026`，现有生成器指定 VS 2022，找不到对应实例。已将作业固定到 `windows-2022`，其 [官方软件清单](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md#visual-studio-enterprise-2022) 包含 VS 2022；修复后的 CI 结果继续核实。
 - 原社区 PR #2/#3 未远程合并或关闭；本集成尚未合并到 main，没有执行 Release。
 

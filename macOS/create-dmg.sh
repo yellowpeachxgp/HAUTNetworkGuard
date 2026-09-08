@@ -2,7 +2,7 @@
 
 # HAUT Network Guard DMG 打包脚本
 
-set -e
+set -euo pipefail
 
 echo "=========================================="
 echo "  HAUT Network Guard DMG 打包脚本"
@@ -15,7 +15,12 @@ APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 DMG_NAME="$APP_NAME.dmg"
 DMG_PATH="$BUILD_DIR/$DMG_NAME"
 VOLUME_NAME="HAUT Network Guard"
-TMP_DMG="$BUILD_DIR/tmp.dmg"
+
+# 临时目录必须每次唯一；固定路径在 CI 重试或并行任务中会让 hdiutil 报
+# Resource busy，也可能把上次中断留下的镜像当作当前输出。
+TMP_WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/haut-dmg.XXXXXX")"
+trap 'rm -rf "$TMP_WORK_DIR"' EXIT INT TERM
+TMP_DMG="$TMP_WORK_DIR/tmp.dmg"
 
 # 检查应用是否已构建
 if [ ! -d "$APP_BUNDLE" ]; then
@@ -25,13 +30,11 @@ fi
 
 # 清理旧的 DMG
 rm -f "$DMG_PATH"
-rm -f "$TMP_DMG"
 
 echo ""
 echo "[1/4] 创建临时 DMG..."
 # 创建临时目录
-TMP_DIR="$BUILD_DIR/dmg_temp"
-rm -rf "$TMP_DIR"
+TMP_DIR="$TMP_WORK_DIR/dmg_temp"
 mkdir -p "$TMP_DIR"
 
 # 复制应用到临时目录

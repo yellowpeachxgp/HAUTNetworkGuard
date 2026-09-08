@@ -101,7 +101,7 @@ uci commit haut-network-guard
 - 手动注销会暂停本次运行期间的自动重连，包括网关返回“当前未在线”的情况。点击“立即登录”解除暂停；自动登录开关仍然有效。
 - 不勾选“记住密码”时，本次会话可以使用已输入密码重连；退出后需要重新输入。Windows 的手动登录也会读取当前“记住密码”选项。
 
-实现与验收范围见 [状态机契约](docs/STATE_MACHINE_CONTRACT.md) 和 [工程台账](docs/IMPLEMENTATION_LEDGER.md)。
+实现与验收范围见 [状态机契约](docs/STATE_MACHINE_CONTRACT.md)、[工程台账](docs/IMPLEMENTATION_LEDGER.md) 和[三端真实设备验收矩阵](docs/REAL_DEVICE_ACCEPTANCE_MATRIX.md)。
 
 ### 更新检测窗口
 

@@ -33,6 +33,7 @@ def main():
     require_contains(readme, "protocol_utils.h/cpp")
     require_contains(readme, "SrunProtocol.swift")
     require_contains(readme, "tests/")
+    require_contains(readme, "REAL_DEVICE_ACCEPTANCE_MATRIX.md")
     require_contains(readme, "SHA256SUMS")
     require_not_contains(readme, "HAUTNetworkGuard-Windows.exe")
     require_not_contains(readme, "HAUTNetworkGuard-macOS.dmg")

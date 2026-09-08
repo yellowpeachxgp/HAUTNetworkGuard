@@ -554,7 +554,7 @@ extension StatusBarController {
         guard config.autoLogin else { return nil }
         let remaining = session.nextAutomaticAttempt - monotonicNow
         guard remaining > 0 else { return nil }
-        return "自动重试约 (Int(ceil(remaining))) 秒后"
+        return "自动重试约 \(Int(ceil(remaining))) 秒后"
     }
 
     private func triggerAutoLoginIfNeeded(trigger: String) {

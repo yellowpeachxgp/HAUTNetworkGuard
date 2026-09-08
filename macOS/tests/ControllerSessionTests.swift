@@ -75,6 +75,9 @@ func runControllerSessionTests() {
     clock = 10
     service.loginReplies[0](.failed("模拟密码错误"))
     settle()
+    let retryDiagnostics = controller.diagnosticText()
+    expect(retryDiagnostics.contains("自动重试约") && !retryDiagnostics.contains("Int(ceil"),
+           "自动重试提示必须显示实际剩余秒数")
     clock = 11
     controller.loginAction()
     expect(service.loginReplies.count == 2, "用户纠正凭据后可手动重试")

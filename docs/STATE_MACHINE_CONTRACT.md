@@ -50,7 +50,7 @@
 - 正式策略：`macOS/Sources/SessionPolicy.swift`、`Windows/src/session_policy.h`，已被实际菜单栏/主窗口控制器消费。
 - 启动只做状态探测，Windows 原先固定 4 秒后的盲目登录入口已移除。
 - 桌面两份策略共用 `tests/fixtures/session_scenarios.txt` 的 9 个事件场景、142 条断言，覆盖异常、并发、冷却边界、连续失败、注销暂停、旧回调与重新连接；OpenWrt `tests/test_openwrt_session.lua` 另覆盖 19 条同步守护策略断言。
-- macOS 额外执行正式控制器回放，注入网络服务和时钟，共 26 条断言；测试不连接校园网、不访问正式凭据域。
+- macOS 额外执行正式控制器回放，注入网络服务和时钟，共 27 条断言；测试不连接校园网、不访问正式凭据域。
 - Windows 目录已在 macOS ARM64 / Qt 6.11.1 及 Windows Server 2022 / Qt 6.6 CI 下完整构建，CTest 的策略、配置、主窗口回放全部通过；正式主窗口回放覆盖 Qt 信号、按钮和保存失败。实际桌面重复启动、托盘、自启动及校园网操作仍待验证。
 - OpenWrt、单实例、睡眠唤醒和接口切换未因本轮修改自动完成。
 

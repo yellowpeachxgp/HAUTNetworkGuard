@@ -57,6 +57,29 @@ struct SessionPolicyTests {
             checked += 1
         }
         guard checked > 0 else { fatalError("没有执行任何断言") }
+
+        // 加速模拟 7 天（每分钟一次检测），验证退避不会形成登录风暴或卡住状态机。
+        var soak = SessionPolicy()
+        var loginCount = 0
+        for minute in 0..<(7 * 24 * 60) {
+            let now = Double(minute * 60)
+            guard let statusToken = soak.beginStatus(),
+                  soak.completeStatus(statusToken, observation: .offline) else {
+                fatalError("7 天 soak 状态请求未能串行完成")
+            }
+            if let loginToken = soak.beginLogin(manual: false, enabled: true, hasCredentials: true,
+                                                now: now, interval: 60) {
+                loginCount += 1
+                let succeeded = (loginCount % 7) != 0
+                guard soak.completeLogin(loginToken, succeeded: succeeded, now: now + 1) else {
+                    fatalError("7 天 soak 登录回调未能完成")
+                }
+            }
+            guard soak.operation == .idle else { fatalError("7 天 soak 结束时仍有未完成操作") }
+        }
+        guard loginCount > 0 && loginCount <= 7 * 24 * 60 else {
+            fatalError("7 天 soak 登录次数越界")
+        }
         print("Swift 会话策略通过：\(scenarios) 个场景，\(checked) 个事件断言")
     }
 }

@@ -75,6 +75,27 @@ int main(int argc, char **argv) {
       ++checked;
     }
     if (checked == 0) throw std::runtime_error("没有执行任何断言");
+
+    // 加速模拟 7 天（每分钟一次检测），验证退避不会形成登录风暴或卡住状态机。
+    SessionPolicy soak;
+    int loginCount = 0;
+    for (int minute = 0; minute < 7 * 24 * 60; ++minute) {
+      const double now = minute * 60.0;
+      const auto statusToken = soak.beginStatus();
+      if (!statusToken || !soak.completeStatus(*statusToken, SessionPolicy::Observation::Offline))
+        throw std::runtime_error("7 天 soak 状态请求未能串行完成");
+      const auto loginToken = soak.beginLogin(false, true, true, now, 60);
+      if (loginToken) {
+        ++loginCount;
+        const bool succeeded = (loginCount % 7) != 0;
+        if (!soak.completeLogin(*loginToken, succeeded, now + 1))
+          throw std::runtime_error("7 天 soak 登录回调未能完成");
+      }
+      if (soak.operation() != SessionPolicy::Operation::Idle)
+        throw std::runtime_error("7 天 soak 结束时仍有未完成操作");
+    }
+    if (loginCount <= 0 || loginCount > 7 * 24 * 60)
+      throw std::runtime_error("7 天 soak 登录次数越界");
   } catch (const std::exception &error) {
     std::cerr << "失败：" << scenario << "，第 " << lineNumber << " 行：" << error.what() << '\n';
     return 1;

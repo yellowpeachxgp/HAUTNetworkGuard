@@ -111,7 +111,7 @@
 | M5-01 | Release 资产安装测试 | CI/三端 | Windows ZIP、macOS DMG 和 OpenWrt 固定版本命令均从干净环境完成安装并启动 |
 | M5-02 | OpenWrt 原子安装 | OpenWrt | 每个文件先下载到临时路径，全部校验通过后再切换；失败不破坏旧版本 |
 | M5-03 | OpenWrt 升级健康检查 | OpenWrt | 更新后验证文件版本、Lua 语法、服务状态和至少一轮状态请求；失败自动回滚 |
-| M5-04 | 资产完整性 | CI | Release 生成 SHA-256 清单；安装文档提供对应校验方式 |
+| M5-04 | 资产完整性 | CI | PR/main/手动运行的发布资产 dry-run 和正式 Release 均生成并校验 SHA-256 清单；安装文档提供对应校验方式 |
 | M5-05 | macOS 签名与 Gatekeeper | macOS/CI | 构建、签名、DMG 解包和首次启动均有记录；签名失败阻止发布 |
 | M5-06 | 发布说明一致性 | 共享/CI | Release 版本、下载文件名、安装命令、变更说明和实际资产自动检查 |
 

@@ -108,6 +108,7 @@ Python 协议、文档、版本契约检查已通过；Shell 语法与 git diff 
 ## 集成分支与原生 CI
 
 - 草稿集成：[PR #4](https://github.com/yellowpeachxgp/HAUTNetworkGuard/pull/4)。当前分支与远端跟踪分支一致，`main` 没有被改写。
+- [运行 34272442987](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34272442987) 对应提交 `0f5d020`：正式 tag Release 显式依赖 `release-dry-run` 的工作流契约通过；三端 Build and Release 与资产 dry-run 全部通过，草稿 PR 的正式 Release 按预期跳过。
 - [运行 34272162197](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34272162197) 对应提交 `251fce6`：PR、tag 条件下的发布资产 dry-run 与正式 Release 依赖关系通过契约检查；三端 Build and Release 与 `release-dry-run` 全部通过，草稿 PR 的正式 Release 按预期跳过。
 - [运行 34271332095](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34271332095) 对应提交 `ba2d006`：Windows、macOS、OpenWrt 与新增 `release-dry-run` 全部通过；dry-run 从同一运行下载桌面构建产物，生成并校验 `SHA256SUMS`、`OpenWrt-SHA256SUMS` 及全部 OpenWrt 文件覆盖；正式 Release job 因草稿 PR 按预期跳过。
 - [运行 34270565796](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34270565796) 对应提交 `1cb3261`：三端 Build and Release job 全部通过；新增 v1.3.18 远端桌面资产真实下载、哈希、Windows ZIP 解压、macOS DMG 只读挂载/签名回读记录，并确认该历史 Release 缺少 SHA-256 清单；Release job 因草稿 PR 按预期跳过。

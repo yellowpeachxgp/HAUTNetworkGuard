@@ -74,6 +74,15 @@ int main(int argc, char *argv[]) {
   expect(ProtocolUtils::userFacingLoginMessage("error_E2531") ==
              "学号或密码错误，请检查后重试。",
          "常见登录错误应转换为学生可理解的提示");
+  expect(ProtocolUtils::userFacingNetworkError("Connection timed out") ==
+             "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。",
+         "网络超时应转换为学生可理解的提示");
+  expect(ProtocolUtils::userFacingNetworkError("Host not found") ==
+             "无法连接校园网网关，请检查网络连接后重试。",
+         "网关不可达应转换为学生可理解的提示");
+  expect(ProtocolUtils::userFacingNetworkError("TLS internal failure") ==
+             "网络请求失败，请检查网络连接后重试。",
+         "未知网络错误应使用通用提示");
   expect(!ProtocolUtils::responsePreview(
                   "{\"user_name\":\"231040600203\"}")
                   .contains("231040600203"),

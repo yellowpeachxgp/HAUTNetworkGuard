@@ -108,6 +108,21 @@ QString ProtocolUtils::userFacingLoginMessage(const QString &classification) {
   return "登录失败，请稍后重试。";
 }
 
+QString ProtocolUtils::userFacingNetworkError(const QString &error) {
+  const QString normalized = error.trimmed().toLower();
+  if (normalized.contains("timeout") || normalized.contains("timed out") ||
+      normalized.contains("超时")) {
+    return "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。";
+  }
+  if (normalized.contains("host not found") ||
+      normalized.contains("network is unreachable") ||
+      normalized.contains("connection refused") ||
+      normalized.contains("unreachable") || normalized.contains("无法连接")) {
+    return "无法连接校园网网关，请检查网络连接后重试。";
+  }
+  return "网络请求失败，请检查网络连接后重试。";
+}
+
 StatusParseResult ProtocolUtils::parseStatusResponse(const QString &response) {
   StatusParseResult result;
   const QString trimmed = response.trimmed();

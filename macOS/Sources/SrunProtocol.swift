@@ -40,6 +40,23 @@ enum SrunProtocol {
         }
     }
 
+    /// 将底层网络错误转换为学生可直接处理的提示，避免展示英文系统错误。
+    static func userFacingNetworkError(_ error: Error) -> String {
+        userFacingNetworkError(error.localizedDescription)
+    }
+
+    static func userFacingNetworkError(_ message: String) -> String {
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized.contains("timeout") || normalized.contains("timed out") || normalized.contains("超时") {
+            return "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。"
+        }
+        if normalized.contains("unreachable") || normalized.contains("connection refused") ||
+            normalized.contains("cannot connect") || normalized.contains("无法连接") {
+            return "无法连接校园网网关，请检查网络连接后重试。"
+        }
+        return "网络请求失败，请检查网络连接后重试。"
+    }
+
     static func preview(_ value: String, limit: Int = 160) -> String {
         // 网关可能在任意字段或异常正文中回显凭据，只输出长度摘要。
         let summary = "<redacted> (\(value.utf8.count) bytes)"

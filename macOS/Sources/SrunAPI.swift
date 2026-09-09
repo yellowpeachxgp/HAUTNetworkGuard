@@ -228,7 +228,7 @@ class SrunAPI: SrunService {
                 let durationMs = Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
                 Logger.error("[\(requestID)] action=\(action) phase=error class=network_error elapsed_ms=\(durationMs) msg=\(error.localizedDescription)")
                 self.finishAuth()
-                completion(.failed(error.localizedDescription))
+                completion(.failed(SrunProtocol.userFacingNetworkError(error)))
             }
         }
     }

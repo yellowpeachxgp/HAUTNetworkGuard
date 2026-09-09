@@ -183,7 +183,8 @@ void Api::onLoginReplyFinished() {
                       .arg(action)
                       .arg(elapsedMs)
                       .arg(reply->errorString()));
-    emit loginFailed(reply->property("sessionToken").toULongLong(), QString("网络错误: %1").arg(reply->errorString()));
+    emit loginFailed(reply->property("sessionToken").toULongLong(),
+                     ProtocolUtils::userFacingNetworkError(reply->errorString()));
     return;
   }
 
@@ -227,7 +228,8 @@ void Api::onLogoutReplyFinished() {
                       .arg(action)
                       .arg(elapsedMs)
                       .arg(reply->errorString()));
-    emit logoutFailed(reply->property("sessionToken").toULongLong(), QString("网络错误: %1").arg(reply->errorString()));
+    emit logoutFailed(reply->property("sessionToken").toULongLong(),
+                      ProtocolUtils::userFacingNetworkError(reply->errorString()));
     return;
   }
 

@@ -23,7 +23,7 @@ MainWindow::MainWindow(QWidget *parent)
 MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
                        bool backgroundTasks, QWidget *parent)
     : QMainWindow(parent), m_config(config), m_now(std::move(now)),
-      m_backgroundTasks(backgroundTasks) {
+      m_backgroundTasks(backgroundTasks), m_externalApi(api != nullptr) {
   m_clock.start();
   setWindowTitle(QStringLiteral("HAUT Network Guard v" HAUT_VERSION_STRING));
   setFixedSize(460, 640);
@@ -85,7 +85,7 @@ void MainWindow::setupNetworkMonitor() {
           &MainWindow::onNetworkChangeDebounced);
 
   // 测试构造关闭后台任务，避免加载系统网络后端或访问任何真实网络。
-  if (!m_backgroundTasks) return;
+  if (!m_backgroundTasks || m_externalApi) return;
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
   const bool loaded = QNetworkInformation::loadDefaultBackend();

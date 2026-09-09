@@ -100,6 +100,7 @@ private:
   Config &m_config;
   std::function<double()> m_now;
   bool m_backgroundTasks;
+  bool m_externalApi = false;
   bool m_networkRecheckPending = false;
 
   bool m_isOnline = false;

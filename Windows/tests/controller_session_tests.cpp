@@ -224,6 +224,8 @@ int main(int argc, char **argv) {
         networkEventWindow.findChild<QTimer *>("networkChangeDebounceTimer");
     expect(networkEventTimer && networkEventTimer->isSingleShot(),
            "网络环境通知必须使用单次去抖定时器");
+    expect(networkEventTimer->interval() == 500,
+           "网络环境通知去抖间隔必须为 500 毫秒");
     // 缩短测试等待，不改变正式实现的去抖间隔。
     networkEventTimer->setInterval(0);
     auto networkEvent = [&] {

@@ -84,7 +84,7 @@ void MainWindow::setupNetworkMonitor() {
   connect(m_networkChangeTimer, &QTimer::timeout, this,
           &MainWindow::onNetworkChangeDebounced);
 
-  // 测试构造关闭后台任务，避免加载系统网络后端或访问任何真实网络。
+  // 测试构造关闭后台任务或注入 Api，避免加载系统网络后端或访问任何真实网络。
   if (!m_backgroundTasks || m_externalApi) return;
 
 #if defined(Q_OS_WIN) && QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)

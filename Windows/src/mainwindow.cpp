@@ -9,8 +9,8 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QMessageBox>
-#include <QNetworkInformation>
 #include <QtGlobal>
+#include <QNetworkInformation>
 #include <QVBoxLayout>
 
 namespace {
@@ -87,7 +87,7 @@ void MainWindow::setupNetworkMonitor() {
   // 测试构造关闭后台任务，避免加载系统网络后端或访问任何真实网络。
   if (!m_backgroundTasks || m_externalApi) return;
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+#if defined(Q_OS_WIN) && QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
   const bool loaded = QNetworkInformation::loadDefaultBackend();
   m_networkInformation = QNetworkInformation::instance();
   if (!m_networkInformation) {
@@ -108,7 +108,7 @@ void MainWindow::setupNetworkMonitor() {
                     .arg(m_networkInformation->backendName())
                     .arg(loaded ? "true" : "false"));
 #else
-  Logger::debug("当前 Qt 版本不提供网络环境变化通知，继续使用周期检测");
+  Logger::debug("当前平台或 Qt 版本不提供 Windows 网络环境变化通知，继续使用周期检测");
 #endif
 }
 

@@ -62,7 +62,7 @@ v1.3.19 起正式 Release 同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`。�
 
 **固定版本安装（推荐生产环境）：**
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.19/OpenWrt/install-online.sh | sh -s -- v1.3.19
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/install-online.sh | sh -s -- v1.3.20
 ```
 
 > v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，固定版本安装会在切换前校验完整清单。
@@ -96,7 +96,7 @@ uci commit haut-network-guard
 
 ### 自动重连行为
 
-v1.3.19 起支持以下行为：
+v1.3.20 起支持以下行为：
 
 - Windows 和 macOS 启动时先检测校园网状态，检测异常时等待下一轮；确认离线后才尝试自动登录。
 - 登录失败后至少等待 60 秒再自动重试，连续失败时逐步延长至 5 分钟。修改凭据后可以立即手动登录。
@@ -278,6 +278,15 @@ cd OpenWrt
 ```
 
 ## 版本历史
+
+### v1.3.20 (2026-09)
+
+- **网络恢复**：Windows/macOS 响应网络变化和系统唤醒，去抖合并事件，忙碌时延后并补发状态检测。
+- **OpenWrt 配置**：支持安全覆盖网关地址、登录端口和 `ac_id`，非法值拒绝并保留旧配置。
+- **更新安全**：macOS 严格校验 Release 标签、官方仓库和 DMG 下载地址，拒绝不可信更新链接。
+- **诊断与错误提示**：OpenWrt 增加只读 `diagnose`；三端统一超时、网关不可达和异常 HTTP 的学生可读提示。
+- **发布**：Windows 网络信息后端插件随 ZIP 打包并校验；所有基础测试和 CI 发布 dry-run 通过。
+
 
 ### 开发中
 

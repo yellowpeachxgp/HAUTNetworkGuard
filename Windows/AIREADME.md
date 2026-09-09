@@ -1,6 +1,6 @@
 # HAUT Network Guard - AI 技术文档 (Windows Qt)
 
-> 本文件用于后续开发快速理解当前 Windows 版本实现。内容已对齐 `v1.3.19`。
+> 本文件用于后续开发快速理解当前 Windows 版本实现。内容已对齐 `v1.3.20`。
 
 ## 项目概述
 
@@ -8,7 +8,7 @@ HAUT Network Guard Windows 版本使用 `Qt 6 + C++17` 实现，是当前正式�
 
 ### 当前版本
 
-- **版本号**: 1.3.19
+- **版本号**: 1.3.20
 - **最后更新**: 2026-04
 - **构建**: CMake + MSVC + GitHub Actions
 

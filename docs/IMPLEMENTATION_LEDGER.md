@@ -1,6 +1,10 @@
 # HAUTNetworkGuard 工程推进台账
 
-更新日期：2026-09-09。完整目标仍为 [产品完成路线图](PRODUCT_COMPLETION_ROADMAP.md)，当前没有完成全部 M0-M6，也未发布新版本。
+更新日期：2026-09-09。`v1.3.19` 已发布，Windows ZIP、macOS DMG 和两个哈希清单已上传并回读；[正式发布 CI](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34281710961) 全部通过。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
+
+按用户最新要求，当前推进范围为产品开发、必要基础测试及 CI 构建；真实设备、长期运行和签名公证不作为本轮开发阻塞。下一批优化聚焦桌面网络恢复、中文错误处理和 OpenWrt 只读诊断。
+
+本轮开发已补齐：Windows Qt 网络可达性/介质变化通知，macOS 路径变化和唤醒通知，两端均合并重复事件、繁忙后补检且保留手动注销暂停；OpenWrt `diagnose` 只读检查和非 2xx 拒绝；中文网络处理建议。基础回归：Windows 5/5 CTest、macOS 控制器 32 条断言和 UI smoke、OpenWrt 4 项诊断行为及双 Lua HTTP 回归通过。新增行为列在 README“开发中”，未修改 v1.3.19 已发布资产。
 
 状态只对应表中列出的验证范围；原生编译、模拟设备边界和真实校园网验收不能互相替代。
 

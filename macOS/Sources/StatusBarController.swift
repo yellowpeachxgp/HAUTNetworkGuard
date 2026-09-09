@@ -13,7 +13,15 @@ class StatusBarController: NSObject {
     private let api: SrunService
     private let config: AppConfig
     private let now: () -> TimeInterval
+    private let workspaceNotificationCenter: NotificationCenter
+    private let networkRecoveryEnabled: Bool
+    private let networkEventDebounceInterval: TimeInterval
     private var checkTimer: Timer?
+    private var networkEventWorkItem: DispatchWorkItem?
+    private var networkEventGeneration: UInt64 = 0
+    private var pendingNetworkCheck = false
+    private var pendingNetworkReason: String?
+    private var wakeObserver: NSObjectProtocol?
     private var currentStatus: NetworkStatus = .checking
     private var lastStatusAt: Date?
     private var checkInterval: TimeInterval { TimeInterval(config.checkInterval) }
@@ -33,14 +41,21 @@ class StatusBarController: NSObject {
     private var utilityWindowObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
 
     init(api: SrunService = SrunAPI(), config: AppConfig = .shared,
-         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
+         networkRecoveryEnabled: Bool = !AppRuntime.isUISmokeTest,
+         networkEventDebounceInterval: TimeInterval = 0.5) {
         self.api = api
         self.config = config
         self.now = now
+        self.workspaceNotificationCenter = workspaceNotificationCenter
+        self.networkRecoveryEnabled = networkRecoveryEnabled
+        self.networkEventDebounceInterval = max(0, networkEventDebounceInterval)
         super.init()
         Logger.debug("初始化菜单栏控制器")
         setupStatusItem()
         setupMenu()
+        setupNotifications()
         if AppRuntime.isUISmokeTest {
             Logger.info("已启用 macOS UI smoke test 模式，跳过通知、网络轮询和自动更新后台任务")
             currentStatus = .offline
@@ -50,11 +65,15 @@ class StatusBarController: NSObject {
             startMonitoring()
             setupUpdateChecker()
         }
-        setupNotifications()
     }
 
     deinit {
         checkTimer?.invalidate()
+        networkEventWorkItem?.cancel()
+        if let wakeObserver {
+            workspaceNotificationCenter.removeObserver(wakeObserver)
+        }
+        api.setNetworkChangeHandler(nil)
         NotificationCenter.default.removeObserver(self)
         for observer in utilityWindowObservers.values {
             NotificationCenter.default.removeObserver(observer)
@@ -69,6 +88,25 @@ class StatusBarController: NSObject {
             name: .checkIntervalChanged,
             object: nil
         )
+
+        guard networkRecoveryEnabled else { return }
+
+        // 唤醒后系统路由和物理接口可能还在收敛，统一经过去抖调度一次状态检测。
+        wakeObserver = workspaceNotificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleNetworkRecoveryCheck(reason: "wake")
+        }
+
+        // SrunAPI 将 DirectHTTPClient 的 NWPathMonitor 事件转发到这里。
+        api.setNetworkChangeHandler { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.scheduleNetworkRecoveryCheck(reason: "network_change")
+            }
+        }
     }
     
     @objc private func restartTimer() {
@@ -447,6 +485,54 @@ extension StatusBarController {
 
 // MARK: - 监控逻辑
 extension StatusBarController {
+    /// 合并短时间内的路径/唤醒事件，避免一次网络切换发出多次状态请求。
+    private func scheduleNetworkRecoveryCheck(reason: String) {
+        guard networkRecoveryEnabled else { return }
+
+        pendingNetworkCheck = true
+        // 多个来源在同一时间窗口内只保留一个检测；保留较宽泛的原因便于日志阅读。
+        if let pendingNetworkReason, pendingNetworkReason != reason {
+            self.pendingNetworkReason = "network_recovery"
+        } else {
+            pendingNetworkReason = reason
+        }
+
+        networkEventGeneration &+= 1
+        let generation = networkEventGeneration
+        networkEventWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.networkEventGeneration == generation else { return }
+            self.networkEventWorkItem = nil
+            self.runNetworkRecoveryCheck()
+        }
+        networkEventWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + networkEventDebounceInterval,
+            execute: workItem
+        )
+    }
+
+    private func runNetworkRecoveryCheck() {
+        guard pendingNetworkCheck else { return }
+        guard !session.isBusy else {
+            // 事件不能因撞上登录/注销而丢失；当前操作完成后会再次排空。
+            Logger.debug("网络恢复检测暂缓：已有网络操作进行中")
+            return
+        }
+
+        let reason = pendingNetworkReason ?? "network_recovery"
+        pendingNetworkCheck = false
+        pendingNetworkReason = nil
+        checkStatus(reason: reason)
+    }
+
+    /// 当前请求完成后排空被去抖窗口暂存的事件。
+    private func drainPendingNetworkRecoveryCheck() {
+        // 去抖窗口尚未结束时交给已排队的 work item，避免同一轮切网被提前拆成两次检测。
+        guard pendingNetworkCheck, networkEventWorkItem == nil, !session.isBusy else { return }
+        runNetworkRecoveryCheck()
+    }
+
     private func startMonitoring() {
         Logger.info("开始网络监控，检测间隔: \(Int(checkInterval)) 秒")
         checkStatus(reason: "startup")
@@ -460,9 +546,20 @@ extension StatusBarController {
 
     func checkStatus(reason: String) {
         guard let token = session.beginStatus() else {
+            // 事件驱动的检测可能在当前认证请求期间到达；留给完成回调排空。
+            if reason == "wake" || reason == "network_change" || reason == "network_recovery" {
+                pendingNetworkCheck = true
+                pendingNetworkReason = reason
+            }
             Logger.debug("跳过状态检测 [\(reason)]：已有网络操作进行中")
             return
         }
+
+        // 任意成功启动的状态请求都可以满足待处理的恢复检测，避免重复请求。
+        pendingNetworkCheck = false
+        pendingNetworkReason = nil
+        networkEventWorkItem?.cancel()
+        networkEventWorkItem = nil
 
         updateUI()
         Logger.debug("触发一次网络状态检测 [\(reason)]")
@@ -477,6 +574,7 @@ extension StatusBarController {
                 }
                 guard self.session.completeStatus(token, observation: observation) else { return }
                 self.handleStatusChange(status, reason: reason)
+                self.drainPendingNetworkRecoveryCheck()
             }
         }
     }
@@ -590,6 +688,7 @@ extension StatusBarController {
                 if succeeded || manual {
                     self.checkStatus(reason: "post_login")
                 }
+                self.drainPendingNetworkRecoveryCheck()
             }
         }
     }
@@ -633,6 +732,7 @@ extension StatusBarController {
                 }
                 self.updateUI()
                 self.checkStatus(reason: "manual_logout")
+                self.drainPendingNetworkRecoveryCheck()
             }
         }
     }

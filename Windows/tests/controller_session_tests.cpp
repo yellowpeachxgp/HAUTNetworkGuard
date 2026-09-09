@@ -2,6 +2,7 @@
 #include "../src/logger.h"
 #include <QApplication>
 #include <QDebug>
+#include <QEventLoop>
 #include <QTemporaryDir>
 #include <stdexcept>
 #include <vector>
@@ -206,6 +207,87 @@ int main(int argc, char **argv) {
     QApplication::processEvents();
     expect(configuredApi.statusTokens.size() == 1,
            "首次配置保存成功后应立即发起一次状态检测");
+
+    // 网络环境通知使用隔离窗口和模拟 API 回放，不接触真实校园网或生产配置。
+    QSettings networkEventSettings(directory.filePath("network-events.ini"),
+                                   QSettings::IniFormat);
+    Config networkEventConfig(networkEventSettings);
+    networkEventConfig.setUsername("event-student");
+    networkEventConfig.setPassword("event-password");
+    networkEventConfig.setAutoSave(false);
+    networkEventConfig.setAutoLogin(true);
+    expect(networkEventConfig.save(), "网络事件回放基线配置应保存成功");
+    ReplayApi networkEventApi;
+    MainWindow networkEventWindow(networkEventConfig, &networkEventApi,
+                                  [&] { return clock; }, false);
+    auto networkEventTimer =
+        networkEventWindow.findChild<QTimer *>("networkChangeDebounceTimer");
+    expect(networkEventTimer && networkEventTimer->isSingleShot(),
+           "网络环境通知必须使用单次去抖定时器");
+    // 缩短测试等待，不改变正式实现的去抖间隔。
+    networkEventTimer->setInterval(0);
+    auto networkEvent = [&] {
+      expect(QMetaObject::invokeMethod(&networkEventWindow,
+                                       "onNetworkEnvironmentChanged",
+                                       Qt::DirectConnection),
+             "无法回放网络环境变化通知");
+    };
+    auto settleNetworkEvent = [&] {
+      QApplication::processEvents(QEventLoop::AllEvents);
+      QApplication::processEvents(QEventLoop::AllEvents);
+    };
+
+    // 同一去抖窗口内的多个系统通知只能合并为一次状态请求。
+    networkEvent();
+    networkEvent();
+    networkEvent();
+    expect(networkEventApi.statusTokens.empty(),
+           "去抖窗口结束前不得发起网络状态请求");
+    settleNetworkEvent();
+    expect(networkEventApi.statusTokens.size() == 1,
+           "连续网络环境通知必须合并为一次状态请求");
+    emit networkEventApi.statusChecked(networkEventApi.statusTokens.back(), true,
+                                       "online_csv", "", 0, 0);
+
+    // 通知在已有检测期间到达时不能丢失，当前检测完成后补发一次且不并发。
+    QMetaObject::invokeMethod(&networkEventWindow, "checkNetworkStatus",
+                              Qt::DirectConnection);
+    const auto busyStatusToken = networkEventApi.statusTokens.back();
+    networkEvent();
+    settleNetworkEvent();
+    expect(networkEventApi.statusTokens.size() == 2,
+           "检测忙碌时网络通知不得并发发起请求");
+    emit networkEventApi.statusChecked(busyStatusToken, true, "online_csv", "",
+                                       0, 0);
+    expect(networkEventApi.statusTokens.size() == 3,
+           "检测完成后应补发一次待处理网络检测");
+    emit networkEventApi.statusChecked(networkEventApi.statusTokens.back(), true,
+                                       "online_csv", "", 0, 0);
+
+    // 手动注销建立的暂停意图不能被网络环境通知或离线结果解除。
+    QMetaObject::invokeMethod(&networkEventWindow, "onLogoutClicked",
+                              Qt::DirectConnection);
+    expect(networkEventApi.logoutTokens.size() == 1,
+           "网络事件回放应能进入正式注销流程");
+    networkEvent();
+    settleNetworkEvent();
+    expect(networkEventApi.statusTokens.size() == 3,
+           "注销请求期间网络通知不得并发检测");
+    emit networkEventApi.logoutSuccess(networkEventApi.logoutTokens.back(),
+                                        "logout_ok");
+    expect(networkEventApi.statusTokens.size() == 4,
+           "注销完成后应补发待处理网络检测");
+    emit networkEventApi.statusChecked(networkEventApi.statusTokens.back(), true,
+                                       "online_csv", "", 0, 0);
+    const auto statusBeforeHoldEvent = networkEventApi.statusTokens.size();
+    networkEvent();
+    settleNetworkEvent();
+    expect(networkEventApi.statusTokens.size() == statusBeforeHoldEvent + 1,
+           "手动注销暂停期间仍应响应网络环境通知并检测");
+    emit networkEventApi.statusChecked(networkEventApi.statusTokens.back(), false,
+                                       "offline", "", 0, 0);
+    expect(networkEventApi.loginTokens.empty(),
+           "网络环境通知不得解除手动注销后的自动重连暂停");
   } catch (const std::exception &error) {
     qCritical().noquote() << "Qt 控制器回放失败：" << error.what();
     return 1;

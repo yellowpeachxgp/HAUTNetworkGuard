@@ -100,6 +100,9 @@ uci commit haut-network-guard
 # 查看状态
 /etc/init.d/haut-network-guard status
 
+# 只读检查依赖和 UCI 配置（不发起校园网请求）
+/etc/init.d/haut-network-guard diagnose
+
 # 开机自启
 /etc/init.d/haut-network-guard enable
 
@@ -168,6 +171,7 @@ chmod +x uninstall.sh
 
 - 查看日志:
   - `logread | grep haut-network-guard`
+- 遇到启动或重连问题时，先运行 `/etc/init.d/haut-network-guard diagnose`，根据“失败/提示”项补齐依赖或配置；诊断不会输出账号和密码内容。
 - 临时提高日志级别:
   - `uci set haut-network-guard.main.log_level='debug'`
   - `uci commit haut-network-guard`

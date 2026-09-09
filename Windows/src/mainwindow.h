@@ -17,6 +17,8 @@
 #include "session_policy.h"
 #include "trayicon.h"
 
+class QNetworkInformation;
+
 class MainWindow : public QMainWindow {
   Q_OBJECT
 
@@ -46,6 +48,8 @@ private slots:
                        qint64 secondsOnline);
 
   void checkNetworkStatus();
+  void onNetworkEnvironmentChanged();
+  void onNetworkChangeDebounced();
   void showWindow();
   void exitApplication();
 
@@ -62,6 +66,8 @@ private:
   void updateOptionHint();
   void updateStatusDisplay(bool online, const QString &ip = "",
                            qint64 bytes = 0, qint64 seconds = 0);
+  void setupNetworkMonitor();
+  void flushPendingNetworkCheck();
   QString formatBytes(qint64 bytes);
   QString formatTime(qint64 seconds);
   QString automaticRetryHint() const;
@@ -89,9 +95,12 @@ private:
   Api *m_api = nullptr;
   TrayIcon *m_trayIcon = nullptr;
   QTimer *m_statusTimer = nullptr;
+  QTimer *m_networkChangeTimer = nullptr;
+  QNetworkInformation *m_networkInformation = nullptr;
   Config &m_config;
   std::function<double()> m_now;
   bool m_backgroundTasks;
+  bool m_networkRecheckPending = false;
 
   bool m_isOnline = false;
   bool m_isManualLogin = false;

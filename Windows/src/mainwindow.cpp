@@ -9,8 +9,13 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QNetworkInformation>
 #include <QtGlobal>
 #include <QVBoxLayout>
+
+namespace {
+constexpr int kNetworkChangeDebounceMs = 500;
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : MainWindow(Config::instance(), nullptr, {}, true, parent) {}
@@ -59,6 +64,9 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
   if (m_backgroundTasks) m_statusTimer->start();
   Logger::info(QString("网络状态定时器已启动: %1 ms").arg(interval));
 
+  // 网络环境变化只作为及时检测提示，最终请求仍由 SessionPolicy 串行控制。
+  setupNetworkMonitor();
+
   // 启动时检测状态
   if (m_backgroundTasks) QTimer::singleShot(1000, this, &MainWindow::checkNetworkStatus);
 
@@ -67,6 +75,42 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::setupNetworkMonitor() {
+  m_networkChangeTimer = new QTimer(this);
+  m_networkChangeTimer->setObjectName(QStringLiteral("networkChangeDebounceTimer"));
+  m_networkChangeTimer->setSingleShot(true);
+  m_networkChangeTimer->setInterval(kNetworkChangeDebounceMs);
+  connect(m_networkChangeTimer, &QTimer::timeout, this,
+          &MainWindow::onNetworkChangeDebounced);
+
+  // 测试构造关闭后台任务，避免加载系统网络后端或访问任何真实网络。
+  if (!m_backgroundTasks) return;
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+  const bool loaded = QNetworkInformation::loadDefaultBackend();
+  m_networkInformation = QNetworkInformation::instance();
+  if (!m_networkInformation) {
+    Logger::debug(QString("网络环境监视器不可用 (backend_loaded=%1)")
+                      .arg(loaded ? "true" : "false"));
+    return;
+  }
+
+  connect(m_networkInformation, &QNetworkInformation::reachabilityChanged,
+          this, [this](QNetworkInformation::Reachability) {
+            onNetworkEnvironmentChanged();
+          });
+  connect(m_networkInformation, &QNetworkInformation::transportMediumChanged,
+          this, [this](QNetworkInformation::TransportMedium) {
+            onNetworkEnvironmentChanged();
+          });
+  Logger::debug(QString("网络环境监视器已启用 (backend=%1, loaded=%2)")
+                    .arg(m_networkInformation->backendName())
+                    .arg(loaded ? "true" : "false"));
+#else
+  Logger::debug("当前 Qt 版本不提供网络环境变化通知，继续使用周期检测");
+#endif
+}
 
 void MainWindow::applyWindowStyle() {
   setStyleSheet(R"(
@@ -520,6 +564,7 @@ void MainWindow::onLoginFailed(quint64 token, const QString &error) {
   if (wasManual && m_backgroundTasks) {
     QMessageBox::warning(this, "登录失败", error);
   }
+  flushPendingNetworkCheck();
 }
 
 void MainWindow::triggerAutoLoginIfPossible(const QString &reason) {
@@ -557,6 +602,7 @@ void MainWindow::onLogoutSuccess(quint64 token, const QString &resultClass) {
   } else {
     m_trayIcon->showMessage("注销成功", "已退出网络");
   }
+  flushPendingNetworkCheck();
 }
 
 void MainWindow::onLogoutFailed(quint64 token, const QString &error) {
@@ -566,6 +612,7 @@ void MainWindow::onLogoutFailed(quint64 token, const QString &error) {
   refreshActionState();
 
   if (m_backgroundTasks) QMessageBox::warning(this, "注销失败", error);
+  flushPendingNetworkCheck();
 }
 
 void MainWindow::onStatusChecked(quint64 token, bool online, const QString &resultClass,
@@ -600,6 +647,7 @@ void MainWindow::onStatusChecked(quint64 token, bool online, const QString &resu
     }
     Logger::warn(QString("状态检测异常，保持当前在线状态不变: class=%1")
                      .arg(resultClass));
+    flushPendingNetworkCheck();
     return;
   }
 
@@ -611,6 +659,7 @@ void MainWindow::onStatusChecked(quint64 token, bool online, const QString &resu
   if (!online) {
     triggerAutoLoginIfPossible(wasOnline ? "掉线重连" : "离线重试");
   }
+  flushPendingNetworkCheck();
 }
 
 void MainWindow::refreshActionState() {
@@ -736,9 +785,34 @@ QString MainWindow::diagnosticText() const {
            m_config.autoLogin() ? "开启" : "关闭", retry);
 }
 
+void MainWindow::onNetworkEnvironmentChanged() {
+  if (!m_networkChangeTimer) return;
+
+  // 单次定时器重启会把连续的网卡/可达性通知合并为一次检测。
+  m_networkRecheckPending = true;
+  m_networkChangeTimer->start();
+  Logger::debug("收到网络环境变化通知，等待去抖后重新检测");
+}
+
+void MainWindow::onNetworkChangeDebounced() {
+  if (!m_networkRecheckPending) return;
+  // 网络事件在认证/注销期间不能丢失，完成回调再补一次；普通周期检测仍按原规则忽略。
+  if (m_session.isBusy()) return;
+  checkNetworkStatus();
+}
+
+void MainWindow::flushPendingNetworkCheck() {
+  if (!m_networkRecheckPending || m_session.isBusy()) return;
+  // 仍在去抖窗口内时，让定时器继续合并后续通知。
+  if (m_networkChangeTimer && m_networkChangeTimer->isActive()) return;
+  checkNetworkStatus();
+}
+
 void MainWindow::checkNetworkStatus() {
   const auto token = m_session.beginStatus();
   if (!token) return;
+  if (m_networkChangeTimer) m_networkChangeTimer->stop();
+  m_networkRecheckPending = false;
   refreshActionState();
   Logger::debug("触发网络状态检测");
   m_api->checkStatus(*token);

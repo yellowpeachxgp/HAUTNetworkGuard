@@ -10,8 +10,16 @@ class DirectHTTPClient {
     private let stateQueue = DispatchQueue(label: "DirectHTTPClient.state")
     private let monitorQueue = DispatchQueue(label: "DirectHTTPClient.monitor")
     private var interfaceName: String?
+    private var pathSignature: String?
+    private var networkChangeHandler: (() -> Void)?
     private let monitor: NWPathMonitor
     private let timeout: TimeInterval
+
+    /// 网络路径发生实际变化时回调。回调在 Network 监控队列上执行，调用方应自行切回主线程。
+    var onNetworkChange: (() -> Void)? {
+        get { stateQueue.sync { networkChangeHandler } }
+        set { stateQueue.sync { networkChangeHandler = newValue } }
+    }
 
     init(timeout: TimeInterval = 10) {
         self.timeout = timeout
@@ -57,9 +65,26 @@ class DirectHTTPClient {
             Logger.warn("[DirectHTTP] 未找到可用物理接口")
         }
 
-        stateQueue.sync {
+        // NWPathMonitor 在唤醒、切换 Wi-Fi/有线和路径失效时都会回调。
+        // 只对路径签名的真实变化发通知，避免初始回调和重复回调造成检测风暴。
+        let signature = Self.pathSignature(path, resolvedInterface: resolvedName)
+        let changed = stateQueue.sync {
+            let changed = pathSignature != signature
+            pathSignature = signature
             interfaceName = resolvedName
+            return changed
         }
+        if changed, let handler = onNetworkChange {
+            handler()
+        }
+    }
+
+    private static func pathSignature(_ path: NWPath, resolvedInterface: String?) -> String {
+        let interfaces = path.availableInterfaces
+            .map { "\($0.name):\($0.type)" }
+            .sorted()
+            .joined(separator: ",")
+        return "status=\(path.status);interface=\(resolvedInterface ?? "");available=\(interfaces);expensive=\(path.isExpensive);constrained=\(path.isConstrained)"
     }
 
     // MARK: - Public API

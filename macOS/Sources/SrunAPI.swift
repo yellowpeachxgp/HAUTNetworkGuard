@@ -75,6 +75,13 @@ protocol SrunService {
     func checkStatus(completion: @escaping (NetworkStatus) -> Void)
     func login(completion: @escaping (LoginResult) -> Void)
     func logout(completion: @escaping (LoginResult) -> Void)
+    /// 注册网络路径变化通知；回调由实现决定所在队列，控制器会切回主线程。
+    func setNetworkChangeHandler(_ handler: (() -> Void)?)
+}
+
+extension SrunService {
+    /// 回放测试服务无需启动系统网络监控。
+    func setNetworkChangeHandler(_ handler: (() -> Void)?) {}
 }
 
 /// SRUN3K API 封装
@@ -90,6 +97,10 @@ class SrunAPI: SrunService {
     private let httpClient = DirectHTTPClient(timeout: 10)
     private let authLock = NSLock()
     private var authActionInFlight: String?
+
+    func setNetworkChangeHandler(_ handler: (() -> Void)?) {
+        httpClient.onNetworkChange = handler
+    }
 
     private func beginAuth(_ action: String) -> Bool {
         authLock.lock()
@@ -140,7 +151,7 @@ class SrunAPI: SrunService {
                 } else if parsed.format == "offline" {
                     status = .offline
                 } else {
-                    status = .error("状态解析失败(\(parsed.format))")
+                    status = .error("校园网网关返回了无法识别的状态，请稍后重试。")
                 }
                 let classification = parsed.online ? "online_\(parsed.format)" : parsed.format
                 Logger.info("[\(requestID)] action=status phase=response class=\(classification) elapsed_ms=\(durationMs)")
@@ -149,7 +160,7 @@ class SrunAPI: SrunService {
             case .failure(let error):
                 let durationMs = Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
                 Logger.warn("[\(requestID)] action=status phase=error class=network_error elapsed_ms=\(durationMs) msg=\(error.localizedDescription)")
-                completion(.error(error.localizedDescription))
+                completion(.error(SrunProtocol.userFacingNetworkError(error)))
             }
         }
     }

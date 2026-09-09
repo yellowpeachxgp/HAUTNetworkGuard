@@ -10,9 +10,12 @@ private final class ReplaySrunService: SrunService {
     var statusReplies: [(NetworkStatus) -> Void] = []
     var loginReplies: [(LoginResult) -> Void] = []
     var logoutReplies: [(LoginResult) -> Void] = []
+    private var networkChangeHandler: (() -> Void)?
     func checkStatus(completion: @escaping (NetworkStatus) -> Void) { statusReplies.append(completion) }
     func login(completion: @escaping (LoginResult) -> Void) { loginReplies.append(completion) }
     func logout(completion: @escaping (LoginResult) -> Void) { logoutReplies.append(completion) }
+    func setNetworkChangeHandler(_ handler: (() -> Void)?) { networkChangeHandler = handler }
+    func emitNetworkChange() { networkChangeHandler?() }
 }
 
 /// 执行正式菜单栏控制器；仅替换 I/O 与时钟，不连接校园网、不调用正式凭据域。
@@ -24,15 +27,23 @@ func runControllerSessionTests() {
     let config = AppConfig(defaults: defaults, credentialStore: SessionTestPasswordStore())
     precondition(config.save(username: "test-student", password: "test-only", autoSave: false))
     let service = ReplaySrunService()
+    let workspaceCenter = NotificationCenter()
     var clock: TimeInterval = 0
-    let controller = StatusBarController(api: service, config: config, now: { clock })
+    let controller = StatusBarController(
+        api: service,
+        config: config,
+        now: { clock },
+        workspaceNotificationCenter: workspaceCenter,
+        networkRecoveryEnabled: true,
+        networkEventDebounceInterval: 0
+    )
     var checked = 0
 
     func expect(_ condition: Bool, _ message: String) {
         precondition(condition, message)
         checked += 1
     }
-    func settle() {
+    func settle(_ extraWait: TimeInterval = 0) {
         var drained = false
         DispatchQueue.main.async { drained = true }
         let deadline = Date().addingTimeInterval(1)
@@ -40,6 +51,12 @@ func runControllerSessionTests() {
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005))
         }
         precondition(drained, "主线程回调未完成")
+        if extraWait > 0 {
+            let waitUntil = Date().addingTimeInterval(extraWait)
+            while Date() < waitUntil {
+                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.005))
+            }
+        }
     }
     func status(_ result: NetworkStatus) {
         let previous = service.statusReplies.count
@@ -132,5 +149,41 @@ func runControllerSessionTests() {
     expect(service.loginReplies.count == 5, "显式恢复并确认在线后，断线可以重新自动登录")
     service.loginReplies[4](.failed("模拟结束"))
     settle()
+
+    // 网络路径事件应去抖为一次检测；事件撞上请求时要在请求完成后补发一次。
+    let beforeDebouncedRecovery = service.statusReplies.count
+    service.emitNetworkChange()
+    service.emitNetworkChange()
+    service.emitNetworkChange()
+    settle(0.05)
+    expect(service.statusReplies.count == beforeDebouncedRecovery + 1,
+           "连续网络路径事件应去抖为一次状态检测")
+    service.statusReplies.last!(.error("模拟网络变化"))
+    settle()
+
+    let beforeWakeRecovery = service.statusReplies.count
+    workspaceCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+    workspaceCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
+    settle(0.05)
+    expect(service.statusReplies.count == beforeWakeRecovery + 1,
+           "连续唤醒事件应去抖为一次状态检测")
+    service.statusReplies.last!(.error("模拟唤醒"))
+    settle()
+
+    let beforeBusyRecovery = service.statusReplies.count
+    controller.checkStatus(reason: "recovery_busy_seed")
+    expect(service.statusReplies.count == beforeBusyRecovery + 1,
+           "恢复检测串行测试应先占用一个状态请求")
+    service.emitNetworkChange()
+    settle(0.05)
+    expect(service.statusReplies.count == beforeBusyRecovery + 1,
+           "网络事件撞上状态请求时不得并发发起请求")
+    service.statusReplies.last!(.error("模拟忙碌期间网络变化"))
+    settle()
+    expect(service.statusReplies.count == beforeBusyRecovery + 2,
+           "忙碌期间网络事件应在当前请求完成后补发检测")
+    service.statusReplies.last!(.error("模拟补发检测"))
+    settle()
+
     print("macOS 正式控制器会话回放通过：\(checked) 个断言")
 }

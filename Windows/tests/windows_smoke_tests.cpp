@@ -83,6 +83,12 @@ int main(int argc, char *argv[]) {
   expect(ProtocolUtils::userFacingNetworkError("TLS internal failure") ==
              "网络请求失败，请检查网络连接后重试。",
          "未知网络错误应使用通用提示");
+  expect(ProtocolUtils::userFacingNetworkError("Service unavailable", 503) ==
+             "校园网网关返回异常，请稍后重试。",
+         "HTTP 服务异常不得提示为账号密码错误");
+  expect(ProtocolUtils::userFacingNetworkError("cannot connect") ==
+             "无法连接校园网网关，请检查网络连接后重试。",
+         "三端网关连接失败提示应一致");
   expect(!ProtocolUtils::responsePreview(
                   "{\"user_name\":\"231040600203\"}")
                   .contains("231040600203"),

@@ -51,6 +51,12 @@ struct SmokeTests {
         )
         expect(SrunProtocol.classifyLoginResponse("login_error#E25:short-code").category == "unknown",
                "短错误码不应被分类为标准错误")
+        expect(SrunProtocol.userFacingNetworkError("Host not found") ==
+                   "无法连接校园网网关，请检查网络连接后重试。",
+               "三端主机解析失败提示应一致")
+        expect(SrunProtocol.userFacingNetworkError(DirectHTTPClient.HTTPError.httpStatus(503)) ==
+                   "校园网网关返回异常，请稍后重试。",
+               "HTTP 服务异常不得提示为账号密码错误")
         expect(SrunProtocol.classifyLoginResponse("login_error#E12345:long-code").category == "unknown",
                "超长错误码不应被分类为标准错误")
         expect(SrunProtocol.classifyLoginResponse("login_ok already_online").category == "success",

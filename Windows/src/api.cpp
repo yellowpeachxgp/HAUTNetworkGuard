@@ -184,7 +184,8 @@ void Api::onLoginReplyFinished() {
                       .arg(elapsedMs)
                       .arg(reply->errorString()));
     emit loginFailed(reply->property("sessionToken").toULongLong(),
-                     ProtocolUtils::userFacingNetworkError(reply->errorString()));
+                     ProtocolUtils::userFacingNetworkError(reply->errorString(),
+                         reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()));
     return;
   }
 
@@ -229,7 +230,8 @@ void Api::onLogoutReplyFinished() {
                       .arg(elapsedMs)
                       .arg(reply->errorString()));
     emit logoutFailed(reply->property("sessionToken").toULongLong(),
-                      ProtocolUtils::userFacingNetworkError(reply->errorString()));
+                      ProtocolUtils::userFacingNetworkError(reply->errorString(),
+                          reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()));
     return;
   }
 

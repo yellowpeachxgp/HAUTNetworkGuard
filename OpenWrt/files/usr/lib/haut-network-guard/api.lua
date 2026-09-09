@@ -81,6 +81,17 @@ local function parse_curl_output(raw)
     }
 end
 
+local function transport_error(meta)
+    if meta.exit_code ~= 0 then
+        return "curl_exit_" .. tostring(meta.exit_code)
+    end
+    -- 非 2xx 正文即使包含 login_ok/not_online 也不能当作有效网关响应。
+    local code = tonumber(meta.http_code) or 0
+    if code < 200 or code >= 300 then
+        return "http_status_" .. tostring(meta.http_code)
+    end
+end
+
 local function http_get(url, req_id, action)
     local err_file = make_temp_path("haut-network-guard-curl-get")
     local cmd = string.format(
@@ -119,9 +130,8 @@ local function http_get(url, req_id, action)
 
     log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%.0f body=%s",
         req_id, tostring(action or "get"), meta.http_code, meta.duration_ms, log.bytes_summary(body)))
-    if tonumber(meta.exit_code or 0) ~= 0 then
-        return nil, "curl_exit_" .. tostring(meta.exit_code), meta
-    end
+    local err = transport_error(meta)
+    if err then return nil, err, meta end
     return body, nil, meta
 end
 
@@ -173,9 +183,8 @@ local function http_post(url, body, req_id, action)
 
     log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%.0f body=%s",
         req_id, tostring(action or "post"), meta.http_code, meta.duration_ms, log.bytes_summary(body_content)))
-    if tonumber(meta.exit_code or 0) ~= 0 then
-        return nil, "curl_exit_" .. tostring(meta.exit_code), meta
-    end
+    local transport_err = transport_error(meta)
+    if transport_err then return nil, transport_err, meta end
     return body_content, nil, meta
 end
 
@@ -211,7 +220,7 @@ function api.login(username, password, context)
     if post_err then
         log.error(string.format("[%s] action=login phase=error class=network_error msg=%s",
             req_id, post_err))
-        return false, "登录请求失败", "network_error"
+        return false, protocol.user_facing_network_error(post_err), "network_error"
     end
 
     local classified = protocol.classify_login_response(response)
@@ -238,7 +247,7 @@ function api.logout()
     if post_err then
         log.error(string.format("[%s] action=logout phase=error class=network_error msg=%s",
             req_id, post_err))
-        return false, "注销请求失败"
+        return false, protocol.user_facing_network_error(post_err)
     end
 
     local classified = protocol.classify_login_response(response)
@@ -268,7 +277,7 @@ function api.get_user_info(source)
     local response, get_err, meta = http_get(url, req_id, "status")
     if get_err then
         log.warn(string.format("[%s] action=status phase=error class=network_error source=%s msg=%s",
-            req_id, source, tostring(get_err)))
+            req_id, source, tostring(get_err) .. "; " .. protocol.user_facing_network_error(get_err)))
         return nil, tostring(get_err)
     end
 

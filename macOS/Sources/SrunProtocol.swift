@@ -42,7 +42,14 @@ enum SrunProtocol {
 
     /// 将底层网络错误转换为学生可直接处理的提示，避免展示英文系统错误。
     static func userFacingNetworkError(_ error: Error) -> String {
-        userFacingNetworkError(error.localizedDescription)
+        if let httpError = error as? DirectHTTPClient.HTTPError {
+            switch httpError {
+            case .httpStatus, .invalidResponse:
+                return "校园网网关返回异常，请稍后重试。"
+            default: break
+            }
+        }
+        return userFacingNetworkError(error.localizedDescription)
     }
 
     static func userFacingNetworkError(_ message: String) -> String {
@@ -51,6 +58,7 @@ enum SrunProtocol {
             return "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。"
         }
         if normalized.contains("unreachable") || normalized.contains("connection refused") ||
+            normalized.contains("host not found") || normalized.contains("无法解析主机") ||
             normalized.contains("cannot connect") || normalized.contains("无法连接") {
             return "无法连接校园网网关，请检查网络连接后重试。"
         }

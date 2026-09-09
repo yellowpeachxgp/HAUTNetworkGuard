@@ -4,6 +4,7 @@ package.path = "OpenWrt/files/usr/lib/haut-network-guard/?.lua;" .. package.path
 local messages, files = {}, {}
 local response_body = ""
 local curl_exit = 0
+local http_status = "200"
 local interval = "30"
 local last_post_body = ""
 local function record(value) messages[#messages + 1] = tostring(value) end
@@ -38,7 +39,7 @@ end
 io.popen = function(command)
     local output
     if command:find("^curl ") then
-        output = response_body .. "\n__HAUT_CURL_META__:200:0.0125\n__HAUT_CURL_EXIT__:" .. curl_exit .. "\n"
+        output = response_body .. "\n__HAUT_CURL_META__:" .. http_status .. ":0.0125\n__HAUT_CURL_EXIT__:" .. curl_exit .. "\n"
     elseif command:find("^uci ") then
         local key = command:match("haut%-network%-guard%.main%.(%w+)")
         output = ({ username = "student-user", password = "test-only", interval = interval,
@@ -84,6 +85,32 @@ check(invalid == nil and invalid_class == "unparsed", "异常响应分类回归"
 curl_exit = 7
 local unavailable, unavailable_class = api.get_user_info("regression")
 check(unavailable == nil and unavailable_class == "curl_exit_7", "连接失败不得误判离线，并应保留 curl 错误")
+curl_exit = 0
+
+-- 错误状态码正文伪装为成功或离线时，不得继续驱动认证状态机。
+for _, code in ipairs({"000", "302", "403", "503"}) do
+    http_status = code
+    response_body = "not_online"
+    local value, category = api.get_user_info("regression")
+    check(value == nil and category == "http_status_" .. code,
+          "HTTP 异常不能被解析为离线：" .. code)
+    response_body = "login_ok"
+    local ok, message, category = api.login("student-user", "test-only")
+    check(not ok and category == "network_error" and
+          message == "校园网网关返回异常，请稍后重试。",
+          "HTTP 异常不能被解析为登录成功：" .. code)
+    response_body = "logout_ok"
+    check(not api.logout(), "HTTP 异常不能被解析为注销成功：" .. code)
+end
+http_status = "200"
+curl_exit = 28
+local timed_out, timeout_message = api.login("student-user", "test-only")
+check(not timed_out and timeout_message ==
+      "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。", "超时应给出处理建议")
+curl_exit = 7
+local connected, connect_message = api.logout()
+check(not connected and connect_message == "无法连接校园网网关，请检查网络连接后重试。",
+      "连接失败应给出与桌面端一致的处理建议")
 curl_exit = 0
 
 -- PR #3 的浮点格式修复仍需防御 API 之外的异常调用，直接回放 main 的格式化边界。

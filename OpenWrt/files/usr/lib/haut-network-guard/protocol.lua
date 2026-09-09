@@ -3,6 +3,20 @@
 
 local protocol = {}
 
+-- 保留 curl/HTTP 技术分类，同时给出与桌面端一致的处理建议。
+function protocol.user_facing_network_error(category)
+    if category == "curl_exit_28" then
+        return "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。"
+    end
+    if category == "curl_exit_6" or category == "curl_exit_7" then
+        return "无法连接校园网网关，请检查网络连接后重试。"
+    end
+    if tostring(category):match("^http_status_%d+$") then
+        return "校园网网关返回异常，请稍后重试。"
+    end
+    return "网络请求失败，请检查网络连接后重试。"
+end
+
 local function trim_value(value)
     if not value then return "" end
     return tostring(value):gsub("^%s+", ""):gsub("%s+$", "")

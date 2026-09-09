@@ -108,13 +108,17 @@ QString ProtocolUtils::userFacingLoginMessage(const QString &classification) {
   return "登录失败，请稍后重试。";
 }
 
-QString ProtocolUtils::userFacingNetworkError(const QString &error) {
+QString ProtocolUtils::userFacingNetworkError(const QString &error, int httpStatus) {
+  if (httpStatus > 0 && (httpStatus < 200 || httpStatus >= 300)) {
+    return "校园网网关返回异常，请稍后重试。";
+  }
   const QString normalized = error.trimmed().toLower();
   if (normalized.contains("timeout") || normalized.contains("timed out") ||
       normalized.contains("超时")) {
     return "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。";
   }
   if (normalized.contains("host not found") ||
+      normalized.contains("无法解析主机") || normalized.contains("cannot connect") ||
       normalized.contains("network is unreachable") ||
       normalized.contains("connection refused") ||
       normalized.contains("unreachable") || normalized.contains("无法连接")) {

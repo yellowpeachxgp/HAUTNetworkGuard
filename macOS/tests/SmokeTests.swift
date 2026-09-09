@@ -57,6 +57,16 @@ struct SmokeTests {
         expect(SrunProtocol.userFacingNetworkError(DirectHTTPClient.HTTPError.httpStatus(503)) ==
                    "校园网网关返回异常，请稍后重试。",
                "HTTP 服务异常不得提示为账号密码错误")
+        expect(UpdateChecker.isValidReleaseTag("v1.3.20") && !UpdateChecker.isValidReleaseTag("1.3.20"),
+               "更新版本标签必须使用严格 vX.Y.Z 格式")
+        expect(UpdateChecker.isTrustedReleaseURL(
+            "https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/download/v1.3.20/HAUTNetworkGuard.dmg",
+            tag: "v1.3.20", assetName: "HAUTNetworkGuard.dmg"),
+               "更新资产地址必须匹配官方仓库和版本")
+        expect(!UpdateChecker.isTrustedReleaseURL(
+            "https://example.com/HAUTNetworkGuard.dmg",
+            tag: "v1.3.20", assetName: "HAUTNetworkGuard.dmg"),
+               "第三方更新地址必须拒绝")
         expect(SrunProtocol.classifyLoginResponse("login_error#E12345:long-code").category == "unknown",
                "超长错误码不应被分类为标准错误")
         expect(SrunProtocol.classifyLoginResponse("login_ok already_online").category == "success",

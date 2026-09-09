@@ -258,8 +258,14 @@ class UpdateWindowController: NSWindowController {
         case .hasUpdate(let info):
             Logger.log("用户选择立即更新")
             let urlString = info.downloadURL ?? info.htmlURL
-            if let url = URL(string: urlString) {
+            let tag = "v\(info.version)"
+            let trusted = info.downloadURL == nil
+                ? UpdateChecker.isTrustedReleaseURL(urlString, tag: tag)
+                : UpdateChecker.isTrustedReleaseURL(urlString, tag: tag, assetName: "HAUTNetworkGuard.dmg")
+            if trusted, let url = URL(string: urlString) {
                 NSWorkspace.shared.open(url)
+            } else {
+                Logger.warn("拒绝打开不可信的更新地址")
             }
             window?.close()
         case .noUpdate, .error:

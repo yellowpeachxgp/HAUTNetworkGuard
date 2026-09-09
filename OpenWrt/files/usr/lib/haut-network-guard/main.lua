@@ -27,7 +27,10 @@ local function read_config()
         password = "",
         enabled = true,
         interval = 30,
-        log_level = "info"
+        log_level = "info",
+        gateway_host = api.DEFAULT_HOST,
+        gateway_port = api.DEFAULT_LOGIN_PORT,
+        ac_id = api.DEFAULT_AC_ID
     }
     local diagnostics = {}
 
@@ -37,6 +40,13 @@ local function read_config()
         protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.password"))
     config.log_level, diagnostics.log_level =
         protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.log_level"))
+    local host, host_diag = protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.gateway_host"))
+    local port, port_diag = protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.gateway_port"))
+    local ac_id, ac_id_diag = protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.ac_id"))
+    diagnostics.gateway_host, diagnostics.gateway_port, diagnostics.ac_id = host_diag, port_diag, ac_id_diag
+    if host ~= "" and protocol.is_valid_ipv4(host) then config.gateway_host = host end
+    config.gateway_port = protocol.parse_port(port, api.DEFAULT_LOGIN_PORT)
+    config.ac_id = protocol.parse_port(ac_id, api.DEFAULT_AC_ID)
 
     local enabled_value, enabled_diag =
         protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.enabled"))
@@ -75,7 +85,10 @@ local function config_signature(config)
         config.username,
         config.password,
         tostring(config.interval),
-        tostring(config.log_level)
+        tostring(config.log_level),
+        config.gateway_host,
+        tostring(config.gateway_port),
+        tostring(config.ac_id)
     }, "|")
 end
 
@@ -176,6 +189,7 @@ local function main()
         if signature ~= last_signature then
             log.info("配置更新: " .. config_summary(config))
             log_diagnostics(diagnostics)
+            api.configure_gateway(config.gateway_host, config.gateway_port, config.ac_id)
             last_signature = signature
             login_session:reset(config.interval)
         end

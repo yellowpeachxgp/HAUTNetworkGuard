@@ -8,8 +8,25 @@ local log = require("log")
 local protocol = require("protocol")
 local version = require("version")
 
-api.BASE_URL = "http://172.16.154.130"
-api.LOGIN_URL = "http://172.16.154.130:69/cgi-bin/srun_portal"
+api.DEFAULT_HOST = "172.16.154.130"
+api.DEFAULT_LOGIN_PORT = 69
+api.DEFAULT_AC_ID = 1
+api.BASE_URL = "http://" .. api.DEFAULT_HOST
+api.LOGIN_URL = api.BASE_URL .. ":" .. api.DEFAULT_LOGIN_PORT .. "/cgi-bin/srun_portal"
+api.ac_id = api.DEFAULT_AC_ID
+
+function api.configure_gateway(host, login_port, ac_id)
+    host = tostring(host or "")
+    local port, port_ok = protocol.parse_port(login_port, api.DEFAULT_LOGIN_PORT)
+    local id, id_ok = protocol.parse_port(ac_id, api.DEFAULT_AC_ID)
+    if not protocol.is_valid_ipv4(host) or not port_ok or not id_ok then
+        return false
+    end
+    api.BASE_URL = "http://" .. host
+    api.LOGIN_URL = api.BASE_URL .. ":" .. tostring(port) .. "/cgi-bin/srun_portal"
+    api.ac_id = id
+    return true
+end
 api.USER_AGENT = "HAUTNetworkGuard/" .. version .. " OpenWrt"
 
 local request_seq = 0
@@ -208,7 +225,7 @@ function api.login(username, password, context)
     local body = "action=login"
         .. "&username=" .. url_encode(enc_username)
         .. "&password=" .. url_encode(enc_password)
-        .. "&ac_id=1&drop=0&pop=1&type=10&n=117&mbytes=0&minutes=0"
+        .. "&ac_id=" .. tostring(api.ac_id) .. "&drop=0&pop=1&type=10&n=117&mbytes=0&minutes=0"
         .. "&mac=02%3A00%3A00%3A00%3A00%3A00"
 
     log.debug(string.format(

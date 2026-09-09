@@ -22,6 +22,7 @@ SWIFTC=$(xcrun --sdk macosx --find swiftc)
     "$PROJECT_DIR/Sources/Encryption.swift" \
     "$PROJECT_DIR/Sources/SrunProtocol.swift" \
     "$PROJECT_DIR/Sources/DirectHTTPClient.swift" \
+    "$PROJECT_DIR/Sources/UpdateChecker.swift" \
     "$PROJECT_DIR/tests/CredentialTests.swift" \
     "$PROJECT_DIR/tests/SmokeTests.swift"
 

@@ -78,6 +78,11 @@ uci set haut-network-guard.main.password='你的密码'
 # 设置检测间隔 (秒，默认30)
 uci set haut-network-guard.main.interval='30'
 
+# 可选：覆盖校园网网关（默认 172.16.154.130:69，ac_id=1）
+uci set haut-network-guard.main.gateway_host='172.16.154.130'
+uci set haut-network-guard.main.gateway_port='69'
+uci set haut-network-guard.main.ac_id='1'
+
 # 可选: 设置日志级别 (debug/info/warn/error)
 uci set haut-network-guard.main.log_level='info'
 

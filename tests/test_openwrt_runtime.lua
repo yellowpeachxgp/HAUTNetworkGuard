@@ -55,6 +55,17 @@ local function check(condition, message)
     assert(condition, message)
 end
 
+check(api.configure_gateway("10.20.30.40", "8080", "2"), "有效网关覆盖应接受")
+check(api.BASE_URL == "http://10.20.30.40" and api.LOGIN_URL:find(":8080/", 1, true),
+      "网关覆盖应更新状态与登录地址")
+check(api.ac_id == 2, "网关覆盖应更新 ac_id")
+local previous_base, previous_login, previous_ac_id = api.BASE_URL, api.LOGIN_URL, api.ac_id
+check(not api.configure_gateway("10.20.30.999", "0", "70000"), "非法网关覆盖应拒绝")
+check(api.BASE_URL == previous_base and api.LOGIN_URL == previous_login and api.ac_id == previous_ac_id,
+      "非法网关覆盖不得破坏上一组有效配置")
+check(api.configure_gateway(api.DEFAULT_HOST, api.DEFAULT_LOGIN_PORT, api.DEFAULT_AC_ID),
+      "恢复默认网关配置应成功")
+
 response_body = "student-user,321,10.10.0.8,512,0,0"
 local parsed, class = api.get_user_info("regression")
 check(parsed and class == "online_csv", "整数状态字段应正常解析")

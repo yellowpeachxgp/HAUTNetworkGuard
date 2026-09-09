@@ -3,6 +3,25 @@
 
 local protocol = {}
 
+function protocol.is_valid_ipv4(value)
+    local a, b, c, d = tostring(value or ""):match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+    if not a then return false end
+    for _, part in ipairs({a, b, c, d}) do
+        local number = tonumber(part)
+        if not number or number > 255 then return false end
+    end
+    return true
+end
+
+function protocol.parse_port(value, fallback)
+    local text = tostring(value or "")
+    local number = tonumber(text)
+    if not text:match("^[0-9]+$") or not number or number < 1 or number > 65535 then
+        return fallback, false
+    end
+    return math.floor(number), true
+end
+
 -- 保留 curl/HTTP 技术分类，同时给出与桌面端一致的处理建议。
 function protocol.user_facing_network_error(category)
     if category == "curl_exit_28" then

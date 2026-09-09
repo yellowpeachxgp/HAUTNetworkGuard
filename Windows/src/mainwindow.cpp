@@ -2,6 +2,7 @@
 #include "config.h"
 #include "logger.h"
 #include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
 #include <QFrame>
 #include <QFormLayout>
@@ -9,10 +10,22 @@
 #include <QHBoxLayout>
 #include <QMessageBox>
 #include <QtGlobal>
+#include <QNetworkInformation>
 #include <QVBoxLayout>
 
-MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
-  setWindowTitle("HAUT Network Guard v1.3.18");
+namespace {
+constexpr int kNetworkChangeDebounceMs = 500;
+}
+
+MainWindow::MainWindow(QWidget *parent)
+    : MainWindow(Config::instance(), nullptr, {}, true, parent) {}
+
+MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
+                       bool backgroundTasks, QWidget *parent)
+    : QMainWindow(parent), m_config(config), m_now(std::move(now)),
+      m_backgroundTasks(backgroundTasks), m_externalApi(api != nullptr) {
+  m_clock.start();
+  setWindowTitle(QStringLiteral("HAUT Network Guard v" HAUT_VERSION_STRING));
   setFixedSize(460, 640);
   Logger::debug("MainWindow 初始化开始");
 
@@ -21,7 +34,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   loadSettings();
 
   // 初始化 API
-  m_api = new Api(this);
+  m_api = api ? api : new Api(this);
   connect(m_api, &Api::loginSuccess, this, &MainWindow::onLoginSuccess);
   connect(m_api, &Api::loginFailed, this, &MainWindow::onLoginFailed);
   connect(m_api, &Api::logoutSuccess, this, &MainWindow::onLogoutSuccess);
@@ -29,7 +42,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   connect(m_api, &Api::statusChecked, this, &MainWindow::onStatusChecked);
 
   // 初始化托盘图标
-  m_trayIcon = new TrayIcon(this);
+  m_trayIcon = new TrayIcon(this, m_backgroundTasks);
   connect(m_trayIcon, &TrayIcon::showWindowRequested, this,
           &MainWindow::showWindow);
   connect(m_trayIcon, &TrayIcon::exitRequested, this,
@@ -38,7 +51,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
           &MainWindow::onLoginClicked);
   connect(m_trayIcon, &TrayIcon::logoutRequested, this,
           &MainWindow::onLogoutClicked);
-  m_trayIcon->show();
+  if (m_backgroundTasks) m_trayIcon->show();
   refreshActionState();
   Logger::info("系统托盘已初始化");
 
@@ -46,19 +59,58 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
   m_statusTimer = new QTimer(this);
   connect(m_statusTimer, &QTimer::timeout, this,
           &MainWindow::checkNetworkStatus);
-  int interval = Config::instance().checkInterval() * 1000;
-  m_statusTimer->start(interval);
+  int interval = m_config.checkInterval() * 1000;
+  m_statusTimer->setInterval(interval);
+  if (m_backgroundTasks) m_statusTimer->start();
   Logger::info(QString("网络状态定时器已启动: %1 ms").arg(interval));
 
-  // 启动时检测状态
-  QTimer::singleShot(1000, this, &MainWindow::checkNetworkStatus);
+  // 网络环境变化只作为及时检测提示，最终请求仍由 SessionPolicy 串行控制。
+  setupNetworkMonitor();
 
-  // 启动时延迟自动登录 (等待首次状态检测完成)
-  QTimer::singleShot(4000, this, &MainWindow::tryAutoLogin);
+  // 启动时检测状态
+  if (m_backgroundTasks) QTimer::singleShot(1000, this, &MainWindow::checkNetworkStatus);
+
+  // 自动登录只由明确离线的状态响应触发。
   Logger::debug("MainWindow 初始化完成");
 }
 
 MainWindow::~MainWindow() {}
+
+void MainWindow::setupNetworkMonitor() {
+  m_networkChangeTimer = new QTimer(this);
+  m_networkChangeTimer->setObjectName(QStringLiteral("networkChangeDebounceTimer"));
+  m_networkChangeTimer->setSingleShot(true);
+  m_networkChangeTimer->setInterval(kNetworkChangeDebounceMs);
+  connect(m_networkChangeTimer, &QTimer::timeout, this,
+          &MainWindow::onNetworkChangeDebounced);
+
+  // 测试构造关闭后台任务或注入 Api，避免加载系统网络后端或访问任何真实网络。
+  if (!m_backgroundTasks || m_externalApi) return;
+
+#if defined(Q_OS_WIN) && QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+  const bool loaded = QNetworkInformation::loadDefaultBackend();
+  m_networkInformation = QNetworkInformation::instance();
+  if (!m_networkInformation) {
+    Logger::debug(QString("网络环境监视器不可用 (backend_loaded=%1)")
+                      .arg(loaded ? "true" : "false"));
+    return;
+  }
+
+  connect(m_networkInformation, &QNetworkInformation::reachabilityChanged,
+          this, [this](QNetworkInformation::Reachability) {
+            onNetworkEnvironmentChanged();
+          });
+  connect(m_networkInformation, &QNetworkInformation::transportMediumChanged,
+          this, [this](QNetworkInformation::TransportMedium) {
+            onNetworkEnvironmentChanged();
+          });
+  Logger::debug(QString("网络环境监视器已启用 (backend=%1, loaded=%2)")
+                    .arg(m_networkInformation->backendName())
+                    .arg(loaded ? "true" : "false"));
+#else
+  Logger::debug("当前平台或 Qt 版本不提供 Windows 网络环境变化通知，继续使用周期检测");
+#endif
+}
 
 void MainWindow::applyWindowStyle() {
   setStyleSheet(R"(
@@ -232,12 +284,16 @@ void MainWindow::setupUi() {
   accountLayout->addRow(accountHintLabel);
 
   m_usernameEdit = new QLineEdit();
+  m_usernameEdit->setObjectName("usernameInput");
+  m_usernameEdit->setAccessibleName("学号输入框");
   m_usernameEdit->setPlaceholderText("请输入学号");
   m_usernameEdit->setClearButtonEnabled(true);
   m_usernameEdit->setToolTip("校园网登录学号");
   accountLayout->addRow("学号:", m_usernameEdit);
 
   m_passwordEdit = new QLineEdit();
+  m_passwordEdit->setObjectName("passwordInput");
+  m_passwordEdit->setAccessibleName("密码输入框");
   m_passwordEdit->setEchoMode(QLineEdit::Password);
   m_passwordEdit->setPlaceholderText("请输入密码");
   m_passwordEdit->setClearButtonEnabled(true);
@@ -245,10 +301,13 @@ void MainWindow::setupUi() {
   accountLayout->addRow("密码:", m_passwordEdit);
 
   m_autoSaveCheck = new QCheckBox("记住密码");
+  m_autoSaveCheck->setAccessibleName("记住密码");
   m_autoSaveCheck->setToolTip("勾选后会持久化保存密码，方便重启后自动恢复连接");
   m_autoLaunchCheck = new QCheckBox("开机自启动");
+  m_autoLaunchCheck->setAccessibleName("开机自启动");
   m_autoLaunchCheck->setToolTip("随系统启动并在托盘中保持运行");
   m_autoLoginCheck = new QCheckBox("自动登录 (断线重连)");
+  m_autoLoginCheck->setAccessibleName("自动登录和断线重连");
   m_autoLoginCheck->setToolTip("离线时自动尝试重连，避免频繁手动登录");
   accountLayout->addRow(m_autoSaveCheck);
   accountLayout->addRow(m_autoLaunchCheck);
@@ -261,6 +320,7 @@ void MainWindow::setupUi() {
   // 检测间隔设置
   QHBoxLayout *intervalLayout = new QHBoxLayout();
   m_intervalSpinBox = new QSpinBox();
+  m_intervalSpinBox->setAccessibleName("检测间隔（秒）");
   m_intervalSpinBox->setRange(30, 300);
   m_intervalSpinBox->setSingleStep(15);
   m_intervalSpinBox->setSuffix(" 秒");
@@ -277,20 +337,30 @@ void MainWindow::setupUi() {
 
   m_saveBtn = new QPushButton("保存设置");
   m_saveBtn->setObjectName("secondaryButton");
+  m_saveBtn->setAccessibleName("保存设置");
   connect(m_saveBtn, &QPushButton::clicked, this, &MainWindow::onSaveClicked);
   buttonLayout->addWidget(m_saveBtn);
 
   m_loginBtn = new QPushButton("登录");
   m_loginBtn->setObjectName("primaryButton");
+  m_loginBtn->setAccessibleName("登录");
   m_loginBtn->setDefault(true);
   connect(m_loginBtn, &QPushButton::clicked, this, &MainWindow::onLoginClicked);
   buttonLayout->addWidget(m_loginBtn);
 
   m_logoutBtn = new QPushButton("注销");
   m_logoutBtn->setObjectName("dangerButton");
+  m_logoutBtn->setAccessibleName("注销");
   connect(m_logoutBtn, &QPushButton::clicked, this,
           &MainWindow::onLogoutClicked);
   buttonLayout->addWidget(m_logoutBtn);
+
+  QPushButton *diagnosticsBtn = new QPushButton("复制诊断");
+  diagnosticsBtn->setObjectName("diagnosticsButton");
+  diagnosticsBtn->setAccessibleName("复制脱敏诊断信息");
+  connect(diagnosticsBtn, &QPushButton::clicked, this,
+          &MainWindow::onCopyDiagnosticsClicked);
+  buttonLayout->addWidget(diagnosticsBtn);
 
   mainLayout->addLayout(buttonLayout);
 
@@ -305,6 +375,17 @@ void MainWindow::setupUi() {
   connect(m_autoLoginCheck, &QCheckBox::toggled, this,
           &MainWindow::updateOptionHint);
 
+  // 明确键盘焦点顺序，确保只用键盘也能完成首次配置和登录。
+  QWidget::setTabOrder(m_usernameEdit, m_passwordEdit);
+  QWidget::setTabOrder(m_passwordEdit, m_autoSaveCheck);
+  QWidget::setTabOrder(m_autoSaveCheck, m_autoLaunchCheck);
+  QWidget::setTabOrder(m_autoLaunchCheck, m_autoLoginCheck);
+  QWidget::setTabOrder(m_autoLoginCheck, m_intervalSpinBox);
+  QWidget::setTabOrder(m_intervalSpinBox, m_saveBtn);
+  QWidget::setTabOrder(m_saveBtn, m_loginBtn);
+  QWidget::setTabOrder(m_loginBtn, m_logoutBtn);
+  QWidget::setTabOrder(m_logoutBtn, diagnosticsBtn);
+
   // 底部信息
   QLabel *footerLabel =
       new QLabel("YellowPeach | QQ群: 789860526 | 关闭窗口后仍会驻留系统托盘");
@@ -314,7 +395,7 @@ void MainWindow::setupUi() {
 }
 
 void MainWindow::loadSettings() {
-  Config &config = Config::instance();
+  Config &config = m_config;
 
   m_usernameEdit->setText(config.username());
   m_passwordEdit->setText(config.password());
@@ -322,7 +403,6 @@ void MainWindow::loadSettings() {
   m_autoLaunchCheck->setChecked(config.autoLaunch());
   m_autoLoginCheck->setChecked(config.autoLogin());
   m_intervalSpinBox->setValue(config.checkInterval());
-  m_autoLoginRetryIntervalMs = qMax(60000, config.checkInterval() * 1000);
   updateOptionHint();
 
   Logger::debug(QString("设置已加载到 UI (用户: %1, 记住密码: %2, 开机自启: %3, "
@@ -332,13 +412,17 @@ void MainWindow::loadSettings() {
                     .arg(config.autoLaunch() ? "on" : "off")
                     .arg(config.autoLogin() ? "on" : "off")
                     .arg(config.checkInterval())
-                    .arg(m_autoLoginRetryIntervalMs));
+                    .arg(qMax(60000, config.checkInterval() * 1000)));
 }
 
-void MainWindow::saveSettings() {
-  Config &config = Config::instance();
+bool MainWindow::saveSettings() {
+  Config &config = m_config;
 
   const QString trimmedUsername = m_usernameEdit->text().trimmed();
+  if (trimmedUsername.isEmpty() || m_passwordEdit->text().isEmpty()) {
+    Logger::warn("设置保存已拒绝：学号或密码为空");
+    return false;
+  }
   m_usernameEdit->setText(trimmedUsername);
   config.setUsername(trimmedUsername);
   config.setPassword(m_passwordEdit->text());
@@ -347,11 +431,13 @@ void MainWindow::saveSettings() {
   config.setAutoLogin(m_autoLoginCheck->isChecked());
   config.setCheckInterval(m_intervalSpinBox->value());
   config.setHasConfigured(true);
-  config.save();
+  if (!config.save()) {
+    updateOptionHint();
+    return false;
+  }
 
   // 更新定时器间隔
   m_statusTimer->setInterval(config.checkInterval() * 1000);
-  m_autoLoginRetryIntervalMs = qMax(60000, config.checkInterval() * 1000);
   updateOptionHint();
   Logger::info(QString("设置已应用 (用户: %1, 开机自启: %2, 自动登录: %3, "
                        "间隔: %4s, 自动重试冷却: %5ms)")
@@ -359,19 +445,28 @@ void MainWindow::saveSettings() {
                    .arg(config.autoLaunch() ? "on" : "off")
                    .arg(config.autoLogin() ? "on" : "off")
                    .arg(config.checkInterval())
-                   .arg(m_autoLoginRetryIntervalMs));
+                   .arg(qMax(60000, config.checkInterval() * 1000)));
+  return true;
 }
 
-void MainWindow::syncCredentialsToConfig() {
-  Config &config = Config::instance();
+bool MainWindow::syncCredentialsToConfig() {
+  Config &config = m_config;
   const QString trimmedUsername = m_usernameEdit->text().trimmed();
   m_usernameEdit->setText(trimmedUsername);
   config.setUsername(trimmedUsername);
   config.setPassword(m_passwordEdit->text());
-  config.save();
+  config.setAutoSave(m_autoSaveCheck->isChecked());
+  if (!config.save()) {
+    updateOptionHint();
+    setStatusDetail(config.lastError(), true);
+    if (m_backgroundTasks) QMessageBox::warning(this, "保存失败", config.lastError());
+    return false;
+  }
   Logger::debug(QString("凭据已同步到配置 (用户: %1, 密码长度: %2)")
                     .arg(Logger::maskUsername(config.username()))
                     .arg(m_passwordEdit->text().length()));
+  updateOptionHint();
+  return true;
 }
 
 void MainWindow::onLoginClicked() {
@@ -379,20 +474,21 @@ void MainWindow::onLoginClicked() {
   QString password = m_passwordEdit->text();
 
   if (username.isEmpty() || password.isEmpty()) {
-    QMessageBox::warning(this, "提示", "请输入学号和密码");
+    if (m_backgroundTasks) QMessageBox::warning(this, "提示", "请输入学号和密码");
     return;
   }
 
-  if (m_isLoggingIn || m_isLoggingOut) {
+  if (m_session.isBusy()) {
     Logger::debug("忽略手动登录：已有操作进行中");
     return;
   }
 
   // 同步凭据到 Config，确保自动重连可用
-  syncCredentialsToConfig();
+  if (!syncCredentialsToConfig()) return;
 
-  m_manualOfflineHold = false;
-  m_isLoggingIn = true;
+  const auto token = m_session.beginLogin(true, m_config.autoLogin(),
+      true, monotonicNow(), m_config.checkInterval());
+  if (!token) return;
   m_isManualLogin = true;
   m_loginBtn->setText("登录中...");
   setStatusDetail("正在提交登录请求，请稍候...");
@@ -400,102 +496,105 @@ void MainWindow::onLoginClicked() {
 
   Logger::info(QString("手动登录触发: %1")
                    .arg(Logger::maskUsername(username)));
-  m_api->login(username, password);
+  m_api->login(*token, username, password);
 }
 
 void MainWindow::onLogoutClicked() {
-  if (m_isLoggingIn || m_isLoggingOut)
-    return;
-
-  m_isLoggingOut = true;
-  m_manualOfflineHold = m_isOnline;
+  const auto token = m_session.beginLogout();
+  if (!token) return;
   m_logoutBtn->setText("注销中...");
   setStatusDetail("正在执行注销请求...");
   refreshActionState();
   Logger::info(QString("手动注销触发 (online=%1)")
                    .arg(m_isOnline ? "true" : "false"));
 
-  m_api->logout();
+  m_api->logout(*token);
 }
 
 void MainWindow::onSaveClicked() {
-  saveSettings();
+  if (!saveSettings()) {
+    const QString error = m_config.lastError().isEmpty()
+                              ? "请输入学号和密码。"
+                              : m_config.lastError();
+    setStatusDetail(error, true);
+    if (m_backgroundTasks) QMessageBox::warning(this, "保存失败", error);
+    return;
+  }
   setStatusDetail("设置已保存，新的检测间隔和运行策略已立即生效。");
   if (m_trayIcon) {
     m_trayIcon->showMessage("设置已保存", "新的配置已应用");
   }
+  // 首次完成配置后立即确认网络状态，避免学生还要额外点击一次登录。
+  if (m_backgroundTasks) {
+    QTimer::singleShot(0, this, &MainWindow::checkNetworkStatus);
+  }
 }
 
-void MainWindow::onLoginSuccess(const QString &message) {
-  m_isLoggingIn = false;
+void MainWindow::onCopyDiagnosticsClicked() {
+  if (m_session.isBusy()) return;
+  QApplication::clipboard()->setText(diagnosticText());
+  setStatusDetail("诊断信息已复制；内容不含账号、密码或网关正文。");
+  Logger::info("已复制脱敏诊断信息");
+}
+
+void MainWindow::onLoginSuccess(quint64 token, const QString &message) {
+  if (!m_session.completeLogin(token, true, monotonicNow())) return;
   m_loginBtn->setText("登录");
-  m_manualOfflineHold = false;
-  setStatusDetail(message);
+  setStatusDetail("登录请求成功，正在确认校园网连接状态。");
   refreshActionState();
 
   Logger::info(QString("登录成功: %1").arg(message));
-  m_trayIcon->showMessage("登录成功", message);
+  m_trayIcon->showMessage("登录请求成功", "正在确认校园网连接状态");
   m_isManualLogin = false;
   checkNetworkStatus();
 }
 
-void MainWindow::onLoginFailed(const QString &error) {
-  m_isLoggingIn = false;
+void MainWindow::onLoginFailed(quint64 token, const QString &error) {
+  if (!m_session.completeLogin(token, false, monotonicNow())) return;
+  const bool wasManual = m_isManualLogin;
+  m_isManualLogin = false;
   m_loginBtn->setText("登录");
-  setStatusDetail(QString("登录失败：%1").arg(error), true);
+  const QString retry = automaticRetryHint();
+  setStatusDetail(QString("登录失败：%1%2").arg(error, retry.isEmpty() ? "" : "；" + retry), true);
   refreshActionState();
 
   Logger::warn(QString("登录失败: %1").arg(error));
   m_trayIcon->showMessage("登录失败", error, QSystemTrayIcon::Warning);
   // 只有手动登录失败才弹模态对话框，自动登录失败仅显示托盘通知
-  if (m_isManualLogin) {
+  if (wasManual && m_backgroundTasks) {
     QMessageBox::warning(this, "登录失败", error);
   }
-  m_isManualLogin = false;
+  flushPendingNetworkCheck();
 }
 
 void MainWindow::triggerAutoLoginIfPossible(const QString &reason) {
-  if (m_isLoggingIn || m_isLoggingOut || !Config::instance().autoLogin()) {
-    return;
-  }
-  if (m_manualOfflineHold) {
-    Logger::info(QString("%1 自动登录被抑制：用户手动注销后保持离线").arg(reason));
-    return;
-  }
-
-  QString username = Config::instance().username();
-  QString password = Config::instance().password();
-  if (username.isEmpty() || password.isEmpty()) {
-    Logger::warn(QString("%1 自动登录被跳过：未保存凭据").arg(reason));
-    return;
-  }
-
-  m_isLoggingIn = true;
+  QString username = m_config.username();
+  QString password = m_config.password();
+  const auto token = m_session.beginLogin(false, m_config.autoLogin(),
+      !username.isEmpty() && !password.isEmpty(), monotonicNow(),
+      m_config.checkInterval());
+  if (!token) return;
   m_isManualLogin = false;
-  m_lastAutoLoginAttemptMs = QDateTime::currentMSecsSinceEpoch();
+  m_loginBtn->setText("登录中...");
   setStatusDetail(QString("%1：正在尝试自动恢复连接...").arg(reason));
   Logger::info(QString("%1 自动登录触发 (用户: %2, 密码长度: %3)")
                    .arg(reason)
                    .arg(Logger::maskUsername(username))
                    .arg(password.length()));
   refreshActionState();
-  m_api->login(username, password);
+  m_api->login(*token, username, password);
 }
 
-void MainWindow::onLogoutSuccess(const QString &resultClass) {
-  m_isLoggingOut = false;
+void MainWindow::onLogoutSuccess(quint64 token, const QString &resultClass) {
+  if (!m_session.completeLogout(token, true)) return;
   m_logoutBtn->setText("注销");
-  if (resultClass == "not_online") {
-    m_manualOfflineHold = false;
-  }
 
   m_isOnline = false;
-  m_lastAutoLoginAttemptMs = 0;
   updateStatusDisplay(false);
   if (resultClass == "not_online") {
-    setStatusDetail("当前本就不在线，无需重复注销。");
+    setStatusDetail("当前未在线；自动重连已暂停，点击登录可解除暂停。");
   } else {
-    setStatusDetail("已退出网络连接。");
+    setStatusDetail("已退出网络连接；自动重连已暂停，点击登录可解除暂停。");
   }
   refreshActionState();
   if (resultClass == "not_online") {
@@ -503,22 +602,27 @@ void MainWindow::onLogoutSuccess(const QString &resultClass) {
   } else {
     m_trayIcon->showMessage("注销成功", "已退出网络");
   }
+  flushPendingNetworkCheck();
 }
 
-void MainWindow::onLogoutFailed(const QString &error) {
-  m_isLoggingOut = false;
+void MainWindow::onLogoutFailed(quint64 token, const QString &error) {
+  if (!m_session.completeLogout(token, false)) return;
   m_logoutBtn->setText("注销");
-  m_manualOfflineHold = false;
-  setStatusDetail(QString("注销失败：%1").arg(error), true);
+  setStatusDetail(QString("注销失败：%1；自动重连已暂停，可再次注销。").arg(error), true);
   refreshActionState();
 
-  QMessageBox::warning(this, "注销失败", error);
+  if (m_backgroundTasks) QMessageBox::warning(this, "注销失败", error);
+  flushPendingNetworkCheck();
 }
 
-void MainWindow::onStatusChecked(bool online, const QString &resultClass,
+void MainWindow::onStatusChecked(quint64 token, bool online, const QString &resultClass,
                                  const QString &ip,
                                  qint64 bytesUsed, qint64 secondsOnline) {
+  const auto observation = online ? SessionPolicy::Observation::Online :
+      (resultClass == "offline" ? SessionPolicy::Observation::Offline : SessionPolicy::Observation::Error);
+  if (!m_session.completeStatus(token, observation)) return;
   bool wasOnline = m_isOnline;
+  refreshActionState();
 
   Logger::debug(QString("状态检测完成 (wasOnline=%1, online=%2, class=%3, ip=%4, bytes=%5, "
                         "seconds=%6)")
@@ -543,68 +647,31 @@ void MainWindow::onStatusChecked(bool online, const QString &resultClass,
     }
     Logger::warn(QString("状态检测异常，保持当前在线状态不变: class=%1")
                      .arg(resultClass));
+    flushPendingNetworkCheck();
     return;
   }
 
   m_isOnline = online;
   updateStatusDisplay(online, ip, bytesUsed, secondsOnline);
 
-  if (online) {
-    m_manualOfflineHold = false;
-  }
   refreshActionState();
 
-  if (!online && Config::instance().autoLogin()) {
-    if (m_manualOfflineHold) {
-      Logger::debug("状态已离线，但当前处于手动离线保持模式，跳过自动登录");
-      return;
-    }
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    const bool cooldownElapsed =
-        (m_lastAutoLoginAttemptMs == 0) ||
-        (now - m_lastAutoLoginAttemptMs >= m_autoLoginRetryIntervalMs);
-
-    // 优先处理在线->离线的边沿；持续离线场景按冷却重试。
-    if (wasOnline) {
-      triggerAutoLoginIfPossible("掉线重连");
-    } else if (cooldownElapsed) {
-      triggerAutoLoginIfPossible("离线重试");
-    }
-  } else if (online) {
-    // 在线后重置重试时钟，后续若再次掉线可立即触发重连。
-    m_lastAutoLoginAttemptMs = 0;
+  if (!online) {
+    triggerAutoLoginIfPossible(wasOnline ? "掉线重连" : "离线重试");
   }
+  flushPendingNetworkCheck();
 }
 
 void MainWindow::refreshActionState() {
-  const bool busy = m_isLoggingIn || m_isLoggingOut;
-  m_loginBtn->setEnabled(!busy && !m_isOnline);
+  const bool busy = m_session.isBusy();
+  m_loginBtn->setEnabled(!busy && (!m_isOnline || m_session.manualOfflineHold()));
   m_logoutBtn->setEnabled(!busy && m_isOnline);
   m_saveBtn->setEnabled(!busy);
 
   if (m_trayIcon) {
     m_trayIcon->setBusy(busy);
     m_trayIcon->setOnlineStatus(m_isOnline);
-  }
-}
-
-void MainWindow::tryAutoLogin() {
-  if (m_startupLoginAttempted)
-    return;
-  m_startupLoginAttempted = true;
-
-  Logger::debug(QString("启动自动登录检查 (online=%1, loggingIn=%2, autoLogin=%3)")
-                    .arg(m_isOnline ? "true" : "false")
-                    .arg(m_isLoggingIn ? "true" : "false")
-                    .arg(Config::instance().autoLogin() ? "true" : "false"));
-
-  if (!m_isOnline && !m_isLoggingIn && Config::instance().autoLogin()) {
-    triggerAutoLoginIfPossible("启动自动登录");
-  } else {
-    Logger::debug("启动自动登录条件未满足");
-    if (!Config::instance().autoLogin()) {
-      setStatusDetail("当前已关闭自动登录，程序只会持续检测网络状态。");
-    }
+    m_trayIcon->setManualOfflineHold(m_session.manualOfflineHold());
   }
 }
 
@@ -654,6 +721,12 @@ void MainWindow::updateOptionHint() {
   } else {
     message += " 当前未启用开机自启动。";
   }
+  if (!m_config.lastError().isEmpty()) {
+    message = m_config.lastError();
+    color = "#8a5a00";
+    background = "#fff7e8";
+    border = "#f7d79b";
+  }
 
   m_optionHintLabel->setText(message);
   m_optionHintLabel->setStyleSheet(
@@ -674,6 +747,9 @@ void MainWindow::updateStatusDisplay(bool online, const QString &ip,
     setStatusDetail(ip.isEmpty()
                         ? "网络连接正常，程序会持续监测在线状态。"
                         : QString("网络连接正常，当前 IP 为 %1。").arg(ip));
+    if (m_session.manualOfflineHold()) {
+      setStatusDetail("当前检测为在线，自动重连仍暂停；可再次注销，或点击登录解除暂停。");
+    }
   } else {
     m_statusLabel->setText("离线");
     m_statusLabel->setStyleSheet(
@@ -682,19 +758,64 @@ void MainWindow::updateStatusDisplay(bool online, const QString &ip,
     m_usageLabel->setText("-");
     m_timeLabel->setText("-");
 
-    if (m_manualOfflineHold) {
-      setStatusDetail("当前处于手动离线保持模式，不会自动尝试重连。", true);
-    } else if (Config::instance().autoLogin()) {
-      setStatusDetail("当前离线，程序会按照检测节奏自动尝试重连。");
+    if (m_session.manualOfflineHold()) {
+      setStatusDetail("自动重连已暂停；点击登录可解除暂停。", true);
+    } else if (m_config.autoLogin()) {
+      const QString retry = automaticRetryHint();
+      setStatusDetail(retry.isEmpty()
+                          ? "当前离线，程序会按照检测节奏自动尝试重连。"
+                          : QString("当前离线，%1。自动重连仍在运行。" ).arg(retry));
     } else {
       setStatusDetail("当前离线，自动登录已关闭，请按需手动登录。");
     }
   }
 }
 
+QString MainWindow::automaticRetryHint() const {
+  if (!m_config.autoLogin() || m_session.manualOfflineHold()) return {};
+  const double remaining = m_session.nextAutomaticAttempt() - monotonicNow();
+  if (remaining <= 0) return {};
+  return QString("自动重试约 %1 秒后").arg(qCeil(remaining));
+}
+
+QString MainWindow::diagnosticText() const {
+  const QString retry = automaticRetryHint().isEmpty() ? "无" : automaticRetryHint();
+  return QString("HAUT Network Guard v" HAUT_VERSION_STRING "\n状态: %1\n%2\n自动登录: %3\n自动重试: %4")
+      .arg(m_statusLabel->text(), m_lastCheckLabel->text(),
+           m_config.autoLogin() ? "开启" : "关闭", retry);
+}
+
+void MainWindow::onNetworkEnvironmentChanged() {
+  if (!m_networkChangeTimer) return;
+
+  // 单次定时器重启会把连续的网卡/可达性通知合并为一次检测。
+  m_networkRecheckPending = true;
+  m_networkChangeTimer->start();
+  Logger::debug("收到网络环境变化通知，等待去抖后重新检测");
+}
+
+void MainWindow::onNetworkChangeDebounced() {
+  if (!m_networkRecheckPending) return;
+  // 网络事件在认证/注销期间不能丢失，完成回调再补一次；普通周期检测仍按原规则忽略。
+  if (m_session.isBusy()) return;
+  checkNetworkStatus();
+}
+
+void MainWindow::flushPendingNetworkCheck() {
+  if (!m_networkRecheckPending || m_session.isBusy()) return;
+  // 仍在去抖窗口内时，让定时器继续合并后续通知。
+  if (m_networkChangeTimer && m_networkChangeTimer->isActive()) return;
+  checkNetworkStatus();
+}
+
 void MainWindow::checkNetworkStatus() {
+  const auto token = m_session.beginStatus();
+  if (!token) return;
+  if (m_networkChangeTimer) m_networkChangeTimer->stop();
+  m_networkRecheckPending = false;
+  refreshActionState();
   Logger::debug("触发网络状态检测");
-  m_api->checkStatus();
+  m_api->checkStatus(*token);
 }
 
 void MainWindow::showWindow() {

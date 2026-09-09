@@ -2,21 +2,122 @@
 # HAUT Network Guard - OpenWrt 一键安装脚本
 # 用法:
 #   最新 main: wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
-#   固定版本:   wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18
+#   固定版本:   wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/install-online.sh | sh -s -- v1.3.20
 
 set -e
 
 REPO_REF="${1:-main}"
 REPO_URL="https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/${REPO_REF}/OpenWrt"
-INSTALL_DIR="/usr/lib/haut-network-guard"
+ROOT_PREFIX="${HAUT_ROOT:-}"
+case "$ROOT_PREFIX" in ""|/*) ;; *) echo "错误: HAUT_ROOT 必须为绝对路径"; exit 1 ;; esac
+INSTALL_DIR="$ROOT_PREFIX/usr/lib/haut-network-guard"
+INIT_FILE="$ROOT_PREFIX/etc/init.d/haut-network-guard"
+CONFIG_FILE="$ROOT_PREFIX/etc/config/haut-network-guard"
+STAGE_DIR=""
+INIT_STAGE=""
+CONFIG_STAGE=""
+CHECKSUM_FILE=""
+OLD_INSTALL_DIR=""
+OLD_INIT_FILE=""
+VERSION=""
+PROGRAM_CREATED=0
+INIT_CREATED=0
+CONFIG_CREATED=0
+INSTALL_COMMITTED=0
+
+cleanup() {
+    status=$?
+    if [ "$INSTALL_COMMITTED" -ne 1 ]; then
+        if [ -n "$OLD_INSTALL_DIR" ] && [ -d "$OLD_INSTALL_DIR" ]; then
+            rm -rf "$INSTALL_DIR"
+            mv "$OLD_INSTALL_DIR" "$INSTALL_DIR" || true
+        elif [ "$PROGRAM_CREATED" -eq 1 ]; then
+            rm -rf "$INSTALL_DIR"
+        fi
+        if [ -n "$OLD_INIT_FILE" ] && [ -f "$OLD_INIT_FILE" ]; then
+            rm -f "$INIT_FILE"
+            mv "$OLD_INIT_FILE" "$INIT_FILE" || true
+        elif [ "$INIT_CREATED" -eq 1 ]; then
+            rm -f "$INIT_FILE"
+        fi
+        if [ "$CONFIG_CREATED" -eq 1 ]; then
+            rm -f "$CONFIG_FILE"
+        fi
+    fi
+    [ -n "$STAGE_DIR" ] && rm -rf "$STAGE_DIR"
+    [ -n "$INIT_STAGE" ] && rm -f "$INIT_STAGE" "$INIT_STAGE.tmp"
+    [ -n "$CONFIG_STAGE" ] && rm -f "$CONFIG_STAGE" "$CONFIG_STAGE.tmp"
+    exit "$status"
+}
+
+trap cleanup EXIT
 
 download_file() {
     url="$1"
     dest="$2"
     tmp="${dest}.tmp"
 
-    curl -fsSL "$url" -o "$tmp"
+    curl -fsSL --connect-timeout 10 --max-time 60 "$url" -o "$tmp"
     mv "$tmp" "$dest"
+}
+
+validate_program_dir() {
+    dir="$1"
+    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+        if [ ! -s "$dir/$file" ]; then
+            echo "错误: 缺少或为空的程序文件: $file"
+            return 1
+        fi
+        if command -v lua >/dev/null 2>&1; then
+            HAUT_VALIDATE_FILE="$dir/$file" lua -e 'assert(loadfile(os.getenv("HAUT_VALIDATE_FILE")))' </dev/null >/dev/null 2>&1 || {
+                echo "错误: Lua 语法校验失败: $file"
+                return 1
+            }
+        else
+            echo "错误: 未安装 Lua，无法验证程序"
+            return 1
+        fi
+    done
+}
+
+
+sha256_of() {
+    file="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file" | awk '{print $1}'
+    elif command -v openssl >/dev/null 2>&1; then
+        openssl dgst -sha256 "$file" | awk -F'= ' '{print $2}'
+    else
+        echo "错误: 缺少 sha256sum 或 openssl，无法校验发布文件" >&2
+        return 1
+    fi
+}
+
+prepare_checksums() {
+    case "$REPO_REF" in
+        v*)
+            CHECKSUM_FILE="$STAGE_DIR/OpenWrt-SHA256SUMS"
+            download_file "https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/download/$REPO_REF/OpenWrt-SHA256SUMS" "$CHECKSUM_FILE"
+            test -s "$CHECKSUM_FILE"
+            ;;
+        *) ;;
+    esac
+}
+
+verify_checksum() {
+    relative="$1"
+    file="$2"
+    [ -z "$CHECKSUM_FILE" ] && return 0
+    expected=$(awk -v path="OpenWrt/$relative" '$2 == path { print $1; exit }' "$CHECKSUM_FILE")
+    if [ -z "$expected" ]; then
+        echo "错误: Release 清单缺少 OpenWrt/$relative"
+        return 1
+    fi
+    actual=$(sha256_of "$file")
+    if [ "$actual" != "$expected" ]; then
+        echo "错误: 文件校验失败: $relative"
+        return 1
+    fi
 }
 
 echo "=========================================="
@@ -39,37 +140,101 @@ opkg install lua curl >/dev/null 2>&1 || {
     echo "警告: 部分依赖可能已安装"
 }
 
-# 创建目录
-echo "[2/5] 创建目录..."
-mkdir -p "$INSTALL_DIR"
+# 创建同文件系统临时目录，完成全部下载后再切换
+echo "[2/5] 准备临时目录..."
+mkdir -p "$(dirname "$INSTALL_DIR")"
+mkdir -p "$(dirname "$INIT_FILE")" "$(dirname "$CONFIG_FILE")"
+STAGE_DIR="$(mktemp -d "$(dirname "$INSTALL_DIR")/.haut-network-guard-install.XXXXXX")"
+prepare_checksums
 
 # 下载文件
 echo "[3/5] 下载程序文件..."
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$INSTALL_DIR/crypto.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$INSTALL_DIR/api.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$INSTALL_DIR/log.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$INSTALL_DIR/protocol.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$INSTALL_DIR/main.lua"
+mkdir -p "$STAGE_DIR/program"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/version.lua" "$STAGE_DIR/program/version.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$STAGE_DIR/program/crypto.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$STAGE_DIR/program/api.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$STAGE_DIR/program/log.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$STAGE_DIR/program/protocol.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/session.lua" "$STAGE_DIR/program/session.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$STAGE_DIR/program/main.lua"
 
 echo "[4/5] 下载配置文件..."
-download_file "$REPO_URL/files/etc/init.d/haut-network-guard" "/etc/init.d/haut-network-guard"
-if [ -f /etc/config/haut-network-guard ]; then
+INIT_STAGE="$ROOT_PREFIX/etc/init.d/.haut-network-guard.$$"
+download_file "$REPO_URL/files/etc/init.d/haut-network-guard" "$INIT_STAGE"
+if [ -f "$CONFIG_FILE" ]; then
     echo "      检测到现有配置，保留 /etc/config/haut-network-guard"
 else
-    download_file "$REPO_URL/files/etc/config/haut-network-guard" "/etc/config/haut-network-guard"
+    CONFIG_STAGE="$ROOT_PREFIX/etc/config/.haut-network-guard.$$"
+    download_file "$REPO_URL/files/etc/config/haut-network-guard" "$CONFIG_STAGE"
 fi
 
-# 设置权限
+# 校验临时文件后切换程序目录和服务脚本
 echo "[5/5] 设置权限..."
-chmod +x /etc/init.d/haut-network-guard
-[ -f /etc/config/haut-network-guard ] && chmod 600 /etc/config/haut-network-guard
+validate_program_dir "$STAGE_DIR/program"
+VERSION=$(sed -n 's/^return "\([^"]*\)".*/\1/p' "$STAGE_DIR/program/version.lua")
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "错误: 无法读取有效程序版本"
+    exit 1
+fi
+case "$REPO_REF" in
+    v*)
+        EXPECTED_VERSION="${REPO_REF#v}"
+        if [ "$VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "错误: tag 与程序版本不一致: $REPO_REF -> $VERSION"
+            exit 1
+        fi
+        ;;
+esac
+test -s "$INIT_STAGE"
+sh -n "$INIT_STAGE"
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    verify_checksum "files/usr/lib/haut-network-guard/$file" "$STAGE_DIR/program/$file"
+done
+verify_checksum "files/etc/init.d/haut-network-guard" "$INIT_STAGE"
+chmod +x "$INIT_STAGE"
+
+if [ -d "$INSTALL_DIR" ]; then
+    OLD_INSTALL_DIR="${INSTALL_DIR}.backup.$$"
+    mv "$INSTALL_DIR" "$OLD_INSTALL_DIR"
+fi
+mv "$STAGE_DIR/program" "$INSTALL_DIR"
+PROGRAM_CREATED=1
+
+if [ -f "$INIT_FILE" ]; then
+    OLD_INIT_FILE="$INIT_FILE.backup.$$"
+    mv "$INIT_FILE" "$OLD_INIT_FILE"
+fi
+mv "$INIT_STAGE" "$INIT_FILE"
+INIT_STAGE=""
+INIT_CREATED=1
+
+if [ -n "$CONFIG_STAGE" ]; then
+    chmod 600 "$CONFIG_STAGE"
+    mv "$CONFIG_STAGE" "$CONFIG_FILE"
+    CONFIG_STAGE=""
+    CONFIG_CREATED=1
+fi
+
+chmod +x "$INIT_FILE"
+[ -f "$CONFIG_FILE" ] && chmod 600 "$CONFIG_FILE"
 
 # 启用服务
-/etc/init.d/haut-network-guard enable >/dev/null 2>&1
+"$INIT_FILE" enable >/dev/null 2>&1
+
+# 服务启用成功即提交；清理旧备份失败不能回退或删除已安装的新程序。
+INSTALL_COMMITTED=1
+if [ -n "$OLD_INSTALL_DIR" ]; then
+    rm -rf "$OLD_INSTALL_DIR" || echo "警告: 旧程序备份未清理: $OLD_INSTALL_DIR"
+fi
+if [ -n "$OLD_INIT_FILE" ]; then
+    rm -f "$OLD_INIT_FILE" || echo "警告: 旧服务备份未清理: $OLD_INIT_FILE"
+fi
+OLD_INSTALL_DIR=""
+OLD_INIT_FILE=""
 
 echo ""
 echo "=========================================="
-echo "  安装完成! (v1.3.18)"
+echo "  安装完成! (v$VERSION)"
 echo "=========================================="
 echo ""
 echo "下一步 - 配置账号:"

@@ -28,6 +28,10 @@ Windows/target/
 # Logs
 *.log
 
+# Python 测试缓存
+__pycache__/
+*.py[cod]
+
 # Rust build artifacts
 Windows-Rust-Deprecated/target/
 Windows-Rust-Deprecated/*.exe

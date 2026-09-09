@@ -76,6 +76,10 @@ jQuery_<timestamp>({...})
 - `sum_seconds`
 - `error`
 
+`sum_bytes` 与 `sum_seconds` 兼容 JSON number 与 quoted numeric string 两种返回形态。三端只保留有限、非负、整数且不超过 `9007199254740991` 的值；无法转换、带小数、负数或超出安全范围的数值按 `0` 处理，但不影响已包含有效账号或 IP 的在线判断。quoted numeric 只接受十进制整数。
+
+JSON 在线身份至少需要非空账号，或有效 IPv4 地址；只有空身份、非法 IP 或非法 JSON 结构时才标记为 `unparsed`。
+
 ### CSV
 
 格式:
@@ -83,6 +87,13 @@ jQuery_<timestamp>({...})
 ```text
 username,seconds,ip,bytes,...
 ```
+
+
+CSV 的 `seconds` 和 `bytes` 只接受非负十进制整数；小数、负数、超出安全范围或其他脏字段会使整行标记为 `unparsed`。
+
+空状态响应（包括只含空白字符的响应）标记为 `unparsed`；只有明确的 `not_online` 响应才标记为 `offline`，避免把网关异常或中间网络设备的空响应误认为离线。
+
+HTTP 响应必须包含有效状态行且状态码为 `2xx`；缺少状态行或返回 `3xx`、`4xx`、`5xx` 时先归为传输错误，不把正文交给状态协议解析器。
 
 ## 6. 登录响应分类
 
@@ -95,11 +106,13 @@ username,seconds,ip,bytes,...
 - 包含 `not_online`:
   - `not_online`
 - 包含任意 `E####`:
-  - `error_E####`
+  - `error_E####`（错误码必须为恰好四位数字；其他位数归为 `unknown`）
 - 空响应:
   - `empty`
 - 其他:
   - `unknown`
+
+UI 应把协议分类转换为学生可理解的提示；例如 `error_E2531` 显示“学号或密码错误，请检查后重试”，不要直接把网关原始响应当作弹窗内容。原始响应只允许进入经过脱敏和长度限制的调试日志。
 
 ## 7. OpenWrt UCI 清洗规则
 

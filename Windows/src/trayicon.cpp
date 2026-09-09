@@ -6,7 +6,8 @@
 #include <QPixmap>
 #include <QStyle>
 
-TrayIcon::TrayIcon(QObject *parent) : QObject(parent) {
+TrayIcon::TrayIcon(QObject *parent, bool notificationsEnabled)
+    : QObject(parent), m_notificationsEnabled(notificationsEnabled) {
   m_trayIcon = new QSystemTrayIcon(this);
 
   createMenu();
@@ -15,6 +16,11 @@ TrayIcon::TrayIcon(QObject *parent) : QObject(parent) {
 
   connect(m_trayIcon, &QSystemTrayIcon::activated, this,
           &TrayIcon::onTrayActivated);
+}
+
+TrayIcon::~TrayIcon() {
+  m_trayIcon->setContextMenu(nullptr);
+  delete m_menu;
 }
 
 void TrayIcon::createMenu() {
@@ -58,9 +64,15 @@ void TrayIcon::setBusy(bool busy) {
   updateActionStates();
 }
 
+void TrayIcon::setManualOfflineHold(bool hold) {
+  m_manualOfflineHold = hold;
+  m_loginAction->setText(hold ? "立即登录（解除暂停）" : "立即登录");
+  updateActionStates();
+}
+
 void TrayIcon::showMessage(const QString &title, const QString &message,
                            QSystemTrayIcon::MessageIcon icon) {
-  m_trayIcon->showMessage(title, message, icon, 3000);
+  if (m_notificationsEnabled) m_trayIcon->showMessage(title, message, icon, 3000);
 }
 
 void TrayIcon::updateIcon(bool online) {
@@ -87,7 +99,7 @@ void TrayIcon::updateIcon(bool online) {
 
 void TrayIcon::updateActionStates() {
   if (m_loginAction) {
-    m_loginAction->setEnabled(!m_online && !m_busy);
+    m_loginAction->setEnabled((!m_online || m_manualOfflineHold) && !m_busy);
   }
   if (m_logoutAction) {
     m_logoutAction->setEnabled(m_online && !m_busy);

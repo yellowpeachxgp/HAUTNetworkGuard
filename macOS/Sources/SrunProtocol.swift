@@ -16,17 +16,63 @@ struct SrunLoginClassification {
 }
 
 enum SrunProtocol {
-    static func preview(_ value: String, limit: Int = 160) -> String {
-        let normalized = value.replacingOccurrences(of: "\r", with: "\\r")
-            .replacingOccurrences(of: "\n", with: "\\n")
-        if normalized.count > limit {
-            return String(normalized.prefix(limit)) + "...(\(normalized.count) chars)"
+    static func userFacingLoginMessage(_ classification: SrunLoginClassification) -> String {
+        switch classification.category {
+        case "error_E2531":
+            return "学号或密码错误，请检查后重试。"
+        case "empty":
+            return "校园网网关返回空响应，请检查网络后重试。"
+        case "unknown":
+            return "校园网网关返回了无法识别的结果，请稍后重试。"
+        case "success":
+            return "登录成功"
+        case "already_online":
+            return "已经在线"
+        case "logout_ok":
+            return "注销成功"
+        case "not_online":
+            return "当前未在线"
+        default:
+            if let errorCode = classification.errorCode {
+                return "登录失败（错误码 \(errorCode)），请稍后重试。"
+            }
+            return "登录失败，请稍后重试。"
         }
-        return normalized
+    }
+
+    /// 将底层网络错误转换为学生可直接处理的提示，避免展示英文系统错误。
+    static func userFacingNetworkError(_ error: Error) -> String {
+        if let httpError = error as? DirectHTTPClient.HTTPError {
+            switch httpError {
+            case .httpStatus, .invalidResponse:
+                return "校园网网关返回异常，请稍后重试。"
+            default: break
+            }
+        }
+        return userFacingNetworkError(error.localizedDescription)
+    }
+
+    static func userFacingNetworkError(_ message: String) -> String {
+        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized.contains("timeout") || normalized.contains("timed out") || normalized.contains("超时") {
+            return "连接校园网网关超时，请确认已连接 Wi-Fi 或有线网络后重试。"
+        }
+        if normalized.contains("unreachable") || normalized.contains("connection refused") ||
+            normalized.contains("host not found") || normalized.contains("无法解析主机") ||
+            normalized.contains("cannot connect") || normalized.contains("无法连接") {
+            return "无法连接校园网网关，请检查网络连接后重试。"
+        }
+        return "网络请求失败，请检查网络连接后重试。"
+    }
+
+    static func preview(_ value: String, limit: Int = 160) -> String {
+        // 网关可能在任意字段或异常正文中回显凭据，只输出长度摘要。
+        let summary = "<redacted> (\(value.utf8.count) bytes)"
+        return String(summary.prefix(max(0, limit)))
     }
 
     static func extractErrorCode(_ response: String) -> String? {
-        guard let range = response.range(of: "E\\d+", options: .regularExpression) else {
+        guard let range = response.range(of: "E\\d{4}(?!\\d)", options: .regularExpression) else {
             return nil
         }
         return String(response[range])
@@ -61,8 +107,11 @@ enum SrunProtocol {
 
     static func parseStatusResponse(_ response: String, callback: String? = nil) -> SrunParsedStatus {
         let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed.contains("not_online") {
+        if trimmed == "not_online" {
             return SrunParsedStatus(online: false, format: "offline", username: "", ip: "", usedBytes: 0, usedSeconds: 0)
+        }
+        if trimmed.isEmpty {
+            return SrunParsedStatus(online: false, format: "unparsed", username: "", ip: "", usedBytes: 0, usedSeconds: 0)
         }
 
         let jsonString: String
@@ -86,7 +135,7 @@ enum SrunProtocol {
             let ip = json["online_ip"] as? String ?? ""
             let usedBytes = parseNumber(json["sum_bytes"])
             let usedSeconds = parseNumber(json["sum_seconds"])
-            if !username.isEmpty || !ip.isEmpty {
+            if !username.isEmpty || isValidIPv4(ip) {
                 return SrunParsedStatus(
                     online: true,
                     format: format,
@@ -138,17 +187,23 @@ enum SrunProtocol {
     }
 
     private static func parseNumber(_ value: Any?) -> Int64 {
+        let maxCounter = Int64(9_007_199_254_740_991)
         if let intValue = value as? Int64 {
-            return intValue
+            return intValue >= 0 && intValue <= maxCounter ? intValue : 0
         }
         if let intValue = value as? Int {
-            return Int64(intValue)
+            return intValue >= 0 && Int64(intValue) <= maxCounter ? Int64(intValue) : 0
         }
         if let doubleValue = value as? Double {
+            guard doubleValue.isFinite, doubleValue >= 0,
+                  doubleValue <= Double(maxCounter),
+                  doubleValue.rounded() == doubleValue else { return 0 }
             return Int64(doubleValue)
         }
         if let stringValue = value as? String {
-            return Int64(stringValue) ?? 0
+            guard stringValue.range(of: "^[0-9]+$", options: .regularExpression) != nil,
+                  let parsed = Int64(stringValue), parsed <= maxCounter else { return 0 }
+            return parsed
         }
         return 0
     }

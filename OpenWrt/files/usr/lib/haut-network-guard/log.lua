@@ -27,6 +27,15 @@ local function shell_quote(str)
     return "'" .. tostring(str or ""):gsub("'", "'\\''") .. "'"
 end
 
+local function redact_sensitive_fields(message)
+    local text = tostring(message or "")
+    -- 日志出口再做一层兜底；业务日志仍应优先使用长度摘要和脱敏账号。
+    text = text:gsub("(enc_[Pp]assword=)([^%s&]+)", "%1<redacted>")
+    text = text:gsub("([Pp]assword=)([^%s&]+)", "%1<redacted>")
+    text = text:gsub("([Uu]sername=)([^%s&]+)", "%1<redacted>")
+    return text
+end
+
 local function refresh_level_if_needed(force)
     local now = os.time()
     if force or (now - last_level_refresh) >= LEVEL_REFRESH_SECONDS then
@@ -41,7 +50,7 @@ local function write_log(level, msg)
     sequence = sequence + 1
     local timestamp = os.date("%Y-%m-%d %H:%M:%S")
     local label = LABELS[level]
-    local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, tostring(msg))
+    local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, redact_sensitive_fields(msg))
     print(line)
     os.execute(string.format("logger -t haut-network-guard %s", shell_quote(line)))
 end
@@ -65,12 +74,9 @@ end
 
 function log.preview(value, max_len)
     max_len = max_len or 120
-    if not value then return "(nil)" end
-    value = tostring(value):gsub("\r", "\\r"):gsub("\n", "\\n")
-    if #value > max_len then
-        return value:sub(1, max_len) .. "...(" .. tostring(#value) .. " bytes)"
-    end
-    return value
+    -- 网关或 curl 错误输出可能在任意位置回显凭据，只保留长度摘要。
+    local summary = "<redacted> (" .. tostring(#tostring(value or "")) .. " bytes)"
+    return summary:sub(1, math.max(0, max_len))
 end
 
 function log.bytes_summary(value)

@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
-project(HAUTNetworkGuard VERSION 1.3.18 LANGUAGES CXX)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" HAUT_VERSION LIMIT_COUNT 1)
+if(NOT HAUT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+  message(FATAL_ERROR "VERSION 文件必须是语义版本号，实际为: ${HAUT_VERSION}")
+endif()
+project(HAUTNetworkGuard VERSION ${HAUT_VERSION} LANGUAGES CXX)
+
+add_compile_definitions(HAUT_VERSION_STRING="${HAUT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +26,7 @@ set(SOURCES
     src/protocol_utils.cpp
     src/trayicon.cpp
     src/logger.cpp
+    src/instance_guard.cpp
 )
 
 # 头文件
@@ -29,11 +36,18 @@ set(HEADERS
     src/api.h
     src/encryption.h
     src/protocol_utils.h
+    src/session_policy.h
     src/trayicon.h
     src/logger.h
+    src/instance_guard.h
 )
 
 enable_testing()
+
+add_executable(haut_session_tests tests/session_policy_tests.cpp)
+set_target_properties(haut_session_tests PROPERTIES AUTOMOC OFF AUTORCC OFF AUTOUIC OFF)
+add_test(NAME session_policy_tests COMMAND haut_session_tests
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tests/fixtures/session_scenarios.txt")
 
 # 资源文件
 set(RESOURCES
@@ -73,12 +87,47 @@ target_link_libraries(haut_smoke_tests PRIVATE
 
 add_test(NAME windows_smoke_tests COMMAND haut_smoke_tests)
 
+add_executable(haut_controller_tests
+    tests/controller_session_tests.cpp
+    src/mainwindow.cpp src/config.cpp src/api.cpp src/encryption.cpp
+    src/protocol_utils.cpp src/trayicon.cpp src/logger.cpp
+    ${HEADERS}
+)
+target_link_libraries(haut_controller_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
+add_test(NAME controller_session_tests COMMAND haut_controller_tests)
+set_tests_properties(controller_session_tests PROPERTIES TIMEOUT 30)
+
+add_executable(haut_credential_tests
+    tests/credential_failure_tests.cpp src/config.cpp src/logger.cpp)
+target_link_libraries(haut_credential_tests PRIVATE Qt6::Core)
+set_target_properties(haut_credential_tests PROPERTIES AUTOMOC OFF AUTORCC OFF AUTOUIC OFF)
+add_test(NAME credential_failure_tests COMMAND haut_credential_tests)
+set_tests_properties(credential_failure_tests PROPERTIES TIMEOUT 30)
+
+add_executable(haut_instance_guard_tests
+    tests/instance_guard_tests.cpp src/instance_guard.cpp)
+target_link_libraries(haut_instance_guard_tests PRIVATE Qt6::Core)
+add_test(NAME instance_guard_tests COMMAND haut_instance_guard_tests)
+set_tests_properties(instance_guard_tests PROPERTIES TIMEOUT 10)
+
 # Windows 特定设置
 if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Crypt32)
+    target_link_libraries(haut_smoke_tests PRIVATE Crypt32)
+    target_link_libraries(haut_controller_tests PRIVATE Crypt32)
+    target_link_libraries(haut_credential_tests PRIVATE Crypt32)
+    target_link_libraries(haut_instance_guard_tests PRIVATE Crypt32)
+
     # 静态链接运行时
     set_property(TARGET ${PROJECT_NAME} PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET haut_smoke_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET haut_controller_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET haut_credential_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET haut_instance_guard_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     
     # 添加版本信息

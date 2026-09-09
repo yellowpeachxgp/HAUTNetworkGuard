@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
 def require_contains(path: Path, needle: str):
@@ -23,39 +24,61 @@ def main():
     macos_ai = ROOT / "macOS" / "AIREADME.md"
     logging_contract = ROOT / "docs" / "LOGGING_CONTRACT.md"
     protocol_spec = ROOT / "docs" / "SRUN3K_PROTOCOL_SPEC.md"
+    state_machine = ROOT / "docs" / "STATE_MACHINE_CONTRACT.md"
+    ledger = ROOT / "docs" / "IMPLEMENTATION_LEDGER.md"
+    acceptance = ROOT / "docs" / "REAL_DEVICE_ACCEPTANCE_MATRIX.md"
 
     require_contains(readme, "HAUTNetworkGuard-Windows.zip")
     require_contains(readme, "HAUTNetworkGuard.dmg")
-    require_contains(readme, "sh -s -- v1.3.18")
+    require_contains(readme, f"sh -s -- v{VERSION}")
     require_contains(readme, "protocol_utils.h/cpp")
     require_contains(readme, "SrunProtocol.swift")
     require_contains(readme, "tests/")
+    require_contains(readme, "REAL_DEVICE_ACCEPTANCE_MATRIX.md")
+    require_contains(readme, "SHA256SUMS")
     require_not_contains(readme, "HAUTNetworkGuard-Windows.exe")
     require_not_contains(readme, "HAUTNetworkGuard-macOS.dmg")
 
     require_contains(openwrt_readme, "HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh")
-    require_contains(openwrt_readme, "HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18")
+    require_contains(openwrt_readme, f"HAUTNetworkGuard/v{VERSION}/OpenWrt/install-online.sh | sh -s -- v{VERSION}")
     require_contains(openwrt_readme, "upgrade-online.sh | sh")
     require_contains(openwrt_readme, "log.lua")
     require_contains(openwrt_readme, "../docs/LOGGING_CONTRACT.md")
+    require_contains(openwrt_readme, "权限为 `600`")
+    require_contains(openwrt_readme, "OpenWrt-SHA256SUMS")
 
-    require_contains(windows_ai, "版本号**: 1.3.18")
+    require_contains(windows_ai, f"版本号**: {VERSION}")
     require_contains(windows_ai, "172.16.154.130")
     require_contains(windows_ai, "protocol_utils.cpp")
     require_not_contains(windows_ai, "172.20.255.2")
     require_not_contains(windows_ai, "版本号**: 1.3.0")
 
-    require_contains(macos_ai, "版本号**: 1.3.18")
+    require_contains(macos_ai, f"版本号**: {VERSION}")
     require_contains(macos_ai, "run_ui_smoke_tests.sh")
     require_contains(macos_ai, "Logger.swift")
     require_contains(macos_ai, "SrunProtocol.swift")
     require_contains(macos_ai, "172.16.154.130")
+    require_contains(macos_ai, "Keychain")
+    require_contains(macos_ai, "卸载脚本会删除")
     require_not_contains(macos_ai, "版本号**: 1.1.4")
+    require_contains(windows_ai, "DPAPI")
 
     require_contains(logging_contract, "error_E####")
     require_contains(logging_contract, "online_jsonp")
+    require_contains(logging_contract, "<redacted>")
     require_contains(protocol_spec, "error_E####")
     require_contains(protocol_spec, "Windows/tests/windows_smoke_tests.cpp")
+    require_contains(protocol_spec, "学生可理解的提示")
+    require_contains(state_machine, "手动离线保持")
+    require_contains(state_machine, "error` 不等于 `offline")
+    require_contains(ledger, "当前环境阻塞")
+    require_contains(ledger, "M5-03 升级健康检查")
+    require_contains(ledger, "M5-02 原子在线安装")
+    require_contains(ledger, "日志脱敏")
+    require_contains(acceptance, "A1")
+    require_contains(acceptance, "A13")
+    require_contains(acceptance, "不得在表格、截图或日志中记录密码")
+    require_contains(ROOT / "docs" / "VALIDATION_2026-09-08.md", "实际执行正式 Shell 脚本和真实 Lua")
 
     print("docs contract ok")
 

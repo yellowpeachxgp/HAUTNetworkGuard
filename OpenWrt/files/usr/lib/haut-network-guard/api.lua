@@ -6,10 +6,28 @@ local api = {}
 local crypto = require("crypto")
 local log = require("log")
 local protocol = require("protocol")
+local version = require("version")
 
-api.BASE_URL = "http://172.16.154.130"
-api.LOGIN_URL = "http://172.16.154.130:69/cgi-bin/srun_portal"
-api.USER_AGENT = "HAUTNetworkGuard/1.3.18 OpenWrt"
+api.DEFAULT_HOST = "172.16.154.130"
+api.DEFAULT_LOGIN_PORT = 69
+api.DEFAULT_AC_ID = 1
+api.BASE_URL = "http://" .. api.DEFAULT_HOST
+api.LOGIN_URL = api.BASE_URL .. ":" .. api.DEFAULT_LOGIN_PORT .. "/cgi-bin/srun_portal"
+api.ac_id = api.DEFAULT_AC_ID
+
+function api.configure_gateway(host, login_port, ac_id)
+    host = tostring(host or "")
+    local port, port_ok = protocol.parse_port(login_port, api.DEFAULT_LOGIN_PORT)
+    local id, id_ok = protocol.parse_port(ac_id, api.DEFAULT_AC_ID)
+    if not protocol.is_valid_ipv4(host) or not port_ok or not id_ok then
+        return false
+    end
+    api.BASE_URL = "http://" .. host
+    api.LOGIN_URL = api.BASE_URL .. ":" .. tostring(port) .. "/cgi-bin/srun_portal"
+    api.ac_id = id
+    return true
+end
+api.USER_AGENT = "HAUTNetworkGuard/" .. version .. " OpenWrt"
 
 local request_seq = 0
 
@@ -80,6 +98,17 @@ local function parse_curl_output(raw)
     }
 end
 
+local function transport_error(meta)
+    if meta.exit_code ~= 0 then
+        return "curl_exit_" .. tostring(meta.exit_code)
+    end
+    -- 非 2xx 正文即使包含 login_ok/not_online 也不能当作有效网关响应。
+    local code = tonumber(meta.http_code) or 0
+    if code < 200 or code >= 300 then
+        return "http_status_" .. tostring(meta.http_code)
+    end
+end
+
 local function http_get(url, req_id, action)
     local err_file = make_temp_path("haut-network-guard-curl-get")
     local cmd = string.format(
@@ -116,11 +145,10 @@ local function http_get(url, req_id, action)
         end
     end
 
-    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%d body=%s",
+    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%.0f body=%s",
         req_id, tostring(action or "get"), meta.http_code, meta.duration_ms, log.bytes_summary(body)))
-    if tonumber(meta.exit_code or 0) ~= 0 then
-        return nil, "curl_exit_" .. tostring(meta.exit_code), meta
-    end
+    local err = transport_error(meta)
+    if err then return nil, err, meta end
     return body, nil, meta
 end
 
@@ -170,11 +198,10 @@ local function http_post(url, body, req_id, action)
         end
     end
 
-    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%d body=%s",
+    log.debug(string.format("[%s] action=%s phase=response http=%s elapsed_ms=%.0f body=%s",
         req_id, tostring(action or "post"), meta.http_code, meta.duration_ms, log.bytes_summary(body_content)))
-    if tonumber(meta.exit_code or 0) ~= 0 then
-        return nil, "curl_exit_" .. tostring(meta.exit_code), meta
-    end
+    local transport_err = transport_error(meta)
+    if transport_err then return nil, transport_err, meta end
     return body_content, nil, meta
 end
 
@@ -198,7 +225,7 @@ function api.login(username, password, context)
     local body = "action=login"
         .. "&username=" .. url_encode(enc_username)
         .. "&password=" .. url_encode(enc_password)
-        .. "&ac_id=1&drop=0&pop=1&type=10&n=117&mbytes=0&minutes=0"
+        .. "&ac_id=" .. tostring(api.ac_id) .. "&drop=0&pop=1&type=10&n=117&mbytes=0&minutes=0"
         .. "&mac=02%3A00%3A00%3A00%3A00%3A00"
 
     log.debug(string.format(
@@ -210,23 +237,23 @@ function api.login(username, password, context)
     if post_err then
         log.error(string.format("[%s] action=login phase=error class=network_error msg=%s",
             req_id, post_err))
-        return false, "登录请求失败", "network_error"
+        return false, protocol.user_facing_network_error(post_err), "network_error"
     end
 
     local classified = protocol.classify_login_response(response)
     log.info(string.format(
-        "[%s] action=login phase=response class=%s http=%s elapsed_ms=%d msg=%s",
+        "[%s] action=login phase=response class=%s http=%s elapsed_ms=%.0f msg=%s",
         req_id,
         tostring(classified.category),
         tostring(meta and meta.http_code or "000"),
-        tonumber(meta and meta.duration_ms or -1),
+        math.floor(tonumber(meta and meta.duration_ms or -1)),
         log.preview(classified.message, 180)
     ))
 
     if classified.category == "success" or classified.category == "already_online" then
-        return true, classified.message, classified.category
+        return true, classified.user_message or classified.message, classified.category
     end
-    return false, classified.message, classified.category
+    return false, classified.user_message or classified.message, classified.category
 end
 
 function api.logout()
@@ -237,22 +264,22 @@ function api.logout()
     if post_err then
         log.error(string.format("[%s] action=logout phase=error class=network_error msg=%s",
             req_id, post_err))
-        return false, "注销请求失败"
+        return false, protocol.user_facing_network_error(post_err)
     end
 
     local classified = protocol.classify_login_response(response)
     log.info(string.format(
-        "[%s] action=logout phase=response class=%s http=%s elapsed_ms=%d msg=%s",
+        "[%s] action=logout phase=response class=%s http=%s elapsed_ms=%.0f msg=%s",
         req_id,
         tostring(classified.category),
         tostring(meta and meta.http_code or "000"),
-        tonumber(meta and meta.duration_ms or -1),
+        math.floor(tonumber(meta and meta.duration_ms or -1)),
         log.preview(classified.message, 120)
     ))
     if classified.category == "logout_ok" or classified.category == "not_online" then
-        return true, classified.message
+        return true, classified.user_message or classified.message
     end
-    return false, classified.message
+    return false, classified.user_message or classified.message
 end
 
 function api.get_user_info(source)
@@ -267,41 +294,33 @@ function api.get_user_info(source)
     local response, get_err, meta = http_get(url, req_id, "status")
     if get_err then
         log.warn(string.format("[%s] action=status phase=error class=network_error source=%s msg=%s",
-            req_id, source, tostring(get_err)))
+            req_id, source, tostring(get_err) .. "; " .. protocol.user_facing_network_error(get_err)))
         return nil, tostring(get_err)
     end
 
     local parsed, format = protocol.parse_status_response(response)
     if parsed then
         log.debug(string.format(
-            "[%s] action=status phase=parse class=online_%s user=%s ip=%s bytes=%d seconds=%d",
+            "[%s] action=status phase=parse class=online_%s user=%s ip=%s bytes=%.0f seconds=%.0f",
             req_id, tostring(format), log.mask_username(parsed.username), tostring(parsed.ip or ""),
-            tonumber(parsed.bytes or 0), tonumber(parsed.seconds or 0)
+            math.floor(tonumber(parsed.bytes or 0)), math.floor(tonumber(parsed.seconds or 0))
         ))
-        log.info(string.format("[%s] action=status phase=response class=online_%s source=%s http=%s elapsed_ms=%d",
+        log.info(string.format("[%s] action=status phase=response class=online_%s source=%s http=%s elapsed_ms=%.0f",
             req_id, tostring(format), source, tostring(meta and meta.http_code or "000"),
-            tonumber(meta and meta.duration_ms or -1)))
+            math.floor(tonumber(meta and meta.duration_ms or -1))))
         return parsed, "online_" .. tostring(format)
     end
 
     if format == "offline" then
-        log.debug(string.format("[%s] action=status phase=response class=offline source=%s http=%s elapsed_ms=%d",
-            req_id, source, tostring(meta and meta.http_code or "000"), tonumber(meta and meta.duration_ms or -1)))
+        log.debug(string.format("[%s] action=status phase=response class=offline source=%s http=%s elapsed_ms=%.0f",
+            req_id, source, tostring(meta and meta.http_code or "000"), math.floor(tonumber(meta and meta.duration_ms or -1))))
         return nil, "offline"
     end
 
-    log.warn(string.format("[%s] action=status phase=response class=%s source=%s http=%s elapsed_ms=%d preview=%s",
+    log.warn(string.format("[%s] action=status phase=response class=%s source=%s http=%s elapsed_ms=%.0f preview=%s",
         req_id, tostring(format), source, tostring(meta and meta.http_code or "000"),
-        tonumber(meta and meta.duration_ms or -1), log.preview(response, 180)))
+        math.floor(tonumber(meta and meta.duration_ms or -1)), log.preview(response, 180)))
     return nil, tostring(format)
-end
-
-function api.test_connection()
-    local cmd = "curl -s --connect-timeout 3 'http://www.apple.com/library/test/success.html'"
-    local handle = io.popen(cmd)
-    local result = handle:read("*a")
-    handle:close()
-    return result:find("Success") ~= nil
 end
 
 return api

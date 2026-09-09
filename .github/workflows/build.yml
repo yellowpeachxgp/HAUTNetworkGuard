@@ -3,8 +3,11 @@ run-name: ${{ github.workflow }} · ${{ github.ref_name }}
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -28,20 +31,37 @@ jobs:
       - name: Install Lua
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.3
+          sudo apt-get install -y lua5.1 lua5.3
 
       - name: Validate OpenWrt Lua Scripts
         run: |
           find OpenWrt/files/usr/lib/haut-network-guard -name '*.lua' -print -exec luac5.3 -p {} \;
+          find OpenWrt/files/usr/lib/haut-network-guard -name '*.lua' -print -exec luac5.1 -p {} \;
 
       - name: Validate Protocol And Docs Contracts
         run: |
           python3 tests/test_protocol_contract.py
           python3 tests/test_docs_contract.py
+          python3 tests/test_acceptance_matrix.py
+          python3 tests/test_version_contract.py
+          python3 tests/test_startup_contract.py
+          python3 tests/test_openwrt_diagnose.py
+          python3 tests/test_release_contract.py
+          python3 tests/test_logging_contract.py
+          python3 tests/test_session_policy.py
 
       - name: Validate OpenWrt Modules
         run: |
           LUA_PATH="OpenWrt/files/usr/lib/haut-network-guard/?.lua;;" lua5.3 tests/test_openwrt_modules.lua
+          lua5.1 tests/test_openwrt_modules.lua
+          lua5.1 tests/test_openwrt_runtime.lua
+          lua5.3 tests/test_openwrt_runtime.lua
+          lua5.1 tests/test_openwrt_session.lua
+          lua5.3 tests/test_openwrt_session.lua
+          lua5.1 tests/test_openwrt_log.lua
+          lua5.3 tests/test_openwrt_log.lua
+          HAUT_TEST_LUA=lua5.1 python3 tests/test_openwrt_installation.py
+          HAUT_TEST_LUA=lua5.3 python3 tests/test_openwrt_installation.py
 
       - name: Validate OpenWrt Shell Scripts
         run: |
@@ -53,7 +73,8 @@ jobs:
           sh -n OpenWrt/files/etc/init.d/haut-network-guard
 
   build-windows-qt:
-    runs-on: windows-latest
+    # Qt 6.6 的当前构建链使用 VS 2022，固定与生成器配套的镜像。
+    runs-on: windows-2022
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -81,7 +102,12 @@ jobs:
         run: |
           mkdir HAUTNetworkGuard-Windows
           copy build\Release\HAUTNetworkGuard.exe HAUTNetworkGuard-Windows\
+          # Qt 6.6 的 windeployqt 不支持 include-soft-plugins；网络信息后端需显式随包复制。
           windeployqt HAUTNetworkGuard-Windows\HAUTNetworkGuard.exe --release --no-translations --no-opengl-sw
+          $networkPlugin = Join-Path $env:QT_ROOT_DIR "plugins\networkinformation\qnetworklistmanager.dll"
+          if (-not (Test-Path $networkPlugin)) { throw "Qt 缺少 networklistmanager 后端: $networkPlugin" }
+          New-Item -ItemType Directory -Force HAUTNetworkGuard-Windows\networkinformation | Out-Null
+          Copy-Item $networkPlugin HAUTNetworkGuard-Windows\networkinformation\qnetworklistmanager.dll -Force
 
       - name: Create Installer ZIP
         run: |
@@ -89,6 +115,18 @@ jobs:
             Remove-Item HAUTNetworkGuard-Windows.zip -Force
           }
           Compress-Archive -Path HAUTNetworkGuard-Windows -DestinationPath HAUTNetworkGuard-Windows.zip
+
+      - name: Validate Installer ZIP
+        shell: pwsh
+        run: |
+          $extract = Join-Path $PWD "zip-validation"
+          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+          Expand-Archive -Path HAUTNetworkGuard-Windows.zip -DestinationPath $extract
+          $root = Join-Path $extract "HAUTNetworkGuard-Windows"
+          if (-not (Test-Path (Join-Path $root "HAUTNetworkGuard.exe"))) { throw "ZIP 缺少主程序" }
+          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Network.dll", "Qt6Widgets.dll", "platforms/qwindows.dll", "networkinformation/qnetworklistmanager.dll")) {
+            if (-not (Test-Path (Join-Path $root $dll))) { throw "ZIP 缺少运行库: $dll" }
+          }
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
@@ -109,6 +147,8 @@ jobs:
         run: |
           cd macOS
           chmod +x build.sh create-dmg.sh tests/run_smoke_tests.sh tests/run_ui_smoke_tests.sh
+          python3 ../tests/test_macos_uninstall.py
+          python3 ../tests/test_session_policy.py
           ./tests/run_smoke_tests.sh
           ./tests/run_ui_smoke_tests.sh
           ./build.sh
@@ -119,6 +159,20 @@ jobs:
           codesign --verify --verbose macOS/build/HAUTNetworkGuard.app
           echo "代码签名验证通过"
 
+      - name: Validate DMG Artifact
+        run: |
+          set -euo pipefail
+          hdiutil verify macOS/build/HAUTNetworkGuard.dmg
+          mount_point="$(mktemp -d)"
+          cleanup() {
+            hdiutil detach "$mount_point" >/dev/null 2>&1 || true
+            rmdir "$mount_point" || true
+          }
+          trap cleanup EXIT
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" macOS/build/HAUTNetworkGuard.dmg >/dev/null
+          test -x "$mount_point/HAUTNetworkGuard.app/Contents/MacOS/HAUTNetworkGuard"
+          codesign --verify --deep --strict "$mount_point/HAUTNetworkGuard.app"
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v7
         with:
@@ -127,8 +181,57 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  release:
+  release-dry-run:
+    # PR、main、tag 和手动运行都验证发布资产事务；该 job 本身不创建或修改 GitHub Release。
     needs: [validate-openwrt, build-windows-qt, build-macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-build
+          path: ./
+
+      - name: Download macOS Artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: macos-build
+          path: ./
+
+      - name: Generate And Validate Release Bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_FILE="$(cat VERSION)"
+          test -s HAUTNetworkGuard-Windows.zip
+          test -s HAUTNetworkGuard.dmg
+          unzip -t HAUTNetworkGuard-Windows.zip >/dev/null
+          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
+          test -s OpenWrt-SHA256SUMS
+          for path in \
+            install.sh install-online.sh upgrade-online.sh uninstall.sh uninstall-online.sh \
+            files/etc/init.d/haut-network-guard files/etc/config/haut-network-guard \
+            files/usr/lib/haut-network-guard/version.lua \
+            files/usr/lib/haut-network-guard/crypto.lua \
+            files/usr/lib/haut-network-guard/api.lua \
+            files/usr/lib/haut-network-guard/log.lua \
+            files/usr/lib/haut-network-guard/protocol.lua \
+            files/usr/lib/haut-network-guard/session.lua \
+            files/usr/lib/haut-network-guard/main.lua; do
+            grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS
+          done
+          grep -Fq "return \"$VERSION_FILE\"" OpenWrt/files/usr/lib/haut-network-guard/version.lua
+          echo "发布资产 dry-run 通过: v$VERSION_FILE"
+
+  release:
+    needs: [validate-openwrt, build-windows-qt, build-macos, release-dry-run]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: startsWith(github.ref, 'refs/tags/v')
@@ -152,7 +255,35 @@ jobs:
 
       - name: Get Version
         id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION_FILE="$(cat VERSION)"
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          test "$VERSION_FILE" = "$TAG_VERSION"
+          echo "VERSION=v$VERSION_FILE" >> $GITHUB_OUTPUT
+
+      - name: Generate Asset Checksums
+        run: |
+          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS
+          find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
+
+      - name: Validate Release Assets
+        run: |
+          set -euo pipefail
+          test -s HAUTNetworkGuard-Windows.zip
+          test -s HAUTNetworkGuard.dmg
+          sha256sum -c SHA256SUMS
+          for path in \
+            install.sh install-online.sh upgrade-online.sh uninstall.sh uninstall-online.sh \
+            files/etc/init.d/haut-network-guard files/etc/config/haut-network-guard \
+            files/usr/lib/haut-network-guard/version.lua \
+            files/usr/lib/haut-network-guard/crypto.lua \
+            files/usr/lib/haut-network-guard/api.lua \
+            files/usr/lib/haut-network-guard/log.lua \
+            files/usr/lib/haut-network-guard/protocol.lua \
+            files/usr/lib/haut-network-guard/session.lua \
+            files/usr/lib/haut-network-guard/main.lua; do
+            grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS
+          done
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
@@ -192,3 +323,5 @@ jobs:
           files: |
             HAUTNetworkGuard-Windows.zip
             HAUTNetworkGuard.dmg
+            SHA256SUMS
+            OpenWrt-SHA256SUMS

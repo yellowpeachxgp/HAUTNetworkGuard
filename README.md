@@ -9,7 +9,7 @@
 - **开机自启**: 支持开机自动启动，保持网络始终连接
 - **系统托盘**: 最小化到系统托盘/菜单栏，静默运行
 - **系统通知**: 登录/注销状态变化时推送通知
-- **配置保存**: 安全存储凭据，支持记住密码
+- **配置保存**: 按平台使用 Keychain、DPAPI 或受限 UCI 配置存储凭据，支持记住密码
 - **更新检测**: 可视化更新窗口，显示版本号和更新日志
 
 ## 系统要求
@@ -28,6 +28,8 @@
 ## 下载安装
 
 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面下载最新版本。
+
+v1.3.19 起正式 Release 同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`。历史版本 v1.3.18 缺少这两个清单，具体回读见 [发布资产审计](docs/RELEASE_ASSET_AUDIT_2026-09-09.md)。
 
 ### macOS
 
@@ -60,8 +62,10 @@
 
 **固定版本安装（推荐生产环境）：**
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/install-online.sh | sh -s -- v1.3.20
 ```
+
+> v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，固定版本安装会在切换前校验完整清单。
 
 **安装最新 main（适合测试）：**
 ```bash
@@ -89,6 +93,18 @@ uci commit haut-network-guard
    - 立即检测
    - 修改账号设置
    - 检查更新
+
+### 自动重连行为
+
+v1.3.20 起支持以下行为：
+
+- Windows 和 macOS 启动时先检测校园网状态，检测异常时等待下一轮；确认离线后才尝试自动登录。
+- 登录失败后至少等待 60 秒再自动重试，连续失败时逐步延长至 5 分钟。修改凭据后可以立即手动登录。
+- 状态接口返回空正文或无法解析的内容时显示异常并等待下一轮检测，不会直接当作离线触发自动登录；只有明确返回“当前不在线”才会进入自动登录判断。
+- 手动注销会暂停本次运行期间的自动重连，包括网关返回“当前未在线”的情况。点击“立即登录”解除暂停；自动登录开关仍然有效。
+- 不勾选“记住密码”时，本次会话可以使用已输入密码重连；退出后需要重新输入。Windows 的手动登录也会读取当前“记住密码”选项。
+
+实现与验收范围见 [状态机契约](docs/STATE_MACHINE_CONTRACT.md)、[工程台账](docs/IMPLEMENTATION_LEDGER.md) 和[三端真实设备验收矩阵](docs/REAL_DEVICE_ACCEPTANCE_MATRIX.md)。
 
 ### 更新检测窗口
 
@@ -202,7 +218,16 @@ HAUTNetworkGuard/
 │   ├── fixtures/protocol_vectors.json
 │   ├── test_protocol_contract.py
 │   ├── test_docs_contract.py
-│   └── test_openwrt_modules.lua
+│   ├── test_version_contract.py
+│   ├── test_release_contract.py
+│   ├── test_logging_contract.py
+│   ├── test_session_policy.py
+│   ├── test_macos_uninstall.py
+│   ├── test_openwrt_installation.py
+│   ├── test_openwrt_modules.lua
+│   ├── test_openwrt_runtime.lua
+│   ├── test_openwrt_session.lua
+│   └── test_openwrt_log.lua
 │
 ├── .github/workflows/          # GitHub Actions CI/CD
 │   └── build.yml
@@ -236,6 +261,7 @@ cd macOS
 或手动删除：
 1. 删除 `/Applications/HAUTNetworkGuard.app`
 2. 删除 `~/Library/LaunchAgents/cn.ehaut.networkguard.plist`
+3. 执行 `macOS/uninstall.sh` 可同时清理 Keychain 凭据和应用配置
 
 ### Windows
 
@@ -252,6 +278,52 @@ cd OpenWrt
 ```
 
 ## 版本历史
+
+### v1.3.20 (2026-09)
+
+- **网络恢复**：Windows/macOS 响应网络变化和系统唤醒，去抖合并事件，忙碌时延后并补发状态检测。
+- **OpenWrt 配置**：支持安全覆盖网关地址、登录端口和 `ac_id`，非法值拒绝并保留旧配置。
+- **更新安全**：macOS 严格校验 Release 标签、官方仓库和 DMG 下载地址，拒绝不可信更新链接。
+- **诊断与错误提示**：OpenWrt 增加只读 `diagnose`；三端统一超时、网关不可达和异常 HTTP 的学生可读提示。
+- **发布**：Windows 网络信息后端插件随 ZIP 打包并校验；所有基础测试和 CI 发布 dry-run 通过。
+
+
+### 开发中
+
+- Windows 和 macOS 在网络变化后合并重复事件并重新检测；检测、登录或注销未结束时只保留一次待执行检测，继续保留手动注销暂停与失败退避。
+- macOS 唤醒后重新检测；Windows 响应 Qt 网络可达性与网络介质变化通知，保留定时检测作为兜底。
+- 桌面网络错误改为中文处理建议，区分超时、无法连接网关和网关异常，保留日志中的技术分类。
+- OpenWrt 新增只读 `diagnose` 命令，帮助检查依赖、服务与配置，输出不包含账号和密码。
+- OpenWrt 拒绝非 2xx HTTP 响应，防止错误页面中的 `not_online` 或 `login_ok` 被当作真实状态；网络失败提示与桌面端保持一致。
+
+### v1.3.19 (2026-09)
+
+- **Windows 学生流程**
+  - 修复开机自启但尚未配置账号时直接隐藏到托盘的问题；现在会显示首次配置窗口。
+  - 保存学号和密码成功后立即发起一次状态检测，不需要额外点击或等待定时器。
+  - 新增启动行为契约测试，并加入 CI 校验。
+- **三端状态机与网络可靠性**
+  - 状态检查、登录、注销统一串行处理，过期回调不会覆盖当前状态。
+  - 明确区分在线、离线、异常响应和网络失败；无法解析的空响应不会误触发自动登录。
+  - 登录失败采用有界退避，手动注销会暂停当前进程内自动重连，手动登录可恢复。
+  - macOS 直连客户端增加物理接口选择、连接超时、HTTP 状态行和非 2xx 响应校验。
+- **协议与 OpenWrt**
+  - 收紧 JSONP/CSV 数字、IPv4、空字段、尾随字段和错误优先级边界。
+  - 接受社区 PR #3，修复 Lua 5.3 浮点格式化导致的运行时崩溃，并完成 Lua 5.1/5.3 回归。
+  - OpenWrt 安装、升级、回滚、卸载和配置保留路径采用 staging 与原子切换，日志对账号、密码和编码字段兜底脱敏。
+- **凭据与隐私**
+  - macOS 使用 Keychain，Windows 使用 DPAPI，关闭“记住密码”时删除持久化密码并保留其他设置。
+  - 凭据写入、回读和删除失败会安全中止，不覆盖旧配置；诊断信息和请求日志不包含密码或完整账号。
+- **桌面体验**
+  - macOS 首次配置、菜单栏窗口、设置保存、托盘恢复和无障碍焦点链路完成回放测试。
+  - Windows 主窗口、托盘显示/隐藏、键盘焦点、错误提示和配置保存失败路径完成 Qt 回放测试。
+- **安装与发布**
+  - `VERSION` 成为三端统一版本源，Windows、macOS、OpenWrt、文档和 User-Agent 保持一致。
+  - Release 同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`，固定版本 OpenWrt 安装/升级会校验清单后再切换。
+  - GitHub Actions 完成 Windows ZIP、macOS DMG、OpenWrt 文件清单和三端基础测试后自动创建 Release。
+- **验证结果**
+  - Windows Qt CTest 5/5 通过；macOS 协议、凭据和 UI smoke 通过；OpenWrt Lua 5.1/5.3 模块、运行时和会话测试通过。
+  - 本版本未把真实校园网设备和长期运行记录冒充为自动化测试结果，现场验证仍按设备环境执行。
 
 ### v1.3.18 (2026-04)
 - **macOS**: 修复菜单栏“账号设置”窗口无法稳定打开的问题

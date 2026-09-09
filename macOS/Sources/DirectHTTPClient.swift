@@ -10,45 +10,89 @@ class DirectHTTPClient {
     private let stateQueue = DispatchQueue(label: "DirectHTTPClient.state")
     private let monitorQueue = DispatchQueue(label: "DirectHTTPClient.monitor")
     private var interfaceName: String?
+    private var pathSignature: String?
+    private var didReceiveInitialMonitorPath = false
+    private var networkChangeHandler: (() -> Void)?
     private let monitor: NWPathMonitor
     private let timeout: TimeInterval
+
+    /// 网络路径发生实际变化时回调。回调在 Network 监控队列上执行，调用方应自行切回主线程。
+    var onNetworkChange: (() -> Void)? {
+        get { stateQueue.sync { networkChangeHandler } }
+        set { stateQueue.sync { networkChangeHandler = newValue } }
+    }
 
     init(timeout: TimeInterval = 10) {
         self.timeout = timeout
         self.monitor = NWPathMonitor()
         self.monitor.pathUpdateHandler = { [weak self] path in
-            self?.updateInterface(from: path)
+            self?.updateInterface(from: path, isMonitorUpdate: true)
         }
         self.monitor.start(queue: monitorQueue)
-        updateInterface(from: monitor.currentPath)
+        updateInterface(from: monitor.currentPath, isMonitorUpdate: false)
     }
 
     deinit {
         monitor.cancel()
     }
 
-    /// 从网络路径中选取物理接口（优先有线，其次 WiFi）
-    private func updateInterface(from path: NWPath) {
-        let interfaces = path.availableInterfaces
-        let resolvedName: String?
+    static func preferredInterfaceName(
+        from interfaces: [(name: String, type: NWInterface.InterfaceType)]
+    ) -> String? {
         if let wired = interfaces.first(where: { $0.type == .wiredEthernet }) {
-            resolvedName = wired.name
-            Logger.info("[DirectHTTP] 使用有线接口: \(wired.name)")
-        } else if let wifi = interfaces.first(where: { $0.type == .wifi }) {
-            resolvedName = wifi.name
-            Logger.info("[DirectHTTP] 使用 WiFi 接口: \(wifi.name)")
-        } else {
-            resolvedName = interfaces.first?.name
-            if let name = resolvedName {
-                Logger.info("[DirectHTTP] 使用接口: \(name)")
+            return wired.name
+        }
+        if let wifi = interfaces.first(where: { $0.type == .wifi }) {
+            return wifi.name
+        }
+        return interfaces.first?.name
+    }
+
+    /// 从网络路径中选取物理接口（优先有线，其次 WiFi）
+    private func updateInterface(from path: NWPath, isMonitorUpdate: Bool) {
+        let interfaces = path.availableInterfaces
+        let resolvedName = Self.preferredInterfaceName(
+            from: interfaces.map { (name: $0.name, type: $0.type) }
+        )
+        if let resolvedName {
+            if interfaces.first(where: { $0.name == resolvedName })?.type == .wiredEthernet {
+                Logger.info("[DirectHTTP] 使用有线接口: \(resolvedName)")
+            } else if interfaces.first(where: { $0.name == resolvedName })?.type == .wifi {
+                Logger.info("[DirectHTTP] 使用 WiFi 接口: \(resolvedName)")
             } else {
-                Logger.warn("[DirectHTTP] 未找到可用物理接口")
+                Logger.info("[DirectHTTP] 使用接口: \(resolvedName)")
             }
+        } else {
+            Logger.warn("[DirectHTTP] 未找到可用物理接口")
         }
 
-        stateQueue.sync {
+        // 首次回调通常只是 currentPath 的重复快照；后续回调即使仍使用同一 en 接口，
+        // 也可能代表用户切换了 Wi-Fi，交给控制器统一去抖，避免漏掉恢复检测。
+        let signature = Self.pathSignature(path, resolvedInterface: resolvedName)
+        let shouldNotify = stateQueue.sync {
+            let signatureChanged = pathSignature != signature
+            let isInitialMonitorPath = isMonitorUpdate && !didReceiveInitialMonitorPath
+            if isMonitorUpdate {
+                didReceiveInitialMonitorPath = true
+            }
+            pathSignature = signature
             interfaceName = resolvedName
+            guard isMonitorUpdate else { return false }
+            // 第一次异步快照若与同步 currentPath 不同，仍需通知；之后每个系统路径事件
+            // 都交给上层去抖，因为 NWPath 的公开字段不足以区分同一接口下的 Wi-Fi 切换。
+            return isInitialMonitorPath ? signatureChanged : true
         }
+        if shouldNotify, let handler = onNetworkChange {
+            handler()
+        }
+    }
+
+    private static func pathSignature(_ path: NWPath, resolvedInterface: String?) -> String {
+        let interfaces = path.availableInterfaces
+            .map { "\($0.name):\($0.type)" }
+            .sorted()
+            .joined(separator: ",")
+        return "status=\(path.status);interface=\(resolvedInterface ?? "");available=\(interfaces);expensive=\(path.isExpensive);constrained=\(path.isConstrained)"
     }
 
     // MARK: - Public API
@@ -183,6 +227,15 @@ class DirectHTTPClient {
                 responseData.append(buffer, count: n)
             }
 
+            guard let statusCode = Self.responseStatusCode(from: responseData) else {
+                completion(.failure(HTTPError.invalidResponse("响应缺少有效 HTTP 状态行")))
+                return
+            }
+            guard (200..<300).contains(statusCode) else {
+                completion(.failure(HTTPError.httpStatus(statusCode)))
+                return
+            }
+
             // 解析 HTTP body
             if let body = self.extractHTTPBody(from: responseData) {
                 Logger.debug("[DirectHTTP] 收到响应 host=\(host) port=\(port) bytes=\(responseData.count) body_chars=\(body.count)")
@@ -235,6 +288,20 @@ class DirectHTTPClient {
             return String(raw[range.upperBound...])
         }
         return raw
+    }
+
+    /// 读取原始 HTTP 响应状态码；非 2xx 由传输层视为失败，不能交给协议层误判。
+    static func responseStatusCode(from data: Data) -> Int? {
+        guard let headerEnd = data.range(of: Data("\r\n".utf8)) else { return nil }
+        guard let statusLine = String(data: data[..<headerEnd.lowerBound], encoding: .ascii) else {
+            return nil
+        }
+        let parts = statusLine.split(separator: " ", omittingEmptySubsequences: true)
+        guard parts.count >= 2, parts[0].hasPrefix("HTTP/"),
+              let code = Int(parts[1]), (100...599).contains(code) else {
+            return nil
+        }
+        return code
     }
 
     // MARK: - URL 解析
@@ -357,6 +424,7 @@ class DirectHTTPClient {
         case invalidURL(String)
         case timeout(phase: String)
         case invalidResponse(String)
+        case httpStatus(Int)
         case socketError(String)
 
         var description: String {
@@ -367,6 +435,7 @@ class DirectHTTPClient {
                 return "请求超时 (\(phase))"
             case .invalidResponse(let message):
                 return message
+            case .httpStatus(let code): return "网关 HTTP 状态异常 (\(code))"
             case .socketError(let msg): return "Socket 错误: \(msg)"
             }
         }

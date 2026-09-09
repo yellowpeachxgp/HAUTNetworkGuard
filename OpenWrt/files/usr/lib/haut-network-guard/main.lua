@@ -2,13 +2,13 @@
 -- HAUT Network Guard - OpenWrt 版本
 -- 主程序入口
 
-local VERSION = "1.3.18"
-
 package.path = package.path .. ";/usr/lib/haut-network-guard/?.lua"
 
 local api = require("api")
 local log = require("log")
 local protocol = require("protocol")
+local session = require("session")
+local VERSION = require("version")
 
 local function read_uci_value(key)
     local handle = io.popen("uci -q get " .. key .. " 2>/dev/null")
@@ -27,7 +27,10 @@ local function read_config()
         password = "",
         enabled = true,
         interval = 30,
-        log_level = "info"
+        log_level = "info",
+        gateway_host = api.DEFAULT_HOST,
+        gateway_port = api.DEFAULT_LOGIN_PORT,
+        ac_id = api.DEFAULT_AC_ID
     }
     local diagnostics = {}
 
@@ -37,6 +40,13 @@ local function read_config()
         protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.password"))
     config.log_level, diagnostics.log_level =
         protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.log_level"))
+    local host, host_diag = protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.gateway_host"))
+    local port, port_diag = protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.gateway_port"))
+    local ac_id, ac_id_diag = protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.ac_id"))
+    diagnostics.gateway_host, diagnostics.gateway_port, diagnostics.ac_id = host_diag, port_diag, ac_id_diag
+    if host ~= "" and protocol.is_valid_ipv4(host) then config.gateway_host = host end
+    config.gateway_port = protocol.parse_port(port, api.DEFAULT_LOGIN_PORT)
+    config.ac_id = protocol.parse_port(ac_id, api.DEFAULT_AC_ID)
 
     local enabled_value, enabled_diag =
         protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.enabled"))
@@ -52,6 +62,8 @@ local function read_config()
     if interval_value ~= "" then
         config.interval = tonumber(interval_value) or 30
     end
+    if config.interval ~= config.interval then config.interval = 30 end
+    config.interval = math.floor(config.interval)
 
     -- 限制检测间隔，避免请求过于频繁导致风控
     if config.interval < 30 then
@@ -73,7 +85,10 @@ local function config_signature(config)
         config.username,
         config.password,
         tostring(config.interval),
-        tostring(config.log_level)
+        tostring(config.log_level),
+        config.gateway_host,
+        tostring(config.gateway_port),
+        tostring(config.ac_id)
     }, "|")
 end
 
@@ -87,6 +102,17 @@ local function config_summary(config)
         tonumber(config.interval) or -1,
         tostring(config.log_level)
     )
+end
+
+local function monotonic_seconds()
+    local file = io.open("/proc/uptime", "r")
+    if file then
+        local line = file:read("*l") or ""
+        file:close()
+        local uptime = tonumber(line:match("^(%S+)") or "")
+        if uptime then return uptime end
+    end
+    return os.time()
 end
 
 local function log_diagnostics(diagnostics)
@@ -117,7 +143,7 @@ end
 -- 格式化流量
 local function format_bytes(bytes)
     if bytes < 1024 then
-        return string.format("%d B", bytes)
+        return string.format("%.0f B", bytes)
     elseif bytes < 1048576 then
         return string.format("%.2f KB", bytes / 1024)
     elseif bytes < 1073741824 then
@@ -129,15 +155,16 @@ end
 
 -- 格式化时间
 local function format_time(seconds)
+    seconds = math.max(0, math.floor(seconds))
     local hours = math.floor(seconds / 3600)
     local mins = math.floor((seconds % 3600) / 60)
     local secs = seconds % 60
     if hours > 0 then
-        return string.format("%d小时%d分%d秒", hours, mins, secs)
+        return string.format("%.0f小时%.0f分%.0f秒", hours, mins, secs)
     elseif mins > 0 then
-        return string.format("%d分%d秒", mins, secs)
+        return string.format("%.0f分%.0f秒", mins, secs)
     else
-        return string.format("%d秒", secs)
+        return string.format("%.0f秒", secs)
     end
 end
 
@@ -148,9 +175,9 @@ local function main()
 
     local last_signature = nil
     local previous_online = nil
-    local consecutive_failures = 0
     local last_login_error = ""
     local last_status_issue = ""
+    local login_session = session.new(30)
 
     while true do
         log.refresh_level()
@@ -162,17 +189,22 @@ local function main()
         if signature ~= last_signature then
             log.info("配置更新: " .. config_summary(config))
             log_diagnostics(diagnostics)
+            api.configure_gateway(config.gateway_host, config.gateway_port, config.ac_id)
             last_signature = signature
+            login_session:reset(config.interval)
         end
 
         if not config.enabled then
+            login_session:observe("error")
             log.warn("服务已禁用，等待下一轮检测")
         elseif config.username == "" or config.password == "" then
+            login_session:observe("error")
             log.error("未配置用户名或密码，等待下一轮检测")
         else
             local user_info, status_class = api.get_user_info("monitor_loop")
 
             if user_info then
+                login_session:observe("online")
                 if previous_online ~= true then
                     log.info("状态迁移: offline -> online")
                 end
@@ -188,49 +220,47 @@ local function main()
                     format_time(user_info.seconds)
                 ))
             elseif status_class == "offline" then
+                local now = monotonic_seconds()
+                login_session:observe("offline")
                 if previous_online ~= false then
                     log.warn("状态迁移: online -> offline")
                 end
                 previous_online = false
                 last_status_issue = ""
-                log.warn("离线，触发自动登录")
+                if login_session:can_auto_login(now, config.enabled,
+                        config.username ~= "" and config.password ~= "") and login_session:begin_login(now) then
+                    log.warn("离线，触发自动登录")
+                    local success, msg, category = api.login(
+                        config.username,
+                        config.password,
+                        { source = "auto_loop" }
+                    )
+                    login_session:finish_login(success, monotonic_seconds())
 
-                local success, msg, category = api.login(
-                    config.username,
-                    config.password,
-                    { source = "auto_loop" }
-                )
-
-                if success then
-                    consecutive_failures = 0
-                    last_login_error = ""
-                    log.info("登录成功: " .. tostring(msg))
-                else
-                    consecutive_failures = consecutive_failures + 1
-                    local sanitized_msg = log.preview(msg or "登录失败", 180)
-                    if sanitized_msg == last_login_error then
-                        log.warn(string.format(
-                            "登录连续失败(%d次), 分类=%s, msg=%s",
-                            consecutive_failures, tostring(category or "unknown"), sanitized_msg
-                        ))
+                    if success then
+                        last_login_error = ""
+                        log.info("登录成功: " .. tostring(msg))
                     else
-                        log.error(string.format(
-                            "登录失败, 分类=%s, msg=%s",
-                            tostring(category or "unknown"), sanitized_msg
-                        ))
+                        local sanitized_msg = log.preview(msg or "登录失败", 180)
+                        if sanitized_msg == last_login_error then
+                            log.warn(string.format(
+                                "登录连续失败(%d次), 分类=%s, msg=%s",
+                                login_session.failures, tostring(category or "unknown"), sanitized_msg
+                            ))
+                        else
+                            log.error(string.format(
+                                "登录失败, 分类=%s, msg=%s",
+                                tostring(category or "unknown"), sanitized_msg
+                            ))
+                        end
+                        last_login_error = sanitized_msg
                     end
-                    last_login_error = sanitized_msg
-
-                    if consecutive_failures > 1 then
-                        local backoff = math.min(60, (consecutive_failures - 1) * 5)
-                        sleep_seconds = sleep_seconds + backoff
-                        log.warn(string.format(
-                            "应用失败退避: +%ds (连续失败=%d)",
-                            backoff, consecutive_failures
-                        ))
-                    end
+                else
+                    log.warn(string.format("离线，自动登录冷却中: 剩余约 %.0f 秒", login_session:remaining(now)))
+                    sleep_seconds = math.max(sleep_seconds, math.ceil(login_session:remaining(now)))
                 end
             else
+                login_session:observe("error")
                 local issue = tostring(status_class or "unknown")
                 if issue ~= last_status_issue then
                     log.warn(string.format(
@@ -243,6 +273,9 @@ local function main()
                 end
             end
         end
+
+        local remaining = login_session:remaining(monotonic_seconds())
+        if remaining > sleep_seconds then sleep_seconds = math.ceil(remaining) end
 
         log.debug("下次检测等待: " .. tostring(sleep_seconds) .. "秒")
         os.execute("sleep " .. tostring(sleep_seconds))

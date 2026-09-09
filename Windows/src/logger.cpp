@@ -55,7 +55,7 @@ void Logger::rotate() {
 
 void Logger::write(Level level, const QString &msg) {
   QMutexLocker locker(&m_mutex);
-  if (level < m_minLevel)
+  if (!m_enabled || level < m_minLevel)
     return;
 
   static const char *labels[] = {"DEBUG", "INFO", "WARN", "ERROR"};
@@ -76,6 +76,12 @@ void Logger::setMinLevel(Level level) {
   Logger &logger = instance();
   QMutexLocker locker(&logger.m_mutex);
   logger.m_minLevel = level;
+}
+
+void Logger::setEnabled(bool enabled) {
+  Logger &logger = instance();
+  QMutexLocker locker(&logger.m_mutex);
+  logger.m_enabled = enabled;
 }
 
 Logger::Level Logger::minLevel() {

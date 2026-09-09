@@ -70,8 +70,22 @@ enum LoginResult {
     case failed(String)
 }
 
+/// 请求边界可替换，以便在不连接校园网的情况下回放控制器行为。
+protocol SrunService {
+    func checkStatus(completion: @escaping (NetworkStatus) -> Void)
+    func login(completion: @escaping (LoginResult) -> Void)
+    func logout(completion: @escaping (LoginResult) -> Void)
+    /// 注册网络路径变化通知；回调由实现决定所在队列，控制器会切回主线程。
+    func setNetworkChangeHandler(_ handler: (() -> Void)?)
+}
+
+extension SrunService {
+    /// 回放测试服务无需启动系统网络监控。
+    func setNetworkChangeHandler(_ handler: (() -> Void)?) {}
+}
+
 /// SRUN3K API 封装
-class SrunAPI {
+class SrunAPI: SrunService {
     static let serverIP = "172.16.154.130"
     static let loginPort = 69
     static let statusURL = "http://\(serverIP)/cgi-bin/rad_user_info"
@@ -81,6 +95,26 @@ class SrunAPI {
     private var username: String { AppConfig.shared.username }
     private var password: String { AppConfig.shared.password }
     private let httpClient = DirectHTTPClient(timeout: 10)
+    private let authLock = NSLock()
+    private var authActionInFlight: String?
+
+    func setNetworkChangeHandler(_ handler: (() -> Void)?) {
+        httpClient.onNetworkChange = handler
+    }
+
+    private func beginAuth(_ action: String) -> Bool {
+        authLock.lock()
+        defer { authLock.unlock() }
+        guard authActionInFlight == nil else { return false }
+        authActionInFlight = action
+        return true
+    }
+
+    private func finishAuth() {
+        authLock.lock()
+        authActionInFlight = nil
+        authLock.unlock()
+    }
 
     func checkStatus(completion: @escaping (NetworkStatus) -> Void) {
         let requestID = Logger.makeRequestID(prefix: "status")
@@ -117,7 +151,7 @@ class SrunAPI {
                 } else if parsed.format == "offline" {
                     status = .offline
                 } else {
-                    status = .error("状态解析失败(\(parsed.format))")
+                    status = .error("校园网网关返回了无法识别的状态，请稍后重试。")
                 }
                 let classification = parsed.online ? "online_\(parsed.format)" : parsed.format
                 Logger.info("[\(requestID)] action=status phase=response class=\(classification) elapsed_ms=\(durationMs)")
@@ -126,7 +160,7 @@ class SrunAPI {
             case .failure(let error):
                 let durationMs = Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
                 Logger.warn("[\(requestID)] action=status phase=error class=network_error elapsed_ms=\(durationMs) msg=\(error.localizedDescription)")
-                completion(.error(error.localizedDescription))
+                completion(.error(SrunProtocol.userFacingNetworkError(error)))
             }
         }
     }
@@ -135,6 +169,11 @@ class SrunAPI {
         guard !username.isEmpty, !password.isEmpty else {
             Logger.warn("登录已取消：凭据为空")
             completion(.failed("未配置学号或密码"))
+            return
+        }
+        guard beginAuth("login") else {
+            Logger.warn("登录已取消：上一个认证请求尚未完成")
+            completion(.failed("上一个认证请求尚未完成"))
             return
         }
 
@@ -167,6 +206,11 @@ class SrunAPI {
     }
 
     func logout(completion: @escaping (LoginResult) -> Void) {
+        guard beginAuth("logout") else {
+            Logger.warn("注销已取消：上一个认证请求尚未完成")
+            completion(.failed("上一个认证请求尚未完成"))
+            return
+        }
         let requestID = Logger.makeRequestID(prefix: "logout")
         sendRequest(params: ["action": "logout"], requestID: requestID, completion: completion)
     }
@@ -188,11 +232,14 @@ class SrunAPI {
                 let classified = SrunProtocol.classifyLoginResponse(responseString)
                 Logger.info("[\(requestID)] action=\(action) phase=response class=\(classified.category) elapsed_ms=\(durationMs)")
                 Logger.debug("[\(requestID)] action=\(action) phase=response preview=\(SrunProtocol.preview(responseString))")
-                completion(self.mapLoginResult(action: action, classified: classified))
+                let mapped = self.mapLoginResult(action: action, classified: classified)
+                self.finishAuth()
+                completion(mapped)
             case .failure(let error):
                 let durationMs = Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1000)
                 Logger.error("[\(requestID)] action=\(action) phase=error class=network_error elapsed_ms=\(durationMs) msg=\(error.localizedDescription)")
-                completion(.failed(error.localizedDescription))
+                self.finishAuth()
+                completion(.failed(SrunProtocol.userFacingNetworkError(error)))
             }
         }
     }
@@ -205,7 +252,7 @@ class SrunAPI {
             if classified.category == "not_online" {
                 return .alreadyOnline
             }
-            return .failed(classified.message)
+            return .failed(SrunProtocol.userFacingLoginMessage(classified))
         }
 
         switch classified.category {
@@ -214,7 +261,7 @@ class SrunAPI {
         case "already_online":
             return .alreadyOnline
         default:
-            return .failed(classified.message)
+            return .failed(SrunProtocol.userFacingLoginMessage(classified))
         }
     }
 }

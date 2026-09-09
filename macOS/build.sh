@@ -12,36 +12,50 @@ echo "=========================================="
 # 项目目录
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCES_DIR="$PROJECT_DIR/Sources"
-BUILD_DIR="$PROJECT_DIR/build"
+BUILD_DIR="${HAUT_BUILD_DIR:-$PROJECT_DIR/build}"
 APP_NAME="HAUTNetworkGuard"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
+VERSION_FILE="$PROJECT_DIR/../VERSION"
+VERSION="$(cat "$VERSION_FILE")"
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    echo "错误: VERSION 文件不是有效语义版本号: $VERSION"
+    exit 1
+fi
 
-# 清理旧构建
-echo "[1/5] 清理旧构建..."
+# 构建与模块缓存限定在本次输出目录，不清理用户的全局 Xcode 缓存。
+echo "[1/5] 准备构建目录..."
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
-
-# 清理 Swift 模块缓存 (修复模块冲突)
-rm -rf ~/Library/Developer/Xcode/DerivedData/ModuleCache* 2>/dev/null || true
-rm -rf /var/folders/*/*/com.apple.DeveloperTools/*/SwiftASTContext/* 2>/dev/null || true
+cat > "$BUILD_DIR/GeneratedVersion.swift" <<EOF_VERSION
+enum BuildVersion {
+    static let value = "$VERSION"
+}
+EOF_VERSION
 
 # 获取 SDK 路径
-SDK_PATH=$(xcrun --show-sdk-path)
+SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
+SWIFTC=$(xcrun --sdk macosx --find swiftc)
 
 # 编译 Swift 源文件
 echo "[2/5] 编译 Swift 源文件..."
-swiftc \
+"$SWIFTC" \
     -o "$BUILD_DIR/$APP_NAME" \
     -sdk "$SDK_PATH" \
+    -module-cache-path "$BUILD_DIR/ModuleCache" \
     -target arm64-apple-macosx11.0 \
     -framework Cocoa \
     -framework UserNotifications \
     -framework Network \
+    -framework Security \
+    -framework LocalAuthentication \
+    "$BUILD_DIR/GeneratedVersion.swift" \
     "$SOURCES_DIR/AppRuntime.swift" \
     "$SOURCES_DIR/Logger.swift" \
     "$SOURCES_DIR/Config.swift" \
     "$SOURCES_DIR/Encryption.swift" \
     "$SOURCES_DIR/SrunProtocol.swift" \
+    "$SOURCES_DIR/SessionPolicy.swift" \
+    "$SOURCES_DIR/SingleInstanceGuard.swift" \
     "$SOURCES_DIR/DirectHTTPClient.swift" \
     "$SOURCES_DIR/SrunAPI.swift" \
     "$SOURCES_DIR/UpdateChecker.swift" \
@@ -62,7 +76,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/"
 
 # 复制 Info.plist
-cp "$PROJECT_DIR/Info.plist" "$APP_BUNDLE/Contents/"
+sed "s/@VERSION@/$VERSION/g" "$PROJECT_DIR/Info.plist" > "$APP_BUNDLE/Contents/Info.plist"
 
 # 创建 PkgInfo
 echo "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"

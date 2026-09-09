@@ -10,16 +10,23 @@ class StatusBarController: NSObject {
     private var loginMenuItem: NSMenuItem!
     private var logoutMenuItem: NSMenuItem!
 
-    private let api = SrunAPI()
+    private let api: SrunService
+    private let config: AppConfig
+    private let now: () -> TimeInterval
+    private let workspaceNotificationCenter: NotificationCenter
+    private let networkRecoveryEnabled: Bool
+    private let networkEventDebounceInterval: TimeInterval
     private var checkTimer: Timer?
+    private var networkEventWorkItem: DispatchWorkItem?
+    private var networkEventGeneration: UInt64 = 0
+    private var pendingNetworkCheck = false
+    private var pendingNetworkReason: String?
+    private var wakeObserver: NSObjectProtocol?
     private var currentStatus: NetworkStatus = .checking
-    private var checkInterval: TimeInterval { TimeInterval(AppConfig.shared.checkInterval) }
-    private var isLoggingIn = false
-    private var isCheckingStatus = false
-    private var startupAutoLoginEvaluated = false
-    private var manualOfflineHold = false
-    private var lastAutoLoginAttemptAt: Date?
-    private let autoLoginRetryInterval: TimeInterval = 30
+    private var lastStatusAt: Date?
+    private var checkInterval: TimeInterval { TimeInterval(config.checkInterval) }
+    private var session = SessionPolicy()
+    private var monotonicNow: TimeInterval { now() }
 
     // 状态图标
     private let onlineIcon = "wifi"
@@ -33,11 +40,22 @@ class StatusBarController: NSObject {
     private var aboutWindowController: AboutWindowController?
     private var utilityWindowObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
 
-    override init() {
+    init(api: SrunService = SrunAPI(), config: AppConfig = .shared,
+         now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+         workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter,
+         networkRecoveryEnabled: Bool = !AppRuntime.isUISmokeTest,
+         networkEventDebounceInterval: TimeInterval = 0.5) {
+        self.api = api
+        self.config = config
+        self.now = now
+        self.workspaceNotificationCenter = workspaceNotificationCenter
+        self.networkRecoveryEnabled = networkRecoveryEnabled
+        self.networkEventDebounceInterval = max(0, networkEventDebounceInterval)
         super.init()
         Logger.debug("初始化菜单栏控制器")
         setupStatusItem()
         setupMenu()
+        setupNotifications()
         if AppRuntime.isUISmokeTest {
             Logger.info("已启用 macOS UI smoke test 模式，跳过通知、网络轮询和自动更新后台任务")
             currentStatus = .offline
@@ -47,7 +65,20 @@ class StatusBarController: NSObject {
             startMonitoring()
             setupUpdateChecker()
         }
-        setupNotifications()
+    }
+
+    deinit {
+        checkTimer?.invalidate()
+        networkEventWorkItem?.cancel()
+        if let wakeObserver {
+            workspaceNotificationCenter.removeObserver(wakeObserver)
+        }
+        api.setNetworkChangeHandler(nil)
+        NotificationCenter.default.removeObserver(self)
+        for observer in utilityWindowObservers.values {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
     }
     
     private func setupNotifications() {
@@ -57,6 +88,25 @@ class StatusBarController: NSObject {
             name: .checkIntervalChanged,
             object: nil
         )
+
+        guard networkRecoveryEnabled else { return }
+
+        // 唤醒后系统路由和物理接口可能还在收敛，统一经过去抖调度一次状态检测。
+        wakeObserver = workspaceNotificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.scheduleNetworkRecoveryCheck(reason: "wake")
+        }
+
+        // SrunAPI 将 DirectHTTPClient 的 NWPathMonitor 事件转发到这里。
+        api.setNetworkChangeHandler { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.scheduleNetworkRecoveryCheck(reason: "network_change")
+            }
+        }
     }
     
     @objc private func restartTimer() {
@@ -336,6 +386,7 @@ extension StatusBarController {
 extension StatusBarController {
     private func setupMenu() {
         menu = NSMenu()
+        menu.autoenablesItems = false
 
         // 状态显示
         statusMenuItem = NSMenuItem(title: "状态: 检测中...", action: nil, keyEquivalent: "")
@@ -377,6 +428,16 @@ extension StatusBarController {
         )
         checkItem.target = self
         menu.addItem(checkItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let diagnosticsItem = NSMenuItem(
+            title: "复制诊断信息",
+            action: #selector(copyDiagnosticsAction),
+            keyEquivalent: "d"
+        )
+        diagnosticsItem.target = self
+        menu.addItem(diagnosticsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -424,6 +485,54 @@ extension StatusBarController {
 
 // MARK: - 监控逻辑
 extension StatusBarController {
+    /// 合并短时间内的路径/唤醒事件，避免一次网络切换发出多次状态请求。
+    private func scheduleNetworkRecoveryCheck(reason: String) {
+        guard networkRecoveryEnabled else { return }
+
+        pendingNetworkCheck = true
+        // 多个来源在同一时间窗口内只保留一个检测；保留较宽泛的原因便于日志阅读。
+        if let pendingNetworkReason, pendingNetworkReason != reason {
+            self.pendingNetworkReason = "network_recovery"
+        } else {
+            pendingNetworkReason = reason
+        }
+
+        networkEventGeneration &+= 1
+        let generation = networkEventGeneration
+        networkEventWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.networkEventGeneration == generation else { return }
+            self.networkEventWorkItem = nil
+            self.runNetworkRecoveryCheck()
+        }
+        networkEventWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + networkEventDebounceInterval,
+            execute: workItem
+        )
+    }
+
+    private func runNetworkRecoveryCheck() {
+        guard pendingNetworkCheck else { return }
+        guard !session.isBusy else {
+            // 事件不能因撞上登录/注销而丢失；当前操作完成后会再次排空。
+            Logger.debug("网络恢复检测暂缓：已有网络操作进行中")
+            return
+        }
+
+        let reason = pendingNetworkReason ?? "network_recovery"
+        pendingNetworkCheck = false
+        pendingNetworkReason = nil
+        checkStatus(reason: reason)
+    }
+
+    /// 当前请求完成后排空被去抖窗口暂存的事件。
+    private func drainPendingNetworkRecoveryCheck() {
+        // 去抖窗口尚未结束时交给已排队的 work item，避免同一轮切网被提前拆成两次检测。
+        guard pendingNetworkCheck, networkEventWorkItem == nil, !session.isBusy else { return }
+        runNetworkRecoveryCheck()
+    }
+
     private func startMonitoring() {
         Logger.info("开始网络监控，检测间隔: \(Int(checkInterval)) 秒")
         checkStatus(reason: "startup")
@@ -435,18 +544,37 @@ extension StatusBarController {
         }
     }
 
-    private func checkStatus(reason: String) {
-        guard !isCheckingStatus else {
-            Logger.debug("跳过状态检测 [\(reason)]：已有状态请求进行中")
+    func checkStatus(reason: String) {
+        guard let token = session.beginStatus() else {
+            // 事件驱动的检测可能在当前认证请求期间到达；留给完成回调排空。
+            if reason == "wake" || reason == "network_change" || reason == "network_recovery" {
+                pendingNetworkCheck = true
+                pendingNetworkReason = reason
+            }
+            Logger.debug("跳过状态检测 [\(reason)]：已有网络操作进行中")
             return
         }
 
-        isCheckingStatus = true
+        // 任意成功启动的状态请求都可以满足待处理的恢复检测，避免重复请求。
+        pendingNetworkCheck = false
+        pendingNetworkReason = nil
+        networkEventWorkItem?.cancel()
+        networkEventWorkItem = nil
+
+        updateUI()
         Logger.debug("触发一次网络状态检测 [\(reason)]")
         api.checkStatus { [weak self] status in
             DispatchQueue.main.async {
-                self?.isCheckingStatus = false
-                self?.handleStatusChange(status, reason: reason)
+                guard let self else { return }
+                let observation: SessionPolicy.Observation
+                switch status {
+                case .online: observation = .online
+                case .offline: observation = .offline
+                case .error, .checking: observation = .error
+                }
+                guard self.session.completeStatus(token, observation: observation) else { return }
+                self.handleStatusChange(status, reason: reason)
+                self.drainPendingNetworkRecoveryCheck()
             }
         }
     }
@@ -456,38 +584,15 @@ extension StatusBarController {
 extension StatusBarController {
     private func handleStatusChange(_ newStatus: NetworkStatus, reason: String) {
         let previousStatus = currentStatus
-        let wasOnline = previousStatus.isOnline
         currentStatus = newStatus
+        lastStatusAt = Date()
         Logger.info("状态迁移 [\(reason)]: \(previousStatus.kindLabel) -> \(newStatus.kindLabel)")
 
         updateUI()
 
-        if newStatus.isOnline {
-            startupAutoLoginEvaluated = true
-            lastAutoLoginAttemptAt = nil
-            Logger.debug("当前在线，无需自动登录")
-            return
-        }
-
-        guard AppConfig.shared.autoLogin else {
-            Logger.debug("自动登录已关闭，保持当前状态")
-            return
-        }
-
         switch newStatus {
         case .offline:
-            let trigger: String
-            if !startupAutoLoginEvaluated {
-                startupAutoLoginEvaluated = true
-                trigger = "startup_offline"
-            } else if wasOnline {
-                trigger = "disconnect"
-                Logger.warn("检测到掉线，准备自动重连")
-                sendNotification(title: "网络已断开", body: "正在尝试自动重连...")
-            } else {
-                trigger = "offline_retry"
-            }
-            triggerAutoLoginIfNeeded(trigger: trigger)
+            triggerAutoLoginIfNeeded(trigger: reason)
         case .error(let message):
             Logger.warn("状态检测错误，不触发自动登录: \(message)")
         case .checking, .online:
@@ -496,8 +601,8 @@ extension StatusBarController {
     }
 
     private func updateUI() {
-        let iconName: String
-        let statusText: String
+        var iconName: String
+        var statusText: String
 
         switch currentStatus {
         case .online:
@@ -505,7 +610,7 @@ extension StatusBarController {
             statusText = "状态: 已连接"
         case .offline:
             iconName = offlineIcon
-            statusText = "状态: 未连接"
+            statusText = session.manualOfflineHold ? "状态: 已暂停自动重连" : "状态: 未连接"
         case .checking:
             iconName = checkingIcon
             statusText = "状态: 检测中..."
@@ -514,67 +619,76 @@ extension StatusBarController {
             statusText = "状态: 错误 - \(msg)"
         }
 
+        if session.isBusy {
+            iconName = checkingIcon
+            switch session.operation {
+            case .login: statusText = "状态: 正在登录..."
+            case .logout: statusText = "状态: 正在注销..."
+            case .status: statusText = "状态: 正在检测..."
+            case .idle: break
+            }
+        }
+
         statusItem.button?.image = NSImage(
             systemSymbolName: iconName,
             accessibilityDescription: statusText
         )
         statusMenuItem.title = statusText
-        detailMenuItem.title = currentStatus.description
-        loginMenuItem.isEnabled = !currentStatus.isOnline && !isLoggingIn
-        logoutMenuItem.isEnabled = currentStatus.isOnline && !isLoggingIn
+        if session.manualOfflineHold {
+            detailMenuItem.title = "自动重连已暂停；点击「立即登录」解除暂停"
+        } else {
+            let hint = automaticRetryHint()
+            let checkedAt = lastStatusAt.map {
+                "最近检测 \(DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .medium))"
+            }
+            detailMenuItem.title = [currentStatus.description, hint, checkedAt]
+                .compactMap { $0 }.joined(separator: "；")
+        }
+        loginMenuItem.isEnabled = (!currentStatus.isOnline || session.manualOfflineHold) && !session.isBusy
+        logoutMenuItem.isEnabled = currentStatus.isOnline && !session.isBusy
+    }
+
+    private func automaticRetryHint() -> String? {
+        guard config.autoLogin else { return nil }
+        let remaining = session.nextAutomaticAttempt - monotonicNow
+        guard remaining > 0 else { return nil }
+        return "自动重试约 \(Int(ceil(remaining))) 秒后"
     }
 
     private func triggerAutoLoginIfNeeded(trigger: String) {
-        guard !isLoggingIn else {
-            Logger.debug("跳过自动登录 [\(trigger)]：已有登录请求进行中")
-            return
-        }
-
-        guard !manualOfflineHold else {
-            Logger.info("跳过自动登录 [\(trigger)]：用户手动注销后保持离线")
-            return
-        }
-
-        guard !AppConfig.shared.username.isEmpty, !AppConfig.shared.password.isEmpty else {
-            Logger.warn("跳过自动登录 [\(trigger)]：未配置可用凭据")
-            return
-        }
-
-        let now = Date()
-        if let lastAttempt = lastAutoLoginAttemptAt {
-            let elapsed = now.timeIntervalSince(lastAttempt)
-            if elapsed < autoLoginRetryInterval {
-                Logger.debug("跳过自动登录 [\(trigger)]：退避剩余 \(Int(autoLoginRetryInterval - elapsed))s")
-                return
-            }
-        }
-
-        lastAutoLoginAttemptAt = now
-        performAutoLogin(trigger: trigger)
+        guard let token = session.beginLogin(
+            manual: false, enabled: config.autoLogin,
+            hasCredentials: !config.username.isEmpty && !config.password.isEmpty,
+            now: monotonicNow, interval: checkInterval
+        ) else { return }
+        performLogin(token: token, manual: false, trigger: trigger)
     }
 
-    private func performAutoLogin(trigger: String) {
-        isLoggingIn = true
+    private func performLogin(token: UInt64, manual: Bool, trigger: String) {
         updateUI()
-        Logger.info("执行自动登录流程 [\(trigger)] (account: \(Logger.maskUsername(AppConfig.shared.username)))")
+        Logger.info("执行登录流程 [\(trigger)] (account: \(Logger.maskUsername(config.username)))")
         api.login { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoggingIn = false
+                guard let self else { return }
+                let succeeded: Bool
+                if case .failed = result { succeeded = false } else { succeeded = true }
+                guard self.session.completeLogin(token, succeeded: succeeded, now: self.monotonicNow) else { return }
                 switch result {
                 case .success:
-                    self?.manualOfflineHold = false
-                    Logger.info("自动登录成功 [\(trigger)]")
-                    self?.sendNotification(title: "登录成功", body: "已自动重新连接校园网")
-                    self?.checkStatus(reason: "post_auto_login_success")
+                    Logger.info("登录请求成功 [\(trigger)]，等待状态确认")
+                    self.sendNotification(title: "登录请求成功", body: "正在确认校园网连接状态")
                 case .alreadyOnline:
-                    self?.manualOfflineHold = false
-                    Logger.info("自动登录返回 already_online [\(trigger)]")
-                    self?.checkStatus(reason: "post_auto_login_already_online")
+                    Logger.info("登录返回 already_online [\(trigger)]，等待状态确认")
                 case .failed(let msg):
-                    Logger.warn("自动登录失败 [\(trigger)]: \(msg)")
-                    self?.sendNotification(title: "登录失败", body: msg)
-                    self?.updateUI()
+                    Logger.warn("登录失败 [\(trigger)]: \(msg)")
+                    self.currentStatus = .error(msg)
+                    self.sendNotification(title: "登录失败", body: msg)
                 }
+                self.updateUI()
+                if succeeded || manual {
+                    self.checkStatus(reason: "post_login")
+                }
+                self.drainPendingNetworkRecoveryCheck()
             }
         }
     }
@@ -582,62 +696,43 @@ extension StatusBarController {
 
 // MARK: - 菜单操作
 extension StatusBarController {
-    @objc private func loginAction() {
-        guard !isLoggingIn else {
-            Logger.debug("忽略手动登录：已有登录请求进行中")
+    @objc func loginAction() {
+        guard !session.isBusy else { return }
+        guard !config.username.isEmpty, !config.password.isEmpty else {
+            settingsAction()
             return
         }
-
-        isLoggingIn = true
-        manualOfflineHold = false
-        updateUI()
-        Logger.info("手动登录")
-        api.login { [weak self] result in
-            DispatchQueue.main.async {
-                self?.isLoggingIn = false
-                switch result {
-                case .success:
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "登录成功", body: "已连接校园网")
-                case .alreadyOnline:
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "提示", body: "已经在线")
-                case .failed(let msg):
-                    self?.sendNotification(title: "登录失败", body: msg)
-                }
-                self?.updateUI()
-                self?.checkStatus(reason: "manual_login")
-            }
-        }
+        guard let token = session.beginLogin(
+            manual: true, enabled: config.autoLogin, hasCredentials: true,
+            now: monotonicNow, interval: checkInterval
+        ) else { return }
+        performLogin(token: token, manual: true, trigger: "manual_login")
     }
 
-    @objc private func logoutAction() {
-        guard !isLoggingIn else {
-            Logger.debug("忽略手动注销：已有登录请求进行中")
-            return
-        }
-
-        manualOfflineHold = true
-        isLoggingIn = true
+    @objc func logoutAction() {
+        guard let token = session.beginLogout() else { return }
         updateUI()
         Logger.info("手动注销")
         api.logout { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoggingIn = false
+                guard let self else { return }
+                let succeeded: Bool
+                if case .failed = result { succeeded = false } else { succeeded = true }
+                guard self.session.completeLogout(token, succeeded: succeeded) else { return }
                 switch result {
                 case .success:
-                    self?.currentStatus = .offline
-                    self?.updateUI()
-                    self?.sendNotification(title: "注销成功", body: "已断开校园网")
+                    self.currentStatus = .offline
+                    self.sendNotification(title: "注销成功", body: "已断开校园网，自动重连已暂停")
                 case .alreadyOnline:
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "提示", body: "当前未在线")
+                    self.currentStatus = .offline
+                    self.sendNotification(title: "提示", body: "当前未在线，自动重连已暂停")
                 case .failed(let msg):
-                    self?.manualOfflineHold = false
-                    self?.sendNotification(title: "注销失败", body: msg)
+                    self.currentStatus = .error(msg)
+                    self.sendNotification(title: "注销失败", body: msg + " 自动重连已暂停，可再次注销。")
                 }
-                self?.updateUI()
-                self?.checkStatus(reason: "manual_logout")
+                self.updateUI()
+                self.checkStatus(reason: "manual_logout")
+                self.drainPendingNetworkRecoveryCheck()
             }
         }
     }
@@ -675,6 +770,27 @@ extension StatusBarController {
         Logger.info("手动检查更新")
         UpdateChecker.shared.checkForUpdate(isManual: true, force: true)
     }
+
+    @objc func copyDiagnosticsAction() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(diagnosticText(), forType: .string)
+        detailMenuItem.title = "诊断信息已复制；内容不含账号和密码"
+        Logger.info("已复制脱敏诊断信息")
+    }
+
+    func diagnosticText() -> String {
+        let checkedAt = lastStatusAt.map {
+            DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .medium)
+        } ?? "尚未检测"
+        let retry = automaticRetryHint() ?? "无"
+        return [
+            "\(AppConfig.appName) v\(AppConfig.version)",
+            "状态分类: \(currentStatus.kindLabel)",
+            "最近检测: \(checkedAt)",
+            "自动登录: \(config.autoLogin ? "开启" : "关闭")",
+            "自动重试: \(retry)"
+        ].joined(separator: "\n")
+    }
 }
 
 // MARK: - 通知
@@ -692,6 +808,7 @@ extension StatusBarController {
     }
 
     private func sendNotification(title: String, body: String) {
+        guard !AppRuntime.isUISmokeTest else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

@@ -40,6 +40,19 @@ class UpdateChecker {
     private var checkTimer: Timer?
     private var isChecking = false
 
+    static func isValidReleaseTag(_ tag: String) -> Bool {
+        tag.range(of: #"^v[0-9]+\.[0-9]+\.[0-9]+$"#, options: .regularExpression) != nil
+    }
+
+    static func isTrustedReleaseURL(_ value: String, tag: String, assetName: String? = nil) -> Bool {
+        guard isValidReleaseTag(tag), let url = URL(string: value), url.scheme == "https",
+              url.host == "github.com", url.path.hasPrefix("/yellowpeachxgp/HAUTNetworkGuard/") else { return false }
+        if let assetName {
+            return url.path == "/yellowpeachxgp/HAUTNetworkGuard/releases/download/\(tag)/\(assetName)"
+        }
+        return url.path == "/yellowpeachxgp/HAUTNetworkGuard/releases/tag/\(tag)"
+    }
+
     // 后台自动检测回调（只在有更新时触发）
     var onUpdateAvailable: ((ReleaseInfo) -> Void)?
 
@@ -70,6 +83,7 @@ class UpdateChecker {
     private enum UpdateNetworkError: Error, LocalizedError {
         case invalidHTTPStatus(Int)
         case missingResponseData
+        case invalidReleasePayload
         case curlUnavailable(String)
         case curlFailure(Int32, String)
 
@@ -82,6 +96,8 @@ class UpdateChecker {
                 return "GitHub API 返回异常状态码: \(statusCode)"
             case .missingResponseData:
                 return "服务器无响应"
+            case .invalidReleasePayload:
+                return "版本信息或下载地址不可信，已停止更新。"
             case .curlUnavailable(let message):
                 return "无法执行更新回退链路: \(message)"
             case .curlFailure(_, let message):
@@ -212,10 +228,13 @@ class UpdateChecker {
                 return
             }
 
+            guard Self.isValidReleaseTag(tagName),
+                  let htmlURL = json["html_url"] as? String,
+                  Self.isTrustedReleaseURL(htmlURL, tag: tagName) else {
+                throw UpdateNetworkError.invalidReleasePayload
+            }
             // 提取版本号 (去掉 v 前缀)
-            let latestVersion = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
-
-            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastCheckKey)
+            let latestVersion = String(tagName.dropFirst())
 
             Logger.info("[\(requestID)] action=update phase=compare current=\(AppConfig.version) latest=\(latestVersion)")
 
@@ -224,8 +243,9 @@ class UpdateChecker {
             if let assets = json["assets"] as? [[String: Any]] {
                 for asset in assets {
                     if let name = asset["name"] as? String,
-                       name.hasSuffix(".dmg"),
-                       let url = asset["browser_download_url"] as? String {
+                       name == "HAUTNetworkGuard.dmg",
+                       let url = asset["browser_download_url"] as? String,
+                       Self.isTrustedReleaseURL(url, tag: tagName, assetName: name) {
                         downloadURL = url
                         break
                     }
@@ -234,10 +254,12 @@ class UpdateChecker {
 
             let releaseInfo = ReleaseInfo(
                 version: latestVersion,
-                htmlURL: json["html_url"] as? String ?? "",
+                htmlURL: htmlURL,
                 downloadURL: downloadURL,
                 releaseNotes: json["body"] as? String ?? "暂无更新说明"
             )
+
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastCheckKey)
 
             // 比较版本号
             let hasUpdate = isNewerVersion(latestVersion, than: AppConfig.version)

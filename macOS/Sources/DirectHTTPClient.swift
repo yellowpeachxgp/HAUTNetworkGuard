@@ -11,6 +11,7 @@ class DirectHTTPClient {
     private let monitorQueue = DispatchQueue(label: "DirectHTTPClient.monitor")
     private var interfaceName: String?
     private var pathSignature: String?
+    private var didReceiveInitialMonitorPath = false
     private var networkChangeHandler: (() -> Void)?
     private let monitor: NWPathMonitor
     private let timeout: TimeInterval
@@ -25,10 +26,10 @@ class DirectHTTPClient {
         self.timeout = timeout
         self.monitor = NWPathMonitor()
         self.monitor.pathUpdateHandler = { [weak self] path in
-            self?.updateInterface(from: path)
+            self?.updateInterface(from: path, isMonitorUpdate: true)
         }
         self.monitor.start(queue: monitorQueue)
-        updateInterface(from: monitor.currentPath)
+        updateInterface(from: monitor.currentPath, isMonitorUpdate: false)
     }
 
     deinit {
@@ -48,7 +49,7 @@ class DirectHTTPClient {
     }
 
     /// 从网络路径中选取物理接口（优先有线，其次 WiFi）
-    private func updateInterface(from path: NWPath) {
+    private func updateInterface(from path: NWPath, isMonitorUpdate: Bool) {
         let interfaces = path.availableInterfaces
         let resolvedName = Self.preferredInterfaceName(
             from: interfaces.map { (name: $0.name, type: $0.type) }
@@ -65,16 +66,23 @@ class DirectHTTPClient {
             Logger.warn("[DirectHTTP] 未找到可用物理接口")
         }
 
-        // NWPathMonitor 在唤醒、切换 Wi-Fi/有线和路径失效时都会回调。
-        // 只对路径签名的真实变化发通知，避免初始回调和重复回调造成检测风暴。
+        // 首次回调通常只是 currentPath 的重复快照；后续回调即使仍使用同一 en 接口，
+        // 也可能代表用户切换了 Wi-Fi，交给控制器统一去抖，避免漏掉恢复检测。
         let signature = Self.pathSignature(path, resolvedInterface: resolvedName)
-        let changed = stateQueue.sync {
-            let changed = pathSignature != signature
+        let shouldNotify = stateQueue.sync {
+            let signatureChanged = pathSignature != signature
+            let isInitialMonitorPath = isMonitorUpdate && !didReceiveInitialMonitorPath
+            if isMonitorUpdate {
+                didReceiveInitialMonitorPath = true
+            }
             pathSignature = signature
             interfaceName = resolvedName
-            return changed
+            guard isMonitorUpdate else { return false }
+            // 第一次异步快照若与同步 currentPath 不同，仍需通知；之后每个系统路径事件
+            // 都交给上层去抖，因为 NWPath 的公开字段不足以区分同一接口下的 Wi-Fi 切换。
+            return isInitialMonitorPath ? signatureChanged : true
         }
-        if changed, let handler = onNetworkChange {
+        if shouldNotify, let handler = onNetworkChange {
             handler()
         }
     }

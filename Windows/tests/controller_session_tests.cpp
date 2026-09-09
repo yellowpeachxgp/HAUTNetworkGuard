@@ -288,6 +288,23 @@ int main(int argc, char **argv) {
                                        "offline", "", 0, 0);
     expect(networkEventApi.loginTokens.empty(),
            "网络环境通知不得解除手动注销后的自动重连暂停");
+
+    // 用户显式恢复后，认证中的网络通知同样应在完成后补检。
+    QMetaObject::invokeMethod(&networkEventWindow, "onLoginClicked",
+                              Qt::DirectConnection);
+    expect(networkEventApi.loginTokens.size() == 1,
+           "手动登录应显式解除暂停并进入认证流程");
+    const auto statusBeforeLoginEvent = networkEventApi.statusTokens.size();
+    networkEvent();
+    settleNetworkEvent();
+    expect(networkEventApi.statusTokens.size() == statusBeforeLoginEvent,
+           "认证期间网络通知不得并发检测");
+    emit networkEventApi.loginFailed(networkEventApi.loginTokens.back(),
+                                     "模拟结束");
+    expect(networkEventApi.statusTokens.size() == statusBeforeLoginEvent + 1,
+           "认证完成后应补发待处理网络检测");
+    emit networkEventApi.statusChecked(networkEventApi.statusTokens.back(), false,
+                                       "offline", "", 0, 0);
   } catch (const std::exception &error) {
     qCritical().noquote() << "Qt 控制器回放失败：" << error.what();
     return 1;

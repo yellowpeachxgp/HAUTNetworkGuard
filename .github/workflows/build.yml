@@ -102,8 +102,12 @@ jobs:
         run: |
           mkdir HAUTNetworkGuard-Windows
           copy build\Release\HAUTNetworkGuard.exe HAUTNetworkGuard-Windows\
-          # QNetworkInformation 的 networklistmanager 后端通过插件动态加载，必须包含软插件。
-          windeployqt HAUTNetworkGuard-Windows\HAUTNetworkGuard.exe --release --include-soft-plugins --no-translations --no-opengl-sw
+          # Qt 6.6 的 windeployqt 不支持 include-soft-plugins；网络信息后端需显式随包复制。
+          windeployqt HAUTNetworkGuard-Windows\HAUTNetworkGuard.exe --release --no-translations --no-opengl-sw
+          $networkPlugin = Join-Path $env:QT_ROOT_DIR "plugins\networkinformation\qnetworklistmanager.dll"
+          if (-not (Test-Path $networkPlugin)) { throw "Qt 缺少 networklistmanager 后端: $networkPlugin" }
+          New-Item -ItemType Directory -Force HAUTNetworkGuard-Windows\networkinformation | Out-Null
+          Copy-Item $networkPlugin HAUTNetworkGuard-Windows\networkinformation\qnetworklistmanager.dll -Force
 
       - name: Create Installer ZIP
         run: |
@@ -120,7 +124,7 @@ jobs:
           Expand-Archive -Path HAUTNetworkGuard-Windows.zip -DestinationPath $extract
           $root = Join-Path $extract "HAUTNetworkGuard-Windows"
           if (-not (Test-Path (Join-Path $root "HAUTNetworkGuard.exe"))) { throw "ZIP 缺少主程序" }
-          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Network.dll", "Qt6Widgets.dll", "platforms/qwindows.dll")) {
+          foreach ($dll in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Network.dll", "Qt6Widgets.dll", "platforms/qwindows.dll", "networkinformation/qnetworklistmanager.dll")) {
             if (-not (Test-Path (Join-Path $root $dll))) { throw "ZIP 缺少运行库: $dll" }
           }
 

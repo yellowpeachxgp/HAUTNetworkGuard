@@ -10,6 +10,9 @@ REPO_REF="${1:-main}"
 REPO_URL="https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/${REPO_REF}/OpenWrt"
 INSTALL_DIR="/usr/lib/haut-network-guard"
 
+# 需要下载/更新的核心模块（新增模块时必须在此追加，确保与 upgrade-online.sh 保持一致）
+MODULES="crypto api log config protocol main"
+
 download_file() {
     url="$1"
     dest="$2"
@@ -45,11 +48,9 @@ mkdir -p "$INSTALL_DIR"
 
 # 下载文件
 echo "[3/5] 下载程序文件..."
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$INSTALL_DIR/crypto.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$INSTALL_DIR/api.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$INSTALL_DIR/log.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$INSTALL_DIR/protocol.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$INSTALL_DIR/main.lua"
+for module in $MODULES; do
+    download_file "$REPO_URL/files/usr/lib/haut-network-guard/${module}.lua" "$INSTALL_DIR/${module}.lua"
+done
 
 echo "[4/5] 下载配置文件..."
 download_file "$REPO_URL/files/etc/init.d/haut-network-guard" "/etc/init.d/haut-network-guard"

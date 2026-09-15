@@ -14,6 +14,9 @@ TMP_DIR=""
 BACKUP_DIR=""
 UPGRADE_SUCCESS=0
 
+# 需要更新的核心模块（新增模块时必须在此追加，确保与 install-online.sh 保持一致）
+MODULES="crypto api log config protocol main"
+
 version_cmp() {
     awk -v a="$1" -v b="$2" '
         BEGIN {
@@ -36,11 +39,9 @@ cleanup() {
     if [ "$UPGRADE_SUCCESS" -ne 1 ] && [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ]; then
         echo ""
         echo "升级失败，正在回滚到原版本..."
-        [ -f "$BACKUP_DIR/crypto.lua" ] && cp -f "$BACKUP_DIR/crypto.lua" "$INSTALL_DIR/crypto.lua" || true
-        [ -f "$BACKUP_DIR/api.lua" ] && cp -f "$BACKUP_DIR/api.lua" "$INSTALL_DIR/api.lua" || true
-        [ -f "$BACKUP_DIR/log.lua" ] && cp -f "$BACKUP_DIR/log.lua" "$INSTALL_DIR/log.lua" || true
-        [ -f "$BACKUP_DIR/protocol.lua" ] && cp -f "$BACKUP_DIR/protocol.lua" "$INSTALL_DIR/protocol.lua" || true
-        [ -f "$BACKUP_DIR/main.lua" ] && cp -f "$BACKUP_DIR/main.lua" "$INSTALL_DIR/main.lua" || true
+        for module in $MODULES; do
+            [ -f "$BACKUP_DIR/${module}.lua" ] && cp -f "$BACKUP_DIR/${module}.lua" "$INSTALL_DIR/${module}.lua" || true
+        done
         if [ -f "$BACKUP_DIR/haut-network-guard.init" ]; then
             cp -f "$BACKUP_DIR/haut-network-guard.init" /etc/init.d/haut-network-guard || true
             chmod +x /etc/init.d/haut-network-guard || true
@@ -128,29 +129,23 @@ echo "[1/4] 停止服务..."
 TMP_DIR="$(mktemp -d /tmp/haut-network-guard-upgrade.XXXXXX)"
 BACKUP_DIR="$(mktemp -d /tmp/haut-network-guard-backup.XXXXXX)"
 
-cp -f "$INSTALL_DIR/crypto.lua" "$BACKUP_DIR/crypto.lua"
-cp -f "$INSTALL_DIR/api.lua" "$BACKUP_DIR/api.lua"
-cp -f "$INSTALL_DIR/log.lua" "$BACKUP_DIR/log.lua"
-cp -f "$INSTALL_DIR/protocol.lua" "$BACKUP_DIR/protocol.lua"
-cp -f "$INSTALL_DIR/main.lua" "$BACKUP_DIR/main.lua"
+for module in $MODULES; do
+    cp -f "$INSTALL_DIR/${module}.lua" "$BACKUP_DIR/${module}.lua"
+done
 cp -f /etc/init.d/haut-network-guard "$BACKUP_DIR/haut-network-guard.init"
 
 # 下载新文件（不覆盖配置）
 echo "[2/4] 下载程序文件..."
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/crypto.lua" "$TMP_DIR/crypto.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$TMP_DIR/api.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$TMP_DIR/log.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$TMP_DIR/protocol.lua"
-download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$TMP_DIR/main.lua"
+for module in $MODULES; do
+    download_file "$REPO_URL/files/usr/lib/haut-network-guard/${module}.lua" "$TMP_DIR/${module}.lua"
+done
 
 echo "[3/4] 更新服务脚本..."
 download_file "$REPO_URL/files/etc/init.d/haut-network-guard" "$TMP_DIR/haut-network-guard.init"
 
-cp -f "$TMP_DIR/crypto.lua" "$INSTALL_DIR/crypto.lua"
-cp -f "$TMP_DIR/api.lua" "$INSTALL_DIR/api.lua"
-cp -f "$TMP_DIR/log.lua" "$INSTALL_DIR/log.lua"
-cp -f "$TMP_DIR/protocol.lua" "$INSTALL_DIR/protocol.lua"
-cp -f "$TMP_DIR/main.lua" "$INSTALL_DIR/main.lua"
+for module in $MODULES; do
+    cp -f "$TMP_DIR/${module}.lua" "$INSTALL_DIR/${module}.lua"
+done
 cp -f "$TMP_DIR/haut-network-guard.init" "/etc/init.d/haut-network-guard"
 chmod +x /etc/init.d/haut-network-guard
 

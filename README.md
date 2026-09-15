@@ -25,6 +25,10 @@
 - OpenWrt 19.07 或更高版本
 - 建议安装: lua, curl
 
+### 通用 Linux (Debian / Ubuntu)
+- Debian 11+ / Ubuntu 20.04+（或其它带 systemd 的发行版）
+- 建议安装: lua5.1, curl
+
 ## 下载安装
 
 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面下载最新版本。
@@ -74,6 +78,21 @@ uci set haut-network-guard.main.username='你的学号'
 uci set haut-network-guard.main.password='你的密码'
 uci commit haut-network-guard
 /etc/init.d/haut-network-guard start
+```
+
+### 通用 Linux (Debian / Ubuntu)
+
+详见 [linux-generic/README.md](linux-generic/README.md)
+
+**一键安装：**
+```bash
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/linux-generic/install-online.sh | sh
+```
+
+**配置并启动：**
+```bash
+nano /etc/haut-network-guard.conf   # 填写 username / password
+systemctl start haut-network-guard
 ```
 
 ## 使用说明
@@ -183,6 +202,7 @@ HAUTNetworkGuard/
 │   │   │   ├── main.lua
 │   │   │   ├── api.lua
 │   │   │   ├── log.lua
+│   │   │   ├── config.lua      # 配置读取（UCI / 纯文本双后端）
 │   │   │   ├── protocol.lua
 │   │   │   └── crypto.lua
 │   │   ├── etc/init.d/
@@ -190,6 +210,15 @@ HAUTNetworkGuard/
 │   ├── install.sh
 │   ├── install-online.sh
 │   ├── upgrade-online.sh
+│   ├── uninstall.sh
+│   └── README.md
+│
+├── linux-generic/              # 通用 Linux 版本 (Debian / Ubuntu)
+│   ├── systemd/
+│   │   └── haut-network-guard.service
+│   ├── config.example
+│   ├── install.sh
+│   ├── install-online.sh
 │   ├── uninstall.sh
 │   └── README.md
 │
@@ -212,17 +241,17 @@ HAUTNetworkGuard/
 
 ## 技术栈
 
-| 组件 | macOS | Windows | OpenWrt |
-|-----|-------|---------|------------|
-| 语言 | Swift | **C++ (Qt 6)** | Lua |
-| GUI | AppKit | **Qt Widgets** | CLI |
-| HTTP | URLSession | **QNetworkAccessManager** | curl |
-| 加密 | SRUN3K | SRUN3K | SRUN3K |
-| 配置存储 | UserDefaults | **QSettings** | UCI |
-| 系统托盘 | NSStatusItem | **QSystemTrayIcon** | - |
-| 开机自启 | LaunchAgent | 注册表 Run 键 | procd |
-| 构建 | swiftc | **CMake + MSVC** | - |
-| CI/CD | GitHub Actions | **GitHub Actions** | - |
+| 组件 | macOS | Windows | OpenWrt | 通用 Linux |
+|-----|-------|---------|------------|------------|
+| 语言 | Swift | **C++ (Qt 6)** | Lua | Lua |
+| GUI | AppKit | **Qt Widgets** | CLI | CLI |
+| HTTP | URLSession | **QNetworkAccessManager** | curl | curl |
+| 加密 | SRUN3K | SRUN3K | SRUN3K | SRUN3K |
+| 配置存储 | UserDefaults | **QSettings** | UCI | 纯文本文件 |
+| 系统托盘 | NSStatusItem | **QSystemTrayIcon** | - | - |
+| 开机自启 | LaunchAgent | 注册表 Run 键 | procd | systemd |
+| 构建 | swiftc | **CMake + MSVC** | - | - |
+| CI/CD | GitHub Actions | **GitHub Actions** | - | - |
 
 ## 卸载
 
@@ -249,6 +278,15 @@ cd macOS
 ```bash
 cd OpenWrt
 ./uninstall.sh
+```
+
+### 通用 Linux (Debian / Ubuntu)
+
+```bash
+cd linux-generic
+sudo ./uninstall.sh
+# 如需同时删除配置
+sudo ./uninstall.sh --purge-config
 ```
 
 ## 版本历史

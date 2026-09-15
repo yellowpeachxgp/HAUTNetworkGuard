@@ -1,0 +1,16 @@
+[Unit]
+Description=HAUT Network Guard (自动登录守护进程)
+Documentation=https://github.com/yellowpeachxgp/HAUTNetworkGuard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lua5.1 /usr/lib/haut-network-guard/main.lua
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

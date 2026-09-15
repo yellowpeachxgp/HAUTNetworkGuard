@@ -1,0 +1,18 @@
+# HAUT Network Guard - 通用 Linux (Debian / Ubuntu) 配置
+# 本文件用于替代 OpenWrt 的 UCI 配置，字段含义与 uci 配置一一对应。
+# 安装后位于 /etc/haut-network-guard.conf （权限 600，仅 root 可读）
+
+# 是否启用自动登录守护 (1/0)
+enabled=1
+
+# 学号
+username=
+
+# 密码
+password=
+
+# 检测间隔（秒），允许范围 30-300
+interval=30
+
+# 日志级别: debug / info / warn / error
+log_level=info

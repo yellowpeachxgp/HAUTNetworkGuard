@@ -52,6 +52,14 @@ jobs:
           sh -n OpenWrt/upgrade-online.sh
           sh -n OpenWrt/files/etc/init.d/haut-network-guard
 
+      - name: Validate Linux Generic Scripts
+        run: |
+          sh -n linux-generic/install.sh
+          sh -n linux-generic/install-online.sh
+          sh -n linux-generic/uninstall.sh
+          test -f linux-generic/systemd/haut-network-guard.service
+          test -f linux-generic/config.example
+
   build-windows-qt:
     runs-on: windows-latest
     timeout-minutes: 30

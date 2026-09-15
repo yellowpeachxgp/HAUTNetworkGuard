@@ -9,15 +9,12 @@ package.path = package.path .. ";/usr/lib/haut-network-guard/?.lua"
 local api = require("api")
 local log = require("log")
 local protocol = require("protocol")
+local config = require("config")
 
-local function read_uci_value(key)
-    local handle = io.popen("uci -q get " .. key .. " 2>/dev/null")
-    if not handle then
-        return ""
-    end
-    local value = handle:read("*a") or ""
-    handle:close()
-    return value
+-- 读取配置项：优先 OpenWrt UCI，其次通用 Linux 的纯文本配置文件
+local function read_config_value(key)
+    local field = key:match("%.([%w_]+)$") or key
+    return config.get(field)
 end
 
 -- 读取 UCI 配置
@@ -32,14 +29,14 @@ local function read_config()
     local diagnostics = {}
 
     config.username, diagnostics.username =
-        protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.username"))
+        protocol.sanitize_uci_value(read_config_value("haut-network-guard.main.username"))
     config.password, diagnostics.password =
-        protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.password"))
+        protocol.sanitize_uci_value(read_config_value("haut-network-guard.main.password"))
     config.log_level, diagnostics.log_level =
-        protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.log_level"))
+        protocol.sanitize_uci_value(read_config_value("haut-network-guard.main.log_level"))
 
     local enabled_value, enabled_diag =
-        protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.enabled"))
+        protocol.sanitize_uci_value(read_config_value("haut-network-guard.main.enabled"))
     diagnostics.enabled = enabled_diag
     if enabled_value ~= "" then
         local normalized = enabled_value:lower()
@@ -47,7 +44,7 @@ local function read_config()
     end
 
     local interval_value, interval_diag =
-        protocol.sanitize_uci_value(read_uci_value("haut-network-guard.main.interval"))
+        protocol.sanitize_uci_value(read_config_value("haut-network-guard.main.interval"))
     diagnostics.interval = interval_diag
     if interval_value ~= "" then
         config.interval = tonumber(interval_value) or 30
@@ -144,7 +141,7 @@ end
 -- 主循环
 local function main()
     log.info("HAUT Network Guard v" .. VERSION .. " 启动")
-    log.info("运行模式: OpenWrt/procd 自动登录守护进程")
+    log.info("运行模式: " .. config.backend_name() .. " 自动登录守护进程")
 
     local last_signature = nil
     local previous_online = nil

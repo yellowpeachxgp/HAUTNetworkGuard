@@ -167,6 +167,22 @@ sha256sum -c SHA256SUMS
 结果：包内包含 `VERSION`、`OpenWrt/files`、`linux-generic/` 和
 `README.md`；SHA-256 回读通过。macOS DMG 已单独完成校验、挂载和签名复核。
 
+### 正式 Release 回读（v1.3.21）
+
+- GitHub Actions tag run `39166133262`：validate-openwrt、build-windows-qt、
+  build-macos、release-dry-run、release 全部通过。
+- Release：<https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/tag/v1.3.21>，
+  资产为 Windows ZIP、macOS DMG、Linux tar.gz、`SHA256SUMS`、`OpenWrt-SHA256SUMS`。
+- 下载后执行 `sha256sum -c SHA256SUMS`：三个资产全部 OK。
+- Windows ZIP 包含 `HAUTNetworkGuard.exe`、`platforms/qwindows.dll` 和
+  `networkinformation/qnetworklistmanager.dll`。
+- Linux tar.gz 包含 `VERSION`、`linux-generic/install.sh`、
+  `OpenWrt/files/usr/lib/haut-network-guard/config.lua` 和 `main.lua`。
+- `OpenWrt-SHA256SUMS` 包含 `config.lua`；DMG 校验、只读挂载、
+  `AppIcon.icns` 和 `codesign --verify --deep --strict` 通过。
+- 使用 Release 实际资产执行 `linux-generic/install-online.sh v1.3.21`：
+  SHA-256 校验、安装、配置权限 600、systemd 服务生成和卸载保留配置通过。
+
 ## 5. 尚未替代的现场验证
 
 - 真实 Windows 10/11 桌面上的通知区域显示、Explorer 重启、125%/150% 缩放；

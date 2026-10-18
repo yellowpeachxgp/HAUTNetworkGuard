@@ -1,6 +1,6 @@
 # HAUTNetworkGuard 工程推进台账
 
-更新日期：2026-10-19。`v1.3.20` 已发布；本轮基于社区 Issue #1/#5/#7 和 PR #2/#3/#6 复核开发 `v1.3.21`，新增 Windows 布局修复、通用 Linux 支持和发布资产。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
+更新日期：2026-10-19。`v1.3.21` 已发布（[Release](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/tag/v1.3.21)，tag `e69e969`，main 合并提交 `582c220`）；本轮基于社区 Issue #1/#5/#7 和 PR #2/#3/#6 复核，新增 Windows 布局修复、通用 Linux 支持和发布资产。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
 
 按用户最新要求，当前推进范围为产品开发、必要基础测试及 CI 构建；真实设备、长期运行和签名公证不作为本轮开发阻塞。v1.3.21 聚焦社区 Issue/PR 复核、Windows 高 DPI 布局、通用 Linux 支持和发布资产完整性，复核记录见 [PR_REVIEW_2026-10-19.md](PR_REVIEW_2026-10-19.md)。
 
@@ -40,6 +40,8 @@ v1.3.21 本轮已补齐：Windows 大字体/高 DPI 布局自适应和滚动容�
 - 通用 Linux 安装/重装/卸载故障注入 15 项 ×2 Lua ×3 轮通过（90 次测试）；覆盖 systemd 失败回滚、Release 哈希、tag/版本一致性和配置保留。
 - Python 协议、文档、版本、发布、日志、启动、会话和四端验收矩阵契约全部通过；C++/Swift 会话策略各 142 条断言、重复 3 轮通过。
 - 本地发布资产 dry-run：`HAUTNetworkGuard-Linux.tar.gz` 结构、`config.lua`、`VERSION` 和 SHA-256 回读通过。
+- GitHub Actions tag run `39166133262` 全部通过；Release v1.3.21 的 Windows ZIP、macOS DMG、Linux tar.gz、`SHA256SUMS` 和 `OpenWrt-SHA256SUMS` 已下载回读，哈希、DMG 挂载/签名和 Linux 包结构通过。
+- 使用 Release 实际资产执行 Linux 固定版本在线安装：SHA-256 校验、安装、配置 600、systemd 服务生成和卸载保留配置通过。
 - 具体命令和未替代项见 [验证记录](VALIDATION_2026-10-19.md)。
 
 ## v1.3.19 验证记录

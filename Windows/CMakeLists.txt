@@ -130,6 +130,7 @@ if(WIN32)
     target_link_libraries(haut_controller_tests PRIVATE Crypt32)
     target_link_libraries(haut_credential_tests PRIVATE Crypt32)
     target_link_libraries(haut_instance_guard_tests PRIVATE Crypt32)
+    target_link_libraries(haut_layout_tests PRIVATE Crypt32)
 
     # 静态链接运行时
     set_property(TARGET ${PROJECT_NAME} PROPERTY
@@ -141,6 +142,8 @@ if(WIN32)
     set_property(TARGET haut_credential_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET haut_instance_guard_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET haut_layout_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     
     # 添加版本信息

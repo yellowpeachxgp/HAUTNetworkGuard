@@ -157,8 +157,9 @@ cp VERSION README.md .release-linux/HAUTNetworkGuard-Linux/
 cp -R OpenWrt/files .release-linux/HAUTNetworkGuard-Linux/OpenWrt/files
 cp -R linux-generic .release-linux/HAUTNetworkGuard-Linux/
 tar -czf HAUTNetworkGuard-Linux.tar.gz -C .release-linux HAUTNetworkGuard-Linux
-tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq ".../linux-generic/install.sh"
-tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq ".../OpenWrt/files/usr/lib/haut-network-guard/config.lua"
+tar -tzf HAUTNetworkGuard-Linux.tar.gz > linux-tar-list.txt
+grep -Fq ".../linux-generic/install.sh" linux-tar-list.txt
+grep -Fq ".../OpenWrt/files/usr/lib/haut-network-guard/config.lua" linux-tar-list.txt
 sha256sum HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS
 sha256sum -c SHA256SUMS
 ```

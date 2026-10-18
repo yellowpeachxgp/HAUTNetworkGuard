@@ -228,8 +228,10 @@ jobs:
           cp -R linux-generic .release-linux/HAUTNetworkGuard-Linux/
           tar -czf HAUTNetworkGuard-Linux.tar.gz -C .release-linux HAUTNetworkGuard-Linux
           rm -rf .release-linux
-          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh"
-          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua"
+          tar -tzf HAUTNetworkGuard-Linux.tar.gz > linux-tar-list.txt
+          grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh" linux-tar-list.txt
+          grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua" linux-tar-list.txt
+          rm -f linux-tar-list.txt
           sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS
           sha256sum -c SHA256SUMS
           find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
@@ -299,8 +301,10 @@ jobs:
           test -s HAUTNetworkGuard-Windows.zip
           test -s HAUTNetworkGuard.dmg
           test -s HAUTNetworkGuard-Linux.tar.gz
-          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh"
-          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua"
+          tar -tzf HAUTNetworkGuard-Linux.tar.gz > linux-tar-list.txt
+          grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh" linux-tar-list.txt
+          grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua" linux-tar-list.txt
+          rm -f linux-tar-list.txt
           sha256sum -c SHA256SUMS
           for path in \
             install.sh install-online.sh upgrade-online.sh uninstall.sh uninstall-online.sh \

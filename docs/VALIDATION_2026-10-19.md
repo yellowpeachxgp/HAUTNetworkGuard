@@ -151,8 +151,12 @@ done
 本地按 CI 的 Linux 打包结构创建并校验：
 
 ```bash
-tar -czf HAUTNetworkGuard-Linux.tar.gz \
-  --transform 's,^,HAUTNetworkGuard-Linux/,' VERSION OpenWrt/files linux-generic README.md
+rm -rf .release-linux
+mkdir -p .release-linux/HAUTNetworkGuard-Linux/OpenWrt
+cp VERSION README.md .release-linux/HAUTNetworkGuard-Linux/
+cp -R OpenWrt/files .release-linux/HAUTNetworkGuard-Linux/OpenWrt/files
+cp -R linux-generic .release-linux/HAUTNetworkGuard-Linux/
+tar -czf HAUTNetworkGuard-Linux.tar.gz -C .release-linux HAUTNetworkGuard-Linux
 tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq ".../linux-generic/install.sh"
 tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq ".../OpenWrt/files/usr/lib/haut-network-guard/config.lua"
 sha256sum HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS

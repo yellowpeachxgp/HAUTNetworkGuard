@@ -221,9 +221,13 @@ jobs:
           test -s HAUTNetworkGuard-Windows.zip
           test -s HAUTNetworkGuard.dmg
           unzip -t HAUTNetworkGuard-Windows.zip >/dev/null
-          tar -czf HAUTNetworkGuard-Linux.tar.gz \
-            --transform 's,^,HAUTNetworkGuard-Linux/,' \
-            VERSION OpenWrt/files linux-generic README.md
+          rm -rf .release-linux
+          mkdir -p .release-linux/HAUTNetworkGuard-Linux/OpenWrt
+          cp VERSION README.md .release-linux/HAUTNetworkGuard-Linux/
+          cp -R OpenWrt/files .release-linux/HAUTNetworkGuard-Linux/OpenWrt/files
+          cp -R linux-generic .release-linux/HAUTNetworkGuard-Linux/
+          tar -czf HAUTNetworkGuard-Linux.tar.gz -C .release-linux HAUTNetworkGuard-Linux
+          rm -rf .release-linux
           tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh"
           tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua"
           sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS
@@ -279,9 +283,13 @@ jobs:
 
       - name: Generate Asset Checksums
         run: |
-          tar -czf HAUTNetworkGuard-Linux.tar.gz \
-            --transform 's,^,HAUTNetworkGuard-Linux/,' \
-            VERSION OpenWrt/files linux-generic README.md
+          rm -rf .release-linux
+          mkdir -p .release-linux/HAUTNetworkGuard-Linux/OpenWrt
+          cp VERSION README.md .release-linux/HAUTNetworkGuard-Linux/
+          cp -R OpenWrt/files .release-linux/HAUTNetworkGuard-Linux/OpenWrt/files
+          cp -R linux-generic .release-linux/HAUTNetworkGuard-Linux/
+          tar -czf HAUTNetworkGuard-Linux.tar.gz -C .release-linux HAUTNetworkGuard-Linux
+          rm -rf .release-linux
           sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS
           find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
 

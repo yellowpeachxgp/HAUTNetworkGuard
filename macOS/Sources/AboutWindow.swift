@@ -4,7 +4,7 @@ import Cocoa
 class AboutWindowController: NSWindowController {
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 250),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 320),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -22,11 +22,19 @@ class AboutWindowController: NSWindowController {
         let contentView = NSView(frame: window.contentView!.bounds)
         window.contentView = contentView
 
+        // 应用图标
+        let iconView = NSImageView(frame: NSRect(x: 142, y: 208, width: 96, height: 96))
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        iconView.image = NSApp.applicationIconImage
+            ?? NSImage(named: NSImage.applicationIconName)
+        iconView.setAccessibilityLabel("应用图标")
+        contentView.addSubview(iconView)
+
         // 应用名称
         let nameLabel = NSTextField(labelWithString: AppConfig.appName)
         nameLabel.font = NSFont.boldSystemFont(ofSize: 20)
         nameLabel.alignment = .center
-        nameLabel.frame = NSRect(x: 0, y: 188, width: 360, height: 30)
+        nameLabel.frame = NSRect(x: 20, y: 174, width: 340, height: 28)
         contentView.addSubview(nameLabel)
 
         // 版本号
@@ -34,22 +42,27 @@ class AboutWindowController: NSWindowController {
         versionLabel.font = NSFont.systemFont(ofSize: 12)
         versionLabel.textColor = .secondaryLabelColor
         versionLabel.alignment = .center
-        versionLabel.frame = NSRect(x: 0, y: 162, width: 360, height: 20)
+        versionLabel.frame = NSRect(x: 20, y: 150, width: 340, height: 18)
         contentView.addSubview(versionLabel)
 
         // 描述
         let descLabel = NSTextField(labelWithString: "河南工业大学校园网自动登录工具")
         descLabel.font = NSFont.systemFont(ofSize: 12)
         descLabel.alignment = .center
-        descLabel.frame = NSRect(x: 0, y: 132, width: 360, height: 20)
+        descLabel.frame = NSRect(x: 20, y: 124, width: 340, height: 18)
         contentView.addSubview(descLabel)
+
+        // 分割线
+        let separator = NSBox(frame: NSRect(x: 30, y: 110, width: 320, height: 1))
+        separator.boxType = .separator
+        contentView.addSubview(separator)
 
         // 作者
         let authorLabel = NSTextField(labelWithString: "作者: \(AppConfig.author)")
         authorLabel.font = NSFont.systemFont(ofSize: 11)
         authorLabel.textColor = .secondaryLabelColor
         authorLabel.alignment = .center
-        authorLabel.frame = NSRect(x: 0, y: 102, width: 360, height: 20)
+        authorLabel.frame = NSRect(x: 20, y: 86, width: 340, height: 18)
         contentView.addSubview(authorLabel)
 
         // QQ群
@@ -57,24 +70,25 @@ class AboutWindowController: NSWindowController {
         qqLabel.font = NSFont.systemFont(ofSize: 11)
         qqLabel.textColor = .secondaryLabelColor
         qqLabel.alignment = .center
-        qqLabel.frame = NSRect(x: 0, y: 76, width: 360, height: 20)
+        qqLabel.frame = NSRect(x: 20, y: 64, width: 340, height: 18)
         contentView.addSubview(qqLabel)
 
         let supportLabel = NSTextField(labelWithString: "遇到问题可前往 GitHub 提交 issue，或加入 QQ 群反馈。")
         supportLabel.font = NSFont.systemFont(ofSize: 10)
         supportLabel.textColor = .tertiaryLabelColor
         supportLabel.alignment = .center
-        supportLabel.frame = NSRect(x: 10, y: 48, width: 340, height: 18)
+        supportLabel.frame = NSRect(x: 10, y: 40, width: 360, height: 18)
         contentView.addSubview(supportLabel)
 
         // 网站
-        let websiteLabel = NSTextField(frame: NSRect(x: 20, y: 20, width: 320, height: 20))
+        let websiteLabel = NSTextField(frame: NSRect(x: 20, y: 14, width: 340, height: 20))
         websiteLabel.isEditable = false
         websiteLabel.isBordered = false
         websiteLabel.drawsBackground = false
         websiteLabel.isSelectable = true
         websiteLabel.alignment = .center
         websiteLabel.allowsEditingTextAttributes = true
+        websiteLabel.setAccessibilityLabel("项目主页")
         websiteLabel.attributedStringValue = NSAttributedString(
             string: AppConfig.website,
             attributes: [

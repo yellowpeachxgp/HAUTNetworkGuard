@@ -7,6 +7,183 @@ USE_PROCD=1
 
 PROG=/usr/lib/haut-network-guard/main.lua
 
+# OpenWrt 新版 rc.common 通过 extra_command 注册命令，旧版通过
+# EXTRA_COMMANDS 分发；两种形式都保留，确保 diagnose 真正可调用。
+if type extra_command >/dev/null 2>&1; then
+    extra_command "diagnose" "只读检查依赖、配置和服务状态"
+else
+    EXTRA_COMMANDS="${EXTRA_COMMANDS:-} diagnose"
+fi
+
+# 只读配置与依赖自检，不发起校园网请求。输出只包含状态、类别和安全提示，
+# 不回显用户名、密码或 UCI 返回的任意原文。
+diagnose() {
+    local failed=0
+    local command_name uci_available
+    local enabled_value username_value password_value interval_value log_level_value
+    local login_mode
+    local service_rc service_state
+
+    printf '%s\n' "HAUT Network Guard 诊断（只读）"
+    for command_name in lua curl uci; do
+        if command -v "$command_name" >/dev/null 2>&1; then
+            printf '[通过] 依赖: %s\n' "$command_name"
+        else
+            printf '[失败] 缺少依赖: %s\n' "$command_name"
+            failed=1
+        fi
+    done
+
+    if [ -s "$PROG" ] && [ -r "$PROG" ]; then
+        printf '[通过] 程序文件可读: %s\n' "$PROG"
+    else
+        printf '[失败] 程序文件不可读或为空: %s\n' "$PROG"
+        failed=1
+    fi
+
+    # service_running 由 rc.common/procd 提供。直接执行函数时可能没有该接口，
+    # 此时明确报告未知，避免把未知状态误报为“正在运行”。
+    service_state="unknown"
+    if type service_running >/dev/null 2>&1; then
+        service_running >/dev/null 2>&1
+        service_rc=$?
+        case "$service_rc" in
+            0) service_state="running" ;;
+            1) service_state="stopped" ;;
+            *) service_state="unknown" ;;
+        esac
+    fi
+    uci_available=0
+    if command -v uci >/dev/null 2>&1; then
+        uci_available=1
+    fi
+
+    if [ "$uci_available" -eq 0 ]; then
+        printf '%s\n' "[失败] 配置: 无法读取 UCI，请安装 uci 或检查配置文件"
+        failed=1
+    else
+        # 每个值单独读取；失败按未设置处理，避免输出 uci 的错误正文。
+        enabled_value=""
+        username_value=""
+        password_value=""
+        interval_value=""
+        log_level_value=""
+        enabled_value="$(uci -q get haut-network-guard.main.enabled 2>/dev/null || :)"
+        username_value="$(uci -q get haut-network-guard.main.username 2>/dev/null || :)"
+        password_value="$(uci -q get haut-network-guard.main.password 2>/dev/null || :)"
+        interval_value="$(uci -q get haut-network-guard.main.interval 2>/dev/null || :)"
+        log_level_value="$(uci -q get haut-network-guard.main.log_level 2>/dev/null || :)"
+
+        login_mode="enabled"
+        case "$enabled_value" in
+            1|true|on)
+                printf '%s\n' "[通过] 登录功能配置: 已启用"
+                ;;
+            0|false|off)
+                printf '%s\n' "[提示] 登录功能配置: 已禁用"
+                login_mode="disabled"
+                ;;
+            '')
+                printf '%s\n' "[提示] 登录功能配置: 未设置，将按启用处理"
+                ;;
+            *)
+                printf '%s\n' "[失败] 登录功能配置: 值无效（可选 0/1、on/off、true/false）"
+                login_mode="invalid"
+                failed=1
+                ;;
+        esac
+
+        # [![:space:]] 表示至少含一个非空白字符；不打印值本身。
+        if [ "$login_mode" = "disabled" ]; then
+            case "$username_value" in
+                *[![:space:]]*) printf '%s\n' "[提示] 用户名: 已配置（登录功能已禁用）" ;;
+                *) printf '%s\n' "[提示] 用户名: 未配置（登录功能已禁用）" ;;
+            esac
+            case "$password_value" in
+                *[![:space:]]*) printf '%s\n' "[提示] 密码: 已配置（登录功能已禁用）" ;;
+                *) printf '%s\n' "[提示] 密码: 未配置（登录功能已禁用）" ;;
+            esac
+        else
+            case "$username_value" in
+                *[![:space:]]*) printf '%s\n' "[通过] 用户名: 已配置" ;;
+                *) printf '%s\n' "[失败] 用户名: 未配置"; failed=1 ;;
+            esac
+            case "$password_value" in
+                *[![:space:]]*) printf '%s\n' "[通过] 密码: 已配置" ;;
+                *) printf '%s\n' "[失败] 密码: 未配置"; failed=1 ;;
+            esac
+        fi
+
+        case "$interval_value" in
+            '')
+                printf '%s\n' "[提示] 检测间隔: 未设置，将使用 30 秒"
+                ;;
+            *[!0-9]*)
+                printf '%s\n' "[失败] 检测间隔: 值无效，将使用 30 秒"
+                failed=1
+                ;;
+            ?????*)
+                # 五位及以上数字不参与算术比较，避免 shell 整数溢出。
+                printf '%s\n' "[失败] 检测间隔: 值过大，将使用 300 秒"
+                failed=1
+                ;;
+            *)
+                if [ "$interval_value" -lt 30 ] 2>/dev/null; then
+                    printf '%s\n' "[失败] 检测间隔: 过短，将使用 30 秒"
+                    failed=1
+                elif [ "$interval_value" -gt 300 ] 2>/dev/null; then
+                    printf '%s\n' "[失败] 检测间隔: 过长，将使用 300 秒"
+                    failed=1
+                else
+                    printf '[通过] 检测间隔: %s 秒\n' "$interval_value"
+                fi
+                ;;
+        esac
+
+        case "$log_level_value" in
+            debug|info|warn|error)
+                printf '[通过] 日志级别: %s\n' "$log_level_value"
+                ;;
+            '')
+                printf '%s\n' "[提示] 日志级别: 未设置，将使用 info"
+                ;;
+            *)
+                printf '%s\n' "[失败] 日志级别无效（可选 debug/info/warn/error）"
+                failed=1
+                ;;
+        esac
+    fi
+
+    # 已明确禁用时，服务未运行是预期状态；启用（或未设置）时才建议启动
+    # 并将停止状态作为诊断失败。这样不会把用户主动停用误报为故障。
+    case "$service_state" in
+        running)
+            printf '%s\n' "[通过] 服务状态: 正在运行"
+            ;;
+        stopped)
+            case "$login_mode" in
+                disabled)
+                    printf '%s\n' "[提示] 服务状态: 未运行（登录功能已禁用）"
+                    ;;
+                *)
+                    printf '%s\n' "[失败] 服务状态: 未运行，请执行 start"
+                    failed=1
+                    ;;
+            esac
+            ;;
+        *)
+            printf '%s\n' "[提示] 服务状态: 未知（无法查询 procd）"
+            ;;
+    esac
+
+    if [ "$failed" -eq 0 ]; then
+        printf '%s\n' "结果: 通过"
+    else
+        printf '%s\n' "结果: 发现问题，请按上述提示修复"
+    fi
+    return "$failed"
+}
+
 start_service() {
     procd_open_instance
     procd_set_param command /usr/bin/lua "$PROG"

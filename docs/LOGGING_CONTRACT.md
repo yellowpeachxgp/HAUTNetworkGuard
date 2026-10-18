@@ -5,15 +5,19 @@
 - `Windows/`
 - `macOS/`
 - `OpenWrt/`
+- `linux-generic/`（与 OpenWrt 共用 Lua 核心）
 
 ## 1. 目标
 
-三端日志需要满足同一套排障契约:
+四端日志需要满足同一套排障契约:
 
 - 能追踪单次请求
 - 能判断请求所处阶段
 - 能看到耗时和响应分类
 - 不泄漏原始账号或密码
+- 凭据存储实现和迁移失败不得把密码或完整编码内容写入日志
+- 响应正文及 curl 错误正文统一输出 `<redacted>` 和字节数摘要；分类、HTTP 状态和耗时单独记录。JSON、CSV、表单、HTML 和无法解析的正文均遵循该规则，不把未知字段原样放入日志。
+- OpenWrt / 通用 Linux 日志出口还会对意外出现的 `username=`、`password=` 和 `enc_password=` 字段做兜底替换；业务代码仍必须在进入日志前使用长度摘要和账号掩码。
 
 ## 2. 核心字段
 
@@ -79,7 +83,7 @@
 
 - `success`
 - `already_online`
-- `error_E####`
+- `error_E####`（错误码必须为恰好四位数字）
 - `empty`
 - `unknown`
 - `network_error`

@@ -1,6 +1,6 @@
 # HAUT Network Guard
 
-河南工业大学校园网自动登录工具 - 支持 macOS、Windows 和 OpenWrt 三平台
+河南工业大学校园网自动登录工具 - 支持 macOS、Windows、OpenWrt 和通用 Linux 四平台
 
 ## 功能特性
 
@@ -9,7 +9,7 @@
 - **开机自启**: 支持开机自动启动，保持网络始终连接
 - **系统托盘**: 最小化到系统托盘/菜单栏，静默运行
 - **系统通知**: 登录/注销状态变化时推送通知
-- **配置保存**: 安全存储凭据，支持记住密码
+- **配置保存**: 按平台使用 Keychain、DPAPI 或受限 UCI 配置存储凭据，支持记住密码
 - **更新检测**: 可视化更新窗口，显示版本号和更新日志
 
 ## 系统要求
@@ -25,9 +25,16 @@
 - OpenWrt 19.07 或更高版本
 - 建议安装: lua, curl
 
+### 通用 Linux
+- Debian 11+ / Ubuntu 20.04+（或其它使用 systemd 的发行版）
+- Lua 5.1+、curl、systemd
+- root 权限
+
 ## 下载安装
 
 前往 [Releases](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases) 页面下载最新版本。
+
+v1.3.19 起正式 Release 同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`；v1.3.21 起 `SHA256SUMS` 还覆盖 `HAUTNetworkGuard-Linux.tar.gz`。历史版本 v1.3.18 缺少这两个清单，具体回读见 [发布资产审计](docs/RELEASE_ASSET_AUDIT_2026-09-09.md)。
 
 ### macOS
 
@@ -60,8 +67,10 @@
 
 **固定版本安装（推荐生产环境）：**
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.18/OpenWrt/install-online.sh | sh -s -- v1.3.18
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/install-online.sh | sh -s -- v1.3.21
 ```
+
+> v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，固定版本安装会在切换前校验完整清单。
 
 **安装最新 main（适合测试）：**
 ```bash
@@ -74,6 +83,29 @@ uci set haut-network-guard.main.username='你的学号'
 uci set haut-network-guard.main.password='你的密码'
 uci commit haut-network-guard
 /etc/init.d/haut-network-guard start
+```
+
+### 通用 Linux
+
+详见 [linux-generic/README.md](linux-generic/README.md)。
+
+**固定版本安装（推荐生产环境）：**
+```bash
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/linux-generic/install-online.sh | sh -s -- v1.3.21
+```
+
+> 固定版本会下载 `HAUTNetworkGuard-Linux.tar.gz`，并使用 `SHA256SUMS` 校验后再安装。
+
+**安装最新 main（适合测试）：**
+```bash
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/linux-generic/install-online.sh | sh
+```
+
+**配置并启动：**
+```bash
+sudo nano /etc/haut-network-guard.conf   # 填写 username / password
+sudo systemctl start haut-network-guard
+journalctl -u haut-network-guard -f
 ```
 
 ## 使用说明
@@ -89,6 +121,18 @@ uci commit haut-network-guard
    - 立即检测
    - 修改账号设置
    - 检查更新
+
+### 自动重连行为
+
+v1.3.20 起支持以下行为：
+
+- Windows 和 macOS 启动时先检测校园网状态，检测异常时等待下一轮；确认离线后才尝试自动登录。
+- 登录失败后至少等待 60 秒再自动重试，连续失败时逐步延长至 5 分钟。修改凭据后可以立即手动登录。
+- 状态接口返回空正文或无法解析的内容时显示异常并等待下一轮检测，不会直接当作离线触发自动登录；只有明确返回“当前不在线”才会进入自动登录判断。
+- 手动注销会暂停本次运行期间的自动重连，包括网关返回“当前未在线”的情况。点击“立即登录”解除暂停；自动登录开关仍然有效。
+- 不勾选“记住密码”时，本次会话可以使用已输入密码重连；退出后需要重新输入。Windows 的手动登录也会读取当前“记住密码”选项。
+
+实现与验收范围见 [状态机契约](docs/STATE_MACHINE_CONTRACT.md)、[工程台账](docs/IMPLEMENTATION_LEDGER.md) 和[三端真实设备验收矩阵](docs/REAL_DEVICE_ACCEPTANCE_MATRIX.md)。
 
 ### 更新检测窗口
 
@@ -151,6 +195,7 @@ HAUTNetworkGuard/
 │   │   ├── UpdateWindow.swift
 │   │   └── LaunchManager.swift
 │   ├── Info.plist
+│   ├── resources/AppIcon.icns  # 应用图标
 │   ├── build.sh
 │   ├── tests/
 │   ├── create-dmg.sh
@@ -168,7 +213,15 @@ HAUTNetworkGuard/
 │   │   ├── logger.h/cpp       # 文件日志与脱敏
 │   │   └── trayicon.h/cpp     # 系统托盘
 │   ├── tests/
-│   │   └── windows_smoke_tests.cpp
+│   │   ├── windows_smoke_tests.cpp
+│   │   ├── controller_session_tests.cpp
+│   │   ├── credential_failure_tests.cpp
+│   │   ├── instance_guard_tests.cpp
+│   │   ├── session_policy_tests.cpp
+│   │   └── layout_tests.cpp   # 大字体/高 DPI 布局回归
+│   ├── resources/
+│   │   ├── app.ico            # 应用图标
+│   │   └── resources.qrc
 │   ├── CMakeLists.txt
 │   └── AIREADME.md
 │
@@ -180,10 +233,13 @@ HAUTNetworkGuard/
 ├── OpenWrt/                    # OpenWrt 版本 (Lua)
 │   ├── files/
 │   │   ├── usr/lib/haut-network-guard/
+│   │   │   ├── version.lua
 │   │   │   ├── main.lua
 │   │   │   ├── api.lua
 │   │   │   ├── log.lua
 │   │   │   ├── protocol.lua
+│   │   │   ├── session.lua
+│   │   │   ├── config.lua     # UCI / 纯文本配置双后端
 │   │   │   └── crypto.lua
 │   │   ├── etc/init.d/
 │   │   └── etc/config/
@@ -191,6 +247,14 @@ HAUTNetworkGuard/
 │   ├── install-online.sh
 │   ├── upgrade-online.sh
 │   ├── uninstall.sh
+│   └── README.md
+│
+├── linux-generic/              # 通用 Linux (Debian/Ubuntu) 适配
+│   ├── install.sh
+│   ├── install-online.sh
+│   ├── uninstall.sh
+│   ├── config.example
+│   ├── systemd/haut-network-guard.service
 │   └── README.md
 │
 ├── docs/
@@ -202,7 +266,18 @@ HAUTNetworkGuard/
 │   ├── fixtures/protocol_vectors.json
 │   ├── test_protocol_contract.py
 │   ├── test_docs_contract.py
-│   └── test_openwrt_modules.lua
+│   ├── test_version_contract.py
+│   ├── test_release_contract.py
+│   ├── test_logging_contract.py
+│   ├── test_session_policy.py
+│   ├── test_macos_uninstall.py
+│   ├── test_openwrt_installation.py
+│   ├── test_linux_generic_installation.py
+│   ├── test_openwrt_modules.lua
+│   ├── test_openwrt_runtime.lua
+│   ├── test_openwrt_session.lua
+│   ├── test_openwrt_log.lua
+│   └── test_openwrt_config.lua
 │
 ├── .github/workflows/          # GitHub Actions CI/CD
 │   └── build.yml
@@ -212,17 +287,17 @@ HAUTNetworkGuard/
 
 ## 技术栈
 
-| 组件 | macOS | Windows | OpenWrt |
-|-----|-------|---------|------------|
-| 语言 | Swift | **C++ (Qt 6)** | Lua |
-| GUI | AppKit | **Qt Widgets** | CLI |
-| HTTP | URLSession | **QNetworkAccessManager** | curl |
-| 加密 | SRUN3K | SRUN3K | SRUN3K |
-| 配置存储 | UserDefaults | **QSettings** | UCI |
-| 系统托盘 | NSStatusItem | **QSystemTrayIcon** | - |
-| 开机自启 | LaunchAgent | 注册表 Run 键 | procd |
-| 构建 | swiftc | **CMake + MSVC** | - |
-| CI/CD | GitHub Actions | **GitHub Actions** | - |
+| 组件 | macOS | Windows | OpenWrt | 通用 Linux |
+|-----|-------|---------|------------|------------|
+| 语言 | Swift | **C++ (Qt 6)** | Lua | Lua |
+| GUI | AppKit | **Qt Widgets** | CLI | CLI |
+| HTTP | URLSession | **QNetworkAccessManager** | curl | curl |
+| 加密 | SRUN3K | SRUN3K | SRUN3K | SRUN3K |
+| 配置存储 | UserDefaults | **QSettings** | UCI | 纯文本 (600) |
+| 系统托盘 | NSStatusItem | **QSystemTrayIcon** | - | - |
+| 开机自启 | LaunchAgent | 注册表 Run 键 | procd | systemd |
+| 构建 | swiftc | **CMake + MSVC** | - | - |
+| CI/CD | GitHub Actions | **GitHub Actions** | GitHub Actions | GitHub Actions |
 
 ## 卸载
 
@@ -236,6 +311,7 @@ cd macOS
 或手动删除：
 1. 删除 `/Applications/HAUTNetworkGuard.app`
 2. 删除 `~/Library/LaunchAgents/cn.ehaut.networkguard.plist`
+3. 执行 `macOS/uninstall.sh` 可同时清理 Keychain 凭据和应用配置
 
 ### Windows
 
@@ -251,7 +327,62 @@ cd OpenWrt
 ./uninstall.sh
 ```
 
+### 通用 Linux
+
+```bash
+sudo ./linux-generic/uninstall.sh
+
+# 同时删除包含密码的配置
+sudo ./linux-generic/uninstall.sh --purge-config
+```
+
 ## 版本历史
+
+### v1.3.21 (2026-10)
+
+- **Windows 界面修复**：修复 issue #7 中 Windows 默认中文字体行高导致 IP/流量/时长和账号标签被压扁的问题；窗口宽度固定、高度按字体度量自适应，内容超出屏幕时提供滚动，并新增布局回归测试。
+- **通用 Linux 支持**：新增共享 `config.lua`，运行时自动选择 UCI 或 `/etc/haut-network-guard.conf`；新增 `linux-generic/` 的 systemd 安装、在线安装、重装、卸载和配置模板，安装采用 staging + 原子切换，失败自动回滚。
+- **OpenWrt**：安装、升级和回滚纳入 `config.lua`；日志 `print` 后刷新 stdout，修复 systemd/重定向下日志延迟；清理主循环遗留的全局失败计数。
+- **托盘可靠性**：系统托盘不可用时不再把窗口隐藏到不可恢复状态；`--startup` 自动回退为显示主窗口，状态徽标按高 DPI 绘制。
+- **发布**：Release 新增 `HAUTNetworkGuard-Linux.tar.gz`，`SHA256SUMS` 覆盖桌面与 Linux 资产；固定版本 Linux 在线安装会校验发布包哈希和 tag/版本一致性。
+- **测试**：新增 Windows 大字体布局回归、共享配置解析（BOM/CRLF/注释/引号/重复键/UCI 回退）、通用 Linux 安装/重装/卸载故障注入；Lua 5.1/5.3、Qt CTest 和 macOS smoke 全部通过。
+
+### v1.3.20 (2026-09)
+
+- **网络恢复**：Windows/macOS 响应网络变化和系统唤醒，去抖合并事件，忙碌时延后并补发状态检测。
+- **OpenWrt 配置**：支持安全覆盖网关地址、登录端口和 `ac_id`，非法值拒绝并保留旧配置。
+- **更新安全**：macOS 严格校验 Release 标签、官方仓库和 DMG 下载地址，拒绝不可信更新链接。
+- **诊断与错误提示**：OpenWrt 增加只读 `diagnose`；三端统一超时、网关不可达和异常 HTTP 的学生可读提示。
+- **发布**：Windows 网络信息后端插件随 ZIP 打包并校验；所有基础测试和 CI 发布 dry-run 通过。
+
+### v1.3.19 (2026-09)
+
+- **Windows 学生流程**
+  - 修复开机自启但尚未配置账号时直接隐藏到托盘的问题；现在会显示首次配置窗口。
+  - 保存学号和密码成功后立即发起一次状态检测，不需要额外点击或等待定时器。
+  - 新增启动行为契约测试，并加入 CI 校验。
+- **三端状态机与网络可靠性**
+  - 状态检查、登录、注销统一串行处理，过期回调不会覆盖当前状态。
+  - 明确区分在线、离线、异常响应和网络失败；无法解析的空响应不会误触发自动登录。
+  - 登录失败采用有界退避，手动注销会暂停当前进程内自动重连，手动登录可恢复。
+  - macOS 直连客户端增加物理接口选择、连接超时、HTTP 状态行和非 2xx 响应校验。
+- **协议与 OpenWrt**
+  - 收紧 JSONP/CSV 数字、IPv4、空字段、尾随字段和错误优先级边界。
+  - 接受社区 PR #3，修复 Lua 5.3 浮点格式化导致的运行时崩溃，并完成 Lua 5.1/5.3 回归。
+  - OpenWrt 安装、升级、回滚、卸载和配置保留路径采用 staging 与原子切换，日志对账号、密码和编码字段兜底脱敏。
+- **凭据与隐私**
+  - macOS 使用 Keychain，Windows 使用 DPAPI，关闭“记住密码”时删除持久化密码并保留其他设置。
+  - 凭据写入、回读和删除失败会安全中止，不覆盖旧配置；诊断信息和请求日志不包含密码或完整账号。
+- **桌面体验**
+  - macOS 首次配置、菜单栏窗口、设置保存、托盘恢复和无障碍焦点链路完成回放测试。
+  - Windows 主窗口、托盘显示/隐藏、键盘焦点、错误提示和配置保存失败路径完成 Qt 回放测试。
+- **安装与发布**
+  - `VERSION` 成为三端统一版本源，Windows、macOS、OpenWrt、文档和 User-Agent 保持一致。
+  - Release 同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`，固定版本 OpenWrt 安装/升级会校验清单后再切换。
+  - GitHub Actions 完成 Windows ZIP、macOS DMG、OpenWrt 文件清单和三端基础测试后自动创建 Release。
+- **验证结果**
+  - Windows Qt CTest 5/5 通过；macOS 协议、凭据和 UI smoke 通过；OpenWrt Lua 5.1/5.3 模块、运行时和会话测试通过。
+  - 本版本未把真实校园网设备和长期运行记录冒充为自动化测试结果，现场验证仍按设备环境执行。
 
 ### v1.3.18 (2026-04)
 - **macOS**: 修复菜单栏“账号设置”窗口无法稳定打开的问题

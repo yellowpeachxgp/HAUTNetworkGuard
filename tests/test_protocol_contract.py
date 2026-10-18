@@ -35,7 +35,7 @@ def classify_login_response(response: str):
 
     import re
 
-    match = re.search(r"E(\d+)", response)
+    match = re.search(r"E(\d{4})(?!\d)", response)
     if match:
         return f"error_E{match.group(1)}", response or f"登录失败 (E{match.group(1)})"
     if not response:
@@ -45,9 +45,18 @@ def classify_login_response(response: str):
 
 def parse_status_response(response: str):
     body = response.strip()
-    if not body or "not_online" in body:
+    if body == "not_online":
         return {
             "format": "offline",
+            "online": False,
+            "username": "",
+            "ip": "",
+            "bytes": 0,
+            "seconds": 0,
+        }
+    if not body:
+        return {
+            "format": "unparsed",
             "online": False,
             "username": "",
             "ip": "",
@@ -69,6 +78,18 @@ def parse_status_response(response: str):
     except json.JSONDecodeError:
         obj = None
 
+    def parse_number(value):
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, int):
+            return value if 0 <= value <= 9_007_199_254_740_991 else 0
+        if isinstance(value, float):
+            return int(value) if value.is_integer() and value >= 0 and value <= 9_007_199_254_740_991 else 0
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value):
+            parsed = int(value)
+            return parsed if parsed <= 9_007_199_254_740_991 else 0
+        return 0
+
     if isinstance(obj, dict):
         error = str(obj.get("error", ""))
         if "not_online" in error:
@@ -81,11 +102,15 @@ def parse_status_response(response: str):
                 "seconds": 0,
             }
 
-        username = str(obj.get("user_name", ""))
-        ip = str(obj.get("online_ip", ""))
-        bytes_used = int(obj.get("sum_bytes", 0) or 0)
-        seconds_used = int(obj.get("sum_seconds", 0) or 0)
-        if username or ip:
+        username = obj.get("user_name") if isinstance(obj.get("user_name"), str) else ""
+        ip = obj.get("online_ip") if isinstance(obj.get("online_ip"), str) else ""
+        bytes_used = parse_number(obj.get("sum_bytes", 0))
+        seconds_used = parse_number(obj.get("sum_seconds", 0))
+        ip_parts = ip.split(".")
+        valid_ip = len(ip_parts) == 4 and all(
+            part.isdigit() and 0 <= int(part) <= 255 for part in ip_parts
+        )
+        if username or valid_ip:
             return {
                 "format": fmt,
                 "online": True,
@@ -96,14 +121,30 @@ def parse_status_response(response: str):
             }
 
     parts = body.split(",")
-    if len(parts) >= 4:
+    valid_ip = False
+    valid_numbers = False
+    seconds = 0
+    bytes_used = 0
+    if len(parts) >= 4 and parts[0]:
+        ip_parts = parts[2].split(".")
+        valid_ip = len(ip_parts) == 4 and all(
+            part.isdigit() and 0 <= int(part) <= 255 for part in ip_parts
+        )
+        if not re.fullmatch(r"[0-9]+", parts[1]) or not re.fullmatch(r"[0-9]+", parts[3]):
+            pass
+        else:
+            seconds = int(parts[1])
+            bytes_used = int(parts[3])
+            valid_numbers = seconds <= 9_007_199_254_740_991 and bytes_used <= 9_007_199_254_740_991
+
+    if len(parts) >= 4 and parts[0] and valid_ip and valid_numbers:
         return {
             "format": "csv",
             "online": True,
             "username": parts[0],
             "ip": parts[2],
-            "bytes": int(parts[3] or 0),
-            "seconds": int(parts[1] or 0),
+            "bytes": bytes_used,
+            "seconds": seconds,
         }
 
     return {
@@ -161,6 +202,9 @@ def sanitize_uci_value(raw: str):
 
 def main():
     fixtures = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+
+    openwrt_api = (ROOT / "OpenWrt/files/usr/lib/haut-network-guard/api.lua").read_text(encoding="utf-8")
+    assert "apple.com" not in openwrt_api, "OpenWrt 状态模块不得依赖公网探测"
 
     for case in fixtures["username_vectors"]:
         actual = encrypt_username(case["input"])

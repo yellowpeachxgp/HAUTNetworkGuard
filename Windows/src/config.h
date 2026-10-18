@@ -3,14 +3,25 @@
 
 #include <QSettings>
 #include <QString>
+#include <memory>
+#include <functional>
+
+struct PasswordCodec {
+  std::function<QString(const QString &)> encode;
+  std::function<QString(const QString &)> decode;
+};
 
 class Config {
 public:
   static Config &instance();
+  // 注入独立存储；此构造方式始终关闭系统自启动集成。
+  explicit Config(QSettings &settings, PasswordCodec codec = {});
+  ~Config() = default;
 
   // 加载/保存配置
   void load();
-  void save();
+  bool save();
+  QString lastError() const { return m_lastError; }
 
   // 配置项
   QString username() const { return m_username; }
@@ -40,9 +51,16 @@ public:
 
 private:
   Config();
-  ~Config() = default;
+  struct Snapshot {
+    QString username, password;
+    bool autoSave, autoLaunch, hasConfigured, autoLogin, credentialReadFailed;
+    int checkInterval;
+  };
+  Snapshot snapshot() const;
+  void restore(const Snapshot &saved);
+  bool failSave(const QString &message);
 
-  // 简单的密码混淆
+  // Windows 使用 DPAPI；解码同时兼容旧版格式。
   QString encodePassword(const QString &password);
   QString decodePassword(const QString &encoded);
 
@@ -59,6 +77,13 @@ private:
   QString startupScriptPath() const;
 
   QString m_username;
+  std::unique_ptr<QSettings> m_ownedSettings;
+  QSettings &m_settings;
+  bool m_startupIntegration = false;
+  PasswordCodec m_codec;
+  QString m_lastError;
+  bool m_credentialReadFailed = false;
+  Snapshot m_lastSaved{};
   QString m_password;
   bool m_autoSave = false;
   bool m_autoLaunch = false;

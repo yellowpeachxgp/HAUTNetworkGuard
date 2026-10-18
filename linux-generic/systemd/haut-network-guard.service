@@ -1,0 +1,22 @@
+[Unit]
+Description=HAUT Network Guard 自动登录守护进程
+Documentation=https://github.com/yellowpeachxgp/HAUTNetworkGuard
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart="@LUA@" "@INSTALL_DIR@/main.lua"
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

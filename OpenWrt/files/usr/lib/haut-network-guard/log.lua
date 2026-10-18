@@ -1,20 +1,18 @@
 #!/usr/bin/lua
 -- HAUT Network Guard - 日志模块
 
+local config = require("config")
+
 local log = {}
 
 local LEVELS = { debug = 1, info = 2, warn = 3, error = 4 }
 local LABELS = { debug = "DEBUG", info = "INFO", warn = "WARN", error = "ERROR" }
 local LEVEL_REFRESH_SECONDS = 30
 
--- 从 UCI 读取日志级别，默认 info
+-- 从 UCI 或纯文本配置读取日志级别，默认 info
 local function get_configured_level()
-    local handle = io.popen("uci -q get haut-network-guard.main.log_level 2>/dev/null")
-    if handle then
-        local val = (handle:read("*a") or ""):gsub("[%s\r\n]+$", "")
-        handle:close()
-        if LEVELS[val] then return LEVELS[val] end
-    end
+    local val = (config.get("log_level") or ""):gsub("[%s\r\n]+$", "")
+    if LEVELS[val] then return LEVELS[val] end
     return LEVELS.info
 end
 
@@ -25,6 +23,15 @@ local sequence = 0
 
 local function shell_quote(str)
     return "'" .. tostring(str or ""):gsub("'", "'\\''") .. "'"
+end
+
+local function redact_sensitive_fields(message)
+    local text = tostring(message or "")
+    -- 日志出口再做一层兜底；业务日志仍应优先使用长度摘要和脱敏账号。
+    text = text:gsub("(enc_[Pp]assword=)([^%s&]+)", "%1<redacted>")
+    text = text:gsub("([Pp]assword=)([^%s&]+)", "%1<redacted>")
+    text = text:gsub("([Uu]sername=)([^%s&]+)", "%1<redacted>")
+    return text
 end
 
 local function refresh_level_if_needed(force)
@@ -41,8 +48,10 @@ local function write_log(level, msg)
     sequence = sequence + 1
     local timestamp = os.date("%Y-%m-%d %H:%M:%S")
     local label = LABELS[level]
-    local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, tostring(msg))
+    local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, redact_sensitive_fields(msg))
     print(line)
+    -- systemd / 输出重定向场景下 stdout 可能是块缓冲；显式刷新避免日志延迟。
+    if io.stdout and io.stdout.flush then io.stdout:flush() end
     os.execute(string.format("logger -t haut-network-guard %s", shell_quote(line)))
 end
 
@@ -65,12 +74,9 @@ end
 
 function log.preview(value, max_len)
     max_len = max_len or 120
-    if not value then return "(nil)" end
-    value = tostring(value):gsub("\r", "\\r"):gsub("\n", "\\n")
-    if #value > max_len then
-        return value:sub(1, max_len) .. "...(" .. tostring(#value) .. " bytes)"
-    end
-    return value
+    -- 网关或 curl 错误输出可能在任意位置回显凭据，只保留长度摘要。
+    local summary = "<redacted> (" .. tostring(#tostring(value or "")) .. " bytes)"
+    return summary:sub(1, math.max(0, max_len))
 end
 
 function log.bytes_summary(value)

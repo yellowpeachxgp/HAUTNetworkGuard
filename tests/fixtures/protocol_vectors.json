@@ -34,6 +34,11 @@
       "message": "登录成功"
     },
     {
+      "input": "login_ok already_online",
+      "class": "success",
+      "message": "登录成功"
+    },
+    {
       "input": "already_online",
       "class": "already_online",
       "message": "已在线"
@@ -47,6 +52,16 @@
       "input": "login_error#E9999:oops",
       "class": "error_E9999",
       "message": "login_error#E9999:oops"
+    },
+    {
+      "input": "login_error#E25:short-code",
+      "class": "unknown",
+      "message": "login_error#E25:short-code"
+    },
+    {
+      "input": "login_error#E12345:long-code",
+      "class": "unknown",
+      "message": "login_error#E12345:long-code"
     },
     {
       "input": "logout_ok",
@@ -84,8 +99,98 @@
       "seconds": 321
     },
     {
+      "input": "jQuery_1712630100001({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":\"12345678\",\"sum_seconds\":\"321\"})",
+      "format": "jsonp",
+      "online": true,
+      "username": "231040600203",
+      "ip": "10.10.0.8",
+      "bytes": 12345678,
+      "seconds": 321
+    },
+    {
+      "input": "jQuery_1712630100002({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":\"invalid\",\"sum_seconds\":\"321\"})",
+      "format": "jsonp",
+      "online": true,
+      "username": "231040600203",
+      "ip": "10.10.0.8",
+      "bytes": 0,
+      "seconds": 321
+    },
+    {
+      "input": "jQuery_1712630100003({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":1.5,\"sum_seconds\":\"321.5\"})",
+      "format": "jsonp",
+      "online": true,
+      "username": "231040600203",
+      "ip": "10.10.0.8",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "231040600203,321.5,10.10.0.8,12345678",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "jQuery_1712630100004({\"error\":\"ok\",\"user_name\":\"231040600203\",\"online_ip\":\"10.10.0.8\",\"sum_bytes\":01,\"sum_seconds\":321})",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "{\"error\":\"ok\",\"user_name\":\"\",\"online_ip\":\"not-an-ip\",\"sum_bytes\":0,\"sum_seconds\":0}",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "{\"error\":\"ok\",\"user_name\":null,\"online_ip\":null,\"sum_bytes\":null,\"sum_seconds\":null}",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "oops,NaN,not-an-ip,garbage",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
       "input": "not_online",
       "format": "offline",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "",
+      "format": "unparsed",
+      "online": false,
+      "username": "",
+      "ip": "",
+      "bytes": 0,
+      "seconds": 0
+    },
+    {
+      "input": "  \n\t",
+      "format": "unparsed",
       "online": false,
       "username": "",
       "ip": "",

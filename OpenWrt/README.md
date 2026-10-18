@@ -2,6 +2,8 @@
 
 河南工业大学校园网自动登录工具 - OpenWrt 路由器版本
 
+> 通用 Linux（Debian / Ubuntu / systemd）请使用 [`../linux-generic/`](../linux-generic/README.md)，与 OpenWrt 共用同一套 Lua 核心。
+
 ## 功能特性
 
 - 自动检测网络状态
@@ -31,7 +33,7 @@ opkg install lua curl
 固定版本安装（推荐生产环境）：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/install-online.sh | sh -s -- v1.3.20
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/install-online.sh | sh -s -- v1.3.21
 ```
 
 安装最新 main（适合测试）：
@@ -53,7 +55,7 @@ v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，其中记录固定版本
 升级到固定版本：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/upgrade-online.sh | sh -s -- v1.3.20
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/upgrade-online.sh | sh -s -- v1.3.21
 ```
 
 ## 手动安装
@@ -153,6 +155,8 @@ chmod +x uninstall.sh
 ├── api.lua       # API 模块
 ├── log.lua       # 日志与脱敏
 ├── protocol.lua  # 配置清洗/响应分类纯逻辑
+├── session.lua   # 自动登录/退避状态机
+├── config.lua    # UCI / 纯文本配置双后端
 └── crypto.lua    # 加密模块
 
 /etc/init.d/haut-network-guard    # 服务脚本

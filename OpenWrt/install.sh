@@ -14,7 +14,7 @@ CONFIG_FILE="$ROOT_PREFIX/etc/config/haut-network-guard"
 SOURCE_DIR="$SOURCE_ROOT/files/usr/lib/haut-network-guard"
 SOURCE_INIT="$SOURCE_ROOT/files/etc/init.d/haut-network-guard"
 SOURCE_CONFIG="$SOURCE_ROOT/files/etc/config/haut-network-guard"
-# 当前发布基线为 v1.3.20；安装提示从主程序版本字段读取。
+# 安装提示从主程序版本字段读取，不在脚本内写死发布版本。
 VERSION=""
 STAGE_DIR=""
 INIT_STAGE=""
@@ -77,7 +77,7 @@ STAGE_DIR="$(mktemp -d "$(dirname "$INSTALL_DIR")/.haut-network-guard-install.XX
 mkdir -p "$STAGE_DIR/program"
 
 echo "[3/5] 校验并复制程序文件..."
-for name in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for name in version.lua crypto.lua api.lua log.lua protocol.lua session.lua config.lua main.lua; do
     source="$SOURCE_DIR/$name"
     target="$STAGE_DIR/program/$name"
     if [ ! -s "$source" ]; then

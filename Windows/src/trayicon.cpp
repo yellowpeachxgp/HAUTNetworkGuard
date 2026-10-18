@@ -1,9 +1,11 @@
 #include "trayicon.h"
 #include <QApplication>
 #include <QColor>
+#include <QGuiApplication>
 #include <QIcon>
 #include <QPainter>
 #include <QPixmap>
+#include <QScreen>
 #include <QStyle>
 
 TrayIcon::TrayIcon(QObject *parent, bool notificationsEnabled)
@@ -47,9 +49,18 @@ void TrayIcon::createMenu() {
   m_trayIcon->setContextMenu(m_menu);
 }
 
-void TrayIcon::show() { m_trayIcon->show(); }
+void TrayIcon::show() {
+  m_trayIcon->setToolTip(QString("HAUT Network Guard v%1")
+                             .arg(QStringLiteral(HAUT_VERSION_STRING)));
+  m_trayIcon->show();
+}
 
 void TrayIcon::hide() { m_trayIcon->hide(); }
+
+bool TrayIcon::isAvailable() const {
+  return m_trayIcon && QSystemTrayIcon::isSystemTrayAvailable() &&
+         m_trayIcon->isVisible();
+}
 
 void TrayIcon::setOnlineStatus(bool online) {
   m_online = online;
@@ -81,7 +92,11 @@ void TrayIcon::updateIcon(bool online) {
     baseIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
   }
 
-  QPixmap pixmap = baseIcon.pixmap(32, 32);
+  qreal devicePixelRatio = 1.0;
+  if (QScreen *screen = QGuiApplication::primaryScreen()) {
+    devicePixelRatio = screen->devicePixelRatio();
+  }
+  QPixmap pixmap = baseIcon.pixmap(QSize(32, 32), devicePixelRatio);
   if (pixmap.isNull()) {
     m_trayIcon->setIcon(baseIcon);
     return;
@@ -89,9 +104,14 @@ void TrayIcon::updateIcon(bool online) {
 
   QPainter painter(&pixmap);
   painter.setRenderHint(QPainter::Antialiasing, true);
-  painter.setPen(Qt::white);
-  painter.setBrush(online ? QColor("#4CAF50") : QColor("#f44336"));
-  painter.drawEllipse(QRect(20, 20, 10, 10));
+  const int badgeSize = qMax(8, pixmap.width() * 3 / 10);
+  const int margin = qMax(1, pixmap.width() / 16);
+  const QRect badgeRect(pixmap.width() - badgeSize - margin,
+                        pixmap.height() - badgeSize - margin, badgeSize,
+                        badgeSize);
+  painter.setPen(QPen(Qt::white, qMax(1, pixmap.width() / 16)));
+  painter.setBrush(online ? QColor("#22c55e") : QColor("#ef4444"));
+  painter.drawEllipse(badgeRect);
   painter.end();
 
   m_trayIcon->setIcon(QIcon(pixmap));

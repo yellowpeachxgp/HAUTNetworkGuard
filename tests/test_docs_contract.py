@@ -36,6 +36,9 @@ def main():
     require_contains(readme, "tests/")
     require_contains(readme, "REAL_DEVICE_ACCEPTANCE_MATRIX.md")
     require_contains(readme, "SHA256SUMS")
+    require_contains(readme, "linux-generic/README.md")
+    require_contains(readme, "HAUTNetworkGuard-Linux.tar.gz")
+    require_contains(readme, "linux-generic/install-online.sh")
     require_not_contains(readme, "HAUTNetworkGuard-Windows.exe")
     require_not_contains(readme, "HAUTNetworkGuard-macOS.dmg")
 
@@ -43,9 +46,18 @@ def main():
     require_contains(openwrt_readme, f"HAUTNetworkGuard/v{VERSION}/OpenWrt/install-online.sh | sh -s -- v{VERSION}")
     require_contains(openwrt_readme, "upgrade-online.sh | sh")
     require_contains(openwrt_readme, "log.lua")
+    require_contains(openwrt_readme, "config.lua")
+    require_contains(openwrt_readme, "session.lua")
     require_contains(openwrt_readme, "../docs/LOGGING_CONTRACT.md")
     require_contains(openwrt_readme, "权限为 `600`")
     require_contains(openwrt_readme, "OpenWrt-SHA256SUMS")
+
+    linux_readme = ROOT / "linux-generic" / "README.md"
+    require_contains(linux_readme, "systemd")
+    require_contains(linux_readme, "HAUTNetworkGuard-Linux.tar.gz")
+    require_contains(linux_readme, "SHA256SUMS")
+    require_contains(linux_readme, "权限 `600`")
+    require_contains(linux_readme, "config.lua")
 
     require_contains(windows_ai, f"版本号**: {VERSION}")
     require_contains(windows_ai, "172.16.154.130")

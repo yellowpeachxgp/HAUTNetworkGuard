@@ -9,9 +9,14 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QMessageBox>
-#include <QtGlobal>
+#include <QGuiApplication>
 #include <QNetworkInformation>
+#include <QScreen>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSizePolicy>
 #include <QVBoxLayout>
+#include <QtGlobal>
 
 namespace {
 constexpr int kNetworkChangeDebounceMs = 500;
@@ -26,12 +31,15 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
       m_backgroundTasks(backgroundTasks), m_externalApi(api != nullptr) {
   m_clock.start();
   setWindowTitle(QStringLiteral("HAUT Network Guard v" HAUT_VERSION_STRING));
-  setFixedSize(460, 640);
+  // 宽度固定以维持设计，高度按当前字体和内容自适应。Windows 默认中文字体
+  // （微软雅黑）行高明显高于 macOS 苹方，写死 640px 会把标签压到不足一行。
+  setFixedWidth(460);
   Logger::debug("MainWindow 初始化开始");
 
   setupUi();
   applyWindowStyle();
   loadSettings();
+  refitWindowHeight();
 
   // 初始化 API
   m_api = api ? api : new Api(this);
@@ -53,7 +61,8 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
           &MainWindow::onLogoutClicked);
   if (m_backgroundTasks) m_trayIcon->show();
   refreshActionState();
-  Logger::info("系统托盘已初始化");
+  Logger::info(QString("系统托盘已初始化 (available=%1)")
+                   .arg(m_trayIcon->isAvailable() ? "true" : "false"));
 
   // 状态检测定时器 (使用配置的间隔)
   m_statusTimer = new QTimer(this);
@@ -116,6 +125,28 @@ void MainWindow::applyWindowStyle() {
   setStyleSheet(R"(
     QMainWindow {
       background-color: #f3f6fb;
+    }
+    QScrollArea#contentScrollArea, QWidget#centralContent {
+      background: transparent;
+      border: none;
+    }
+    QScrollBar:vertical {
+      background: transparent;
+      width: 10px;
+      margin: 4px 2px;
+    }
+    QScrollBar::handle:vertical {
+      background: #cbd5e1;
+      border-radius: 4px;
+      min-height: 32px;
+    }
+    QScrollBar::handle:vertical:hover {
+      background: #94a3b8;
+    }
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+    QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+      background: transparent;
+      height: 0;
     }
     QFrame#heroCard, QGroupBox {
       background: #ffffff;
@@ -203,8 +234,18 @@ void MainWindow::applyWindowStyle() {
 }
 
 void MainWindow::setupUi() {
-  m_centralWidget = new QWidget(this);
-  setCentralWidget(m_centralWidget);
+  // 内容放在滚动区域中：字体行高较大或屏幕较矮时仍能完整阅读，
+  // 不会因为窗口高度受限而把 QLabel 压扁。
+  QScrollArea *scrollArea = new QScrollArea(this);
+  scrollArea->setObjectName("contentScrollArea");
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+  m_centralWidget = new QWidget();
+  m_centralWidget->setObjectName("centralContent");
+  scrollArea->setWidget(m_centralWidget);
+  setCentralWidget(scrollArea);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(m_centralWidget);
   mainLayout->setSpacing(14);
@@ -240,6 +281,8 @@ void MainWindow::setupUi() {
   statusLayout->setSpacing(10);
 
   m_statusLabel = new QLabel("检测中");
+  m_statusLabel->setObjectName("statusValue");
+  m_statusLabel->setAccessibleName("网络状态");
   m_statusLabel->setAlignment(Qt::AlignCenter);
   m_statusLabel->setStyleSheet(
       "font-size: 22px; font-weight: 700; color: #2563eb;");
@@ -247,8 +290,10 @@ void MainWindow::setupUi() {
 
   m_statusDetailLabel = new QLabel("正在初始化网络状态检测...");
   m_statusDetailLabel->setObjectName("supportingText");
+  m_statusDetailLabel->setAccessibleName("网络状态详情");
   m_statusDetailLabel->setAlignment(Qt::AlignCenter);
   m_statusDetailLabel->setWordWrap(true);
+  m_statusDetailLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
   statusLayout->addWidget(m_statusDetailLabel);
 
   QFormLayout *infoLayout = new QFormLayout();
@@ -260,6 +305,12 @@ void MainWindow::setupUi() {
   m_ipLabel->setObjectName("metricValue");
   m_usageLabel->setObjectName("metricValue");
   m_timeLabel->setObjectName("metricValue");
+  m_ipLabel->setAccessibleName("IP 地址");
+  m_usageLabel->setAccessibleName("已用流量");
+  m_timeLabel->setAccessibleName("在线时长");
+  m_ipLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  m_usageLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+  m_timeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
   infoLayout->addRow("IP 地址:", m_ipLabel);
   infoLayout->addRow("已用流量:", m_usageLabel);
   infoLayout->addRow("在线时长:", m_timeLabel);
@@ -267,6 +318,7 @@ void MainWindow::setupUi() {
 
   m_lastCheckLabel = new QLabel("最近检测：尚未开始");
   m_lastCheckLabel->setObjectName("supportingText");
+  m_lastCheckLabel->setAccessibleName("最近检测时间");
   statusLayout->addWidget(m_lastCheckLabel);
 
   mainLayout->addWidget(statusGroup);
@@ -387,11 +439,53 @@ void MainWindow::setupUi() {
   QWidget::setTabOrder(m_logoutBtn, diagnosticsBtn);
 
   // 底部信息
-  QLabel *footerLabel =
-      new QLabel("YellowPeach | QQ群: 789860526 | 关闭窗口后仍会驻留系统托盘");
+  QLabel *footerLabel = new QLabel(
+      QString("YellowPeach | v%1 | QQ群: 789860526 | 关闭窗口后仍会驻留系统托盘")
+          .arg(QStringLiteral(HAUT_VERSION_STRING)));
   footerLabel->setAlignment(Qt::AlignCenter);
   footerLabel->setObjectName("supportingText");
+  footerLabel->setWordWrap(true);
   mainLayout->addWidget(footerLabel);
+}
+
+void MainWindow::refitWindowHeight() {
+  if (!m_centralWidget) return;
+
+  const int windowWidth = 460;
+  if (m_centralWidget->width() < 200) {
+    m_centralWidget->resize(windowWidth, qMax(640, m_centralWidget->height()));
+  }
+
+  // 每个 QLabel 至少保留一行文字的高度；自动换行的标签按当前宽度计算
+  // 实际需要的高度。这样即使系统字体行高更大，布局也不会把文字压扁。
+  const QList<QLabel *> labels = findChildren<QLabel *>();
+  for (QLabel *label : labels) {
+    if (!label || label->text().isEmpty()) continue;
+    int minimum = qMax(label->fontMetrics().height(), label->sizeHint().height());
+    if (label->wordWrap()) {
+      int availableWidth = label->width();
+      if (availableWidth <= 0) availableWidth = windowWidth - 80;
+      const int wrappedHeight = label->heightForWidth(availableWidth);
+      if (wrappedHeight > 0) minimum = qMax(minimum, wrappedHeight);
+    }
+    label->setMinimumHeight(minimum);
+    label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+  }
+
+  if (QLayout *layout = m_centralWidget->layout()) {
+    layout->activate();
+    int contentHeight = qMax(layout->sizeHint().height(), layout->minimumSize().height());
+    const int wrappedHeight = m_centralWidget->heightForWidth(windowWidth);
+    if (wrappedHeight > 0) contentHeight = qMax(contentHeight, wrappedHeight);
+
+    int maxHeight = 900;
+    if (QScreen *screen = QGuiApplication::primaryScreen()) {
+      maxHeight = qMax(640, screen->availableGeometry().height() - 80);
+    }
+    const int targetHeight = qBound(640, contentHeight, maxHeight);
+    // 只在内容变高时扩展窗口，避免状态文本刷新导致窗口来回跳动。
+    if (targetHeight > height()) setFixedHeight(targetHeight);
+  }
 }
 
 void MainWindow::loadSettings() {
@@ -683,6 +777,7 @@ void MainWindow::setStatusDetail(const QString &message, bool warning) {
   m_statusDetailLabel->setStyleSheet(
       QString("font-size: 12px; color: %1;")
           .arg(warning ? "#a56a00" : "#60758f"));
+  refitWindowHeight();
 }
 
 void MainWindow::updateLastCheckLabel(const QString &prefix) {
@@ -733,6 +828,7 @@ void MainWindow::updateOptionHint() {
       QString("QLabel { color: %1; background: %2; border: 1px solid %3; "
               "border-radius: 10px; padding: 10px 12px; }")
           .arg(color, background, border));
+  refitWindowHeight();
 }
 
 void MainWindow::updateStatusDisplay(bool online, const QString &ip,
@@ -831,7 +927,18 @@ void MainWindow::exitApplication() {
   QApplication::quit();
 }
 
+bool MainWindow::isTrayAvailable() const {
+  return m_trayIcon && m_trayIcon->isAvailable();
+}
+
 void MainWindow::closeEvent(QCloseEvent *event) {
+  // 托盘不可用时隐藏窗口会让应用无法再被找回；此时允许关闭并退出。
+  if (m_backgroundTasks && !isTrayAvailable()) {
+    Logger::warn("系统托盘不可用，关闭窗口将退出应用");
+    event->accept();
+    QApplication::quit();
+    return;
+  }
   // 关闭窗口时最小化到托盘
   event->ignore();
   hide();

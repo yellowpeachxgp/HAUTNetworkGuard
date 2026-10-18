@@ -6,6 +6,7 @@ local api = {}
 local crypto = require("crypto")
 local log = require("log")
 local protocol = require("protocol")
+local config = require("config")
 local version = require("version")
 
 api.DEFAULT_HOST = "172.16.154.130"
@@ -27,7 +28,7 @@ function api.configure_gateway(host, login_port, ac_id)
     api.ac_id = id
     return true
 end
-api.USER_AGENT = "HAUTNetworkGuard/" .. version .. " OpenWrt"
+api.USER_AGENT = "HAUTNetworkGuard/" .. version .. " " .. config.platform_name()
 
 local request_seq = 0
 

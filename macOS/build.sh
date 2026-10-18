@@ -75,6 +75,13 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 # 复制可执行文件
 cp "$BUILD_DIR/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/"
 
+# 复制应用图标（Info.plist 的 CFBundleIconFile 指向 AppIcon）
+if [ -f "$PROJECT_DIR/resources/AppIcon.icns" ]; then
+    cp "$PROJECT_DIR/resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+else
+    echo "警告: 未找到 macOS/resources/AppIcon.icns，应用将使用系统默认图标"
+fi
+
 # 复制 Info.plist
 sed "s/@VERSION@/$VERSION/g" "$PROJECT_DIR/Info.plist" > "$APP_BUNDLE/Contents/Info.plist"
 

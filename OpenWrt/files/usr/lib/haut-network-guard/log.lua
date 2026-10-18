@@ -1,20 +1,18 @@
 #!/usr/bin/lua
 -- HAUT Network Guard - 日志模块
 
+local config = require("config")
+
 local log = {}
 
 local LEVELS = { debug = 1, info = 2, warn = 3, error = 4 }
 local LABELS = { debug = "DEBUG", info = "INFO", warn = "WARN", error = "ERROR" }
 local LEVEL_REFRESH_SECONDS = 30
 
--- 从 UCI 读取日志级别，默认 info
+-- 从 UCI 或纯文本配置读取日志级别，默认 info
 local function get_configured_level()
-    local handle = io.popen("uci -q get haut-network-guard.main.log_level 2>/dev/null")
-    if handle then
-        local val = (handle:read("*a") or ""):gsub("[%s\r\n]+$", "")
-        handle:close()
-        if LEVELS[val] then return LEVELS[val] end
-    end
+    local val = (config.get("log_level") or ""):gsub("[%s\r\n]+$", "")
+    if LEVELS[val] then return LEVELS[val] end
     return LEVELS.info
 end
 
@@ -52,6 +50,8 @@ local function write_log(level, msg)
     local label = LABELS[level]
     local line = string.format("[%s] [%s] [#%d] %s", timestamp, label, sequence, redact_sensitive_fields(msg))
     print(line)
+    -- systemd / 输出重定向场景下 stdout 可能是块缓冲；显式刷新避免日志延迟。
+    if io.stdout and io.stdout.flush then io.stdout:flush() end
     os.execute(string.format("logger -t haut-network-guard %s", shell_quote(line)))
 end
 

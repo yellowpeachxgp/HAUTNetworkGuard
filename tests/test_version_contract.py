@@ -31,6 +31,10 @@ def main():
     config_swift = (ROOT / "macOS" / "Sources" / "Config.swift").read_text(encoding="utf-8")
     assert "static let version = BuildVersion.value" in config_swift, "macOS Swift must consume generated VERSION"
     require_version(ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "version.lua", r'return "([0-9.]+)"')
+    install_sh = (ROOT / "OpenWrt" / "install.sh").read_text(encoding="utf-8")
+    assert "version.lua" in install_sh and "VERSION=" in install_sh, (
+        "OpenWrt 离线安装必须从 version.lua 读取版本，而不是写死版本号"
+    )
     for path in (ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "main.lua",
                  ROOT / "OpenWrt" / "files" / "usr" / "lib" / "haut-network-guard" / "api.lua"):
         assert 'require("version")' in path.read_text(encoding="utf-8"), f"{path} must consume version.lua"
@@ -38,9 +42,10 @@ def main():
     for path in (
         ROOT / "README.md",
         ROOT / "OpenWrt" / "README.md",
-        ROOT / "OpenWrt" / "install.sh",
         ROOT / "OpenWrt" / "install-online.sh",
         ROOT / "OpenWrt" / "upgrade-online.sh",
+        ROOT / "linux-generic" / "README.md",
+        ROOT / "linux-generic" / "install-online.sh",
         ROOT / "Windows" / "AIREADME.md",
         ROOT / "macOS" / "AIREADME.md",
     ):
@@ -57,6 +62,14 @@ def main():
     )
     require_version(ROOT / "Windows" / "AIREADME.md", r"版本号\*\*: ([0-9]+\.[0-9]+\.[0-9]+)")
     require_version(ROOT / "macOS" / "AIREADME.md", r"版本号\*\*: ([0-9]+\.[0-9]+\.[0-9]+)")
+    require_version(
+        ROOT / "linux-generic" / "README.md",
+        r"HAUTNetworkGuard/v([0-9]+\.[0-9]+\.[0-9]+)/linux-generic/install-online\.sh \| sh -s -- v?\1",
+    )
+    require_version(
+        ROOT / "linux-generic" / "install-online.sh",
+        r"sh -s -- v([0-9]+\.[0-9]+\.[0-9]+)",
+    )
 
     online_install = (ROOT / "OpenWrt" / "install-online.sh").read_text(encoding="utf-8")
     assert 'echo "  安装完成! (v$VERSION)"' in online_install, (

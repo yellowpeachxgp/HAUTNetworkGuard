@@ -1,10 +1,10 @@
 # HAUTNetworkGuard 工程推进台账
 
-更新日期：2026-09-09。`v1.3.19` 已发布，Windows ZIP、macOS DMG 和两个哈希清单已上传并回读；[正式发布 CI](https://github.com/yellowpeachxgp/HAUTNetworkGuard/actions/runs/34281710961) 全部通过。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
+更新日期：2026-10-19。`v1.3.20` 已发布；本轮基于社区 Issue #1/#5/#7 和 PR #2/#3/#6 复核开发 `v1.3.21`，新增 Windows 布局修复、通用 Linux 支持和发布资产。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
 
-按用户最新要求，当前推进范围为产品开发、必要基础测试及 CI 构建；真实设备、长期运行和签名公证不作为本轮开发阻塞。下一批优化聚焦桌面网络恢复、中文错误处理和 OpenWrt 只读诊断。
+按用户最新要求，当前推进范围为产品开发、必要基础测试及 CI 构建；真实设备、长期运行和签名公证不作为本轮开发阻塞。v1.3.21 聚焦社区 Issue/PR 复核、Windows 高 DPI 布局、通用 Linux 支持和发布资产完整性，复核记录见 [PR_REVIEW_2026-10-19.md](PR_REVIEW_2026-10-19.md)。
 
-本轮开发已补齐：Windows Qt 网络可达性/介质变化通知，macOS 路径变化和唤醒通知，两端均合并重复事件、繁忙后补检且保留手动注销暂停；OpenWrt `diagnose` 只读检查和非 2xx 拒绝；中文网络处理建议。基础回归：Windows 5/5 CTest、macOS 控制器 32 条断言和 UI smoke、OpenWrt 4 项诊断行为及双 Lua HTTP 回归通过。新增行为列在 README“开发中”，未修改 v1.3.19 已发布资产。
+v1.3.21 本轮已补齐：Windows 大字体/高 DPI 布局自适应和滚动容器（Issue #7）；共享 `config.lua` 与 `linux-generic/` systemd 安装、在线安装、卸载和发布包（Issue #5 / PR #6）；托盘不可用回退和高 DPI 状态徽标（Issue #1）；OpenWrt 安装/升级/回滚纳入 `config.lua`；应用图标与 About 窗口美化。基础回归：Windows Qt CTest 6/6（含新增 `layout_tests`）、macOS 控制器 32 条断言和 UI smoke、Lua 5.1/5.3 配置/运行时/日志、OpenWrt 安装 25 项 ×2、Linux 安装 15 项 ×2、Python 契约全部通过。新增行为已写入 README v1.3.21。
 
 状态只对应表中列出的验证范围；原生编译、模拟设备边界和真实校园网验收不能互相替代。
 
@@ -28,10 +28,21 @@
 | M5-04 资产完整性 | 部分实现 | CI 哈希清单已加入；PR/main/手动运行新增发布资产 dry-run，下载桌面构建产物、生成并校验桌面与 OpenWrt 清单及文件覆盖；Release job 新增正式上传前 `sha256sum -c` 和 OpenWrt 清单覆盖回读；固定版本在线安装/升级消费 `OpenWrt-SHA256SUMS`，并拒绝 tag 与 `version.lua` 不一致；两种 Lua 各 25 项安装/升级/卸载测试通过，并验证清单缺失时保持旧安装和服务；本地 macOS DMG 哈希/只读挂载/包内签名核对通过；已审计 v1.3.18 远端桌面资产版本与哈希，但该 Release 缺少两个清单，固定版本 OpenWrt 安装会安全停止 | 下一版正式 Release 上传清单后，回读资产哈希、OpenWrt 覆盖和固定安装链路 |
 | M5-05 macOS 打包 | 本地已验证 | 匹配 Xcode SDK/编译器后构建、ad-hoc 签名、DMG 和窗口测试通过 | Developer ID/公证及干净设备首次启动未验证，ad-hoc 不等于 Gatekeeper 放行 |
 | M5-06 发布说明一致性 | 自动契约已加入 | `tests/test_release_contract.py` 已接入 CI；PR/main/tag/手动 dry-run 与正式 Release 均校验 tag/VERSION、Release 依赖、桌面资产、双哈希清单和 OpenWrt 固定版本安装命令 | 真实 Release tag、资产上传和发布页面回读 |
-| M6 现场和稳定性 | 未完成 | 已新增 [三端真实设备验收矩阵](REAL_DEVICE_ACCEPTANCE_MATRIX.md) 和 `tests/test_acceptance_matrix.py` 结构契约，CI 校验 A1-A13、状态值、证据列和七天记录字段；但没有新的校园网请求或 7 天运行证据 | 按矩阵完成 Windows/macOS/OpenWrt 真机、学生完整旅程、稳定性与最终发布门禁 |
-| 社区 PR | 已审查并进入集成提交 | [PR 审查记录](PR_REVIEW_2026-09-08.md)：#3 已采纳并复现验证，提交记录保留来源；#2 保留已生效修复 | GitHub 社区 PR 尚未合并/关闭，新版本尚未发布 |
+| M6 现场和稳定性 | 未完成 | 已新增 [四端真实设备验收矩阵](REAL_DEVICE_ACCEPTANCE_MATRIX.md) 和 `tests/test_acceptance_matrix.py` 结构契约，CI 校验 A1-A13、状态值、证据列和七天记录字段；但没有新的校园网请求或 7 天运行证据 | 按矩阵完成 Windows/macOS/OpenWrt/通用 Linux 真机、学生完整旅程、稳定性与最终发布门禁 |
+| 社区 PR | v1.3.21 已复核 | [2026-09-08 审查](PR_REVIEW_2026-09-08.md) 记录 #3 采纳、#2 保留已生效修复；[2026-10-19 复核](PR_REVIEW_2026-10-19.md) 记录 Issue #7 布局修复、Issue #5/PR #6 通用 Linux 支持和 Issue #1 托盘加固 | GitHub PR #6 仍需在合并前由维护者确认；Windows/OpenWrt/Linux 实机仍需验收 |
 
-## 本轮验证
+## v1.3.21 本轮验证（2026-10-19）
+
+- Windows Qt CTest 6/6 通过，新增 `layout_tests` 覆盖大字体、自动换行、选项切换和滚动条；`ctest --repeat until-fail:20` 共 120 次测试通过。
+- macOS 完整构建、32 条控制器断言、UI smoke、DMG 校验/只读挂载/包内签名和 `AppIcon.icns` 回读通过；UI smoke 重复 2 轮通过。
+- Lua 5.1.5/5.3.6：模块、共享配置、运行时、会话、日志测试通过；运行时重复 50 轮、配置重复 10 轮通过。
+- OpenWrt 安装/升级/卸载故障注入 25 项 ×2 Lua ×2 轮通过（100 次测试）；新增 `config.lua` 覆盖安装、升级、回滚和清单。
+- 通用 Linux 安装/重装/卸载故障注入 15 项 ×2 Lua ×3 轮通过（90 次测试）；覆盖 systemd 失败回滚、Release 哈希、tag/版本一致性和配置保留。
+- Python 协议、文档、版本、发布、日志、启动、会话和四端验收矩阵契约全部通过；C++/Swift 会话策略各 142 条断言、重复 3 轮通过。
+- 本地发布资产 dry-run：`HAUTNetworkGuard-Linux.tar.gz` 结构、`config.lua`、`VERSION` 和 SHA-256 回读通过。
+- 具体命令和未替代项见 [验证记录](VALIDATION_2026-10-19.md)。
+
+## v1.3.19 验证记录
 
 - Python 协议、文档、版本契约：通过。
 - Release 发布契约：通过，自动检查 workflow 的 tag/VERSION 闸门、Windows/macOS 资产、双哈希清单和 OpenWrt 安装命令。

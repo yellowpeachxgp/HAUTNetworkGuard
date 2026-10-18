@@ -24,6 +24,25 @@ io.open = function(path, mode)
             close = function() return true end
         }
     end
+    if path == "/etc/haut-network-guard.conf" then
+        local lines = {
+            "username=student-user",
+            "password=test-only",
+            "interval=" .. interval,
+            "enabled=1",
+            "log_level=info"
+        }
+        local index = 0
+        return {
+            lines = function()
+                return function()
+                    index = index + 1
+                    return lines[index]
+                end
+            end,
+            close = function() return true end
+        }
+    end
     if files[path] then
         return { read = function() return files[path] end, close = function() end }
     end

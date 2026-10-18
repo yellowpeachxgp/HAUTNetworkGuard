@@ -21,7 +21,9 @@ def main():
     require(workflow, "if: startsWith(github.ref, 'refs/tags/v')", "Release guard")
     require(workflow, 'VERSION_FILE="$(cat VERSION)"', "VERSION source")
     require(workflow, 'test "$VERSION_FILE" = "$TAG_VERSION"', "tag/version equality")
-    require(workflow, "sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS", "desktop checksum manifest")
+    require(workflow, "sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS", "desktop and Linux checksum manifest")
+    require(workflow, "tar -czf HAUTNetworkGuard-Linux.tar.gz", "Linux release tarball")
+    require(workflow, "HAUTNetworkGuard-Linux.tar.gz", "Linux release asset")
     require(workflow, "find OpenWrt -type f", "OpenWrt checksum manifest")
     require(workflow, "name: Validate Release Assets", "Release asset validation step")
     require(workflow, "release-dry-run:", "PR 发布资产 dry-run job")
@@ -40,6 +42,7 @@ def main():
     for asset in (
         "HAUTNetworkGuard-Windows.zip",
         "HAUTNetworkGuard.dmg",
+        "HAUTNetworkGuard-Linux.tar.gz",
         "SHA256SUMS",
         "OpenWrt-SHA256SUMS",
     ):
@@ -47,9 +50,12 @@ def main():
     require(workflow, "HAUTNetworkGuard/${{ steps.get_version.outputs.VERSION }}/OpenWrt/install-online.sh", "Release OpenWrt URL")
     require(workflow, "sh -s -- ${{ steps.get_version.outputs.VERSION }}", "Release OpenWrt version argument")
 
-    for asset in ("HAUTNetworkGuard-Windows.zip", "HAUTNetworkGuard.dmg", "SHA256SUMS"):
+    for asset in ("HAUTNetworkGuard-Windows.zip", "HAUTNetworkGuard.dmg",
+                  "HAUTNetworkGuard-Linux.tar.gz", "SHA256SUMS"):
         require(readme, asset, "README")
     require(openwrt_readme, "OpenWrt-SHA256SUMS", "OpenWrt README")
+    require((ROOT / "linux-generic/README.md").read_text(encoding="utf-8"),
+            "HAUTNetworkGuard-Linux.tar.gz", "Linux README")
 
     print("release contract ok")
 

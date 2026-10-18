@@ -646,6 +646,11 @@ extension StatusBarController {
         }
         loginMenuItem.isEnabled = (!currentStatus.isOnline || session.manualOfflineHold) && !session.isBusy
         logoutMenuItem.isEnabled = currentStatus.isOnline && !session.isBusy
+
+        // 悬停菜单栏图标即可看到状态和最近检测信息，无需先点开菜单。
+        let detail = detailMenuItem.title
+        statusItem.button?.toolTip = detail.isEmpty ? statusText : statusText + "\n" + detail
+        statusItem.button?.setAccessibilityLabel(statusText)
     }
 
     private func automaticRetryHint() -> String? {

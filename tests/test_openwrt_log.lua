@@ -11,6 +11,16 @@ os.execute = function(command)
 end
 
 package.path = "OpenWrt/files/usr/lib/haut-network-guard/?.lua;" .. package.path
+local config = require("config")
+
+-- 先用纯文本配置验证日志级别读取，再用 UCI 后端验证优先级。
+local config_path = os.tmpname()
+local config_file = assert(io.open(config_path, "wb"))
+config_file:write("log_level=debug\n")
+config_file:close()
+config.FILE_PATH = config_path
+config.detect_uci = function() return false end
+
 local log = require("log")
 
 local json_preview = log.preview('{"user_name":"231040600203","online_ip":"10.10.0.8"}')
@@ -48,4 +58,26 @@ assert(not last_command:find("231040600203", 1, true), "日志出口不得泄漏
 assert(not last_command:find("test-private", 1, true), "日志出口不得泄漏密码")
 assert(not last_command:find("encoded-private", 1, true), "日志出口不得泄漏编码密码")
 assert(last_command:find("password=<redacted>", 1, true), "日志出口应保留脱敏字段")
+
+-- 纯文本配置的 debug 级别应生效。
+log.debug("file-debug-visible")
+assert(table.concat(executed, "\n"):find("file-debug-visible", 1, true),
+       "纯文本配置的 debug 日志级别未生效")
+
+-- UCI 后端应优先于文件配置。
+config.detect_uci = function() return true end
+log.refresh_level()
+log.debug("uci-debug-visible")
+assert(table.concat(executed, "\n"):find("uci-debug-visible", 1, true),
+       "UCI 配置的 debug 日志级别未生效")
+
+-- print 后必须显式刷新 stdout，适配 systemd 块缓冲。
+local original_stdout = io.stdout
+local flushed = false
+io.stdout = { flush = function() flushed = true end }
+log.info("flush-check")
+io.stdout = original_stdout
+assert(flushed, "日志输出后必须刷新 stdout")
+
+os.remove(config_path)
 print("OpenWrt 日志脱敏测试通过：" .. _VERSION)

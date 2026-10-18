@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
+#include <QIcon>
 #include <QStringList>
 #include <QStyle>
 
@@ -15,8 +16,11 @@ int main(int argc, char *argv[]) {
   app.setApplicationName("HAUTNetworkGuard");
   app.setApplicationVersion(QStringLiteral(HAUT_VERSION_STRING));
   app.setOrganizationName("YellowPeach");
-  // 使用系统默认图标
-  app.setWindowIcon(app.style()->standardIcon(QStyle::SP_ComputerIcon));
+  // 优先使用打包的应用图标，缺失时回退到系统图标。
+  const QIcon appIcon(":/app.ico");
+  app.setWindowIcon(appIcon.isNull()
+                        ? app.style()->standardIcon(QStyle::SP_ComputerIcon)
+                        : appIcon);
 
   // 设置关闭最后窗口时不退出应用（托盘常驻）
   app.setQuitOnLastWindowClosed(false);
@@ -48,7 +52,10 @@ int main(int argc, char *argv[]) {
 
   // 创建主窗口
   MainWindow mainWindow;
-  if (!startInBackground) {
+  if (startInBackground && !mainWindow.isTrayAvailable()) {
+    Logger::warn("系统托盘不可用，--startup 回退为显示主窗口");
+    mainWindow.show();
+  } else if (!startInBackground) {
     Logger::debug("主窗口前台显示");
     mainWindow.show();
   } else {

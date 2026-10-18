@@ -28,6 +28,7 @@ public:
   MainWindow(Config &config, Api *api, std::function<double()> now,
              bool backgroundTasks, QWidget *parent = nullptr);
   QString diagnosticText() const;
+  bool isTrayAvailable() const;
   ~MainWindow();
 
 protected:
@@ -56,6 +57,7 @@ private slots:
 private:
   void applyWindowStyle();
   void setupUi();
+  void refitWindowHeight();
   void loadSettings();
   bool saveSettings();
   bool syncCredentialsToConfig();

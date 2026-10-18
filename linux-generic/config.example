@@ -1,0 +1,23 @@
+# HAUT Network Guard - 通用 Linux (Debian / Ubuntu) 配置
+# 安装后位于 /etc/haut-network-guard.conf，权限 600，仅 root 可读。
+# 字段含义与 OpenWrt 的 UCI 配置一一对应。
+
+# 是否启用自动登录守护 (1/0)
+enabled=1
+
+# 学号
+username=
+
+# 密码。包含 #、;、空格或引号时，请用双引号包裹整个值。
+password=
+
+# 检测间隔（秒），允许范围 30-300
+interval=30
+
+# 日志级别: debug / info / warn / error
+log_level=info
+
+# 可选：覆盖校园网网关（默认 172.16.154.130:69，ac_id=1）
+gateway_host=172.16.154.130
+gateway_port=69
+ac_id=1

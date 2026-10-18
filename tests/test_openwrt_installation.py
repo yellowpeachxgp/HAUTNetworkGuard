@@ -83,7 +83,8 @@ sys.exit(subprocess.call([os.environ["HAUT_REAL_MV"], *args]))
 ''', executable=True)
         self.write(self.remote / "files/usr/lib/haut-network-guard/version.lua",
                    'return "1.3.18"\n')
-        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua", "session.lua"):
+        for name in ("crypto.lua", "api.lua", "log.lua", "protocol.lua",
+                     "session.lua", "config.lua"):
             self.write(self.remote / "files/usr/lib/haut-network-guard" / name,
                        'error("语法检查不得执行模块")\nreturn {}\n')
         self.write(self.remote / "files/usr/lib/haut-network-guard/main.lua",
@@ -190,6 +191,8 @@ esac
         self.assertTrue(os.access(self.init, os.X_OK))
         self.assertEqual((self.program / "main.lua").read_bytes(),
                          (self.remote / "files/usr/lib/haut-network-guard/main.lua").read_bytes())
+        self.assertTrue((self.program / "config.lua").is_file(),
+                        "安装必须包含共享配置模块")
         self.assert_no_temporary_files()
 
     def test_tag_version_mismatch_is_rejected(self):

@@ -535,8 +535,11 @@ class UpdateChecker {
         if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
             parts.append("underlying=\(underlying.domain)#\(underlying.code):\(underlying.localizedDescription)")
         }
-        if let failingURL = nsError.userInfo[NSURLErrorFailingURLStringErrorKey] as? String {
-            parts.append("url=\(failingURL)")
+        if let failingURL = nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL {
+            parts.append("url=\(failingURL.absoluteString)")
+        } else if let failingString =
+            nsError.userInfo["NSURLErrorFailingURLStringErrorKey"] as? String {
+            parts.append("url=\(failingString)")
         }
 
         return parts.joined(separator: " ")

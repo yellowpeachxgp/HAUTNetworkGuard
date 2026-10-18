@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证三端真实设备验收矩阵的结构，避免现场记录缺列或状态值漂移。"""
+"""验证四端真实设备验收矩阵的结构，避免现场记录缺列或状态值漂移。"""
 
 import re
 from pathlib import Path
@@ -23,12 +23,12 @@ def main():
         if not match:
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        assert len(cells) == 6, f"{match.group(1)} 列数错误: {cells}"
+        assert len(cells) == 7, f"{match.group(1)} 列数错误: {cells}"
         scenario_id = match.group(1)
         assert scenario_id not in rows, f"验收场景重复: {scenario_id}"
-        for platform, value in zip(("Windows", "macOS", "OpenWrt"), cells[2:5]):
+        for platform, value in zip(("Windows", "macOS", "OpenWrt", "通用 Linux"), cells[2:6]):
             assert value in VALID_STATUSES, f"{scenario_id} 的 {platform} 状态非法: {value!r}"
-        assert cells[5], f"{scenario_id} 缺少必须记录的证据说明"
+        assert cells[6], f"{scenario_id} 缺少必须记录的证据说明"
         rows[scenario_id] = cells
 
     expected = {f"A{i}" for i in range(1, 14)}

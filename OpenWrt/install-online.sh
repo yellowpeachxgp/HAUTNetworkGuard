@@ -2,7 +2,7 @@
 # HAUT Network Guard - OpenWrt 一键安装脚本
 # 用法:
 #   最新 main: wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/install-online.sh | sh
-#   固定版本:   wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/install-online.sh | sh -s -- v1.3.20
+#   固定版本:   wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/install-online.sh | sh -s -- v1.3.21
 
 set -e
 
@@ -63,7 +63,7 @@ download_file() {
 
 validate_program_dir() {
     dir="$1"
-    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua config.lua main.lua; do
         if [ ! -s "$dir/$file" ]; then
             echo "错误: 缺少或为空的程序文件: $file"
             return 1
@@ -156,6 +156,7 @@ download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$STAGE_DIR/p
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$STAGE_DIR/program/log.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$STAGE_DIR/program/protocol.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/session.lua" "$STAGE_DIR/program/session.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/config.lua" "$STAGE_DIR/program/config.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$STAGE_DIR/program/main.lua"
 
 echo "[4/5] 下载配置文件..."
@@ -187,7 +188,7 @@ case "$REPO_REF" in
 esac
 test -s "$INIT_STAGE"
 sh -n "$INIT_STAGE"
-for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua config.lua main.lua; do
     verify_checksum "files/usr/lib/haut-network-guard/$file" "$STAGE_DIR/program/$file"
 done
 verify_checksum "files/etc/init.d/haut-network-guard" "$INIT_STAGE"

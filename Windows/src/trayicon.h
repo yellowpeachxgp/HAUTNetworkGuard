@@ -15,6 +15,7 @@ public:
 
   void show();
   void hide();
+  bool isAvailable() const;
 
   void setOnlineStatus(bool online);
   void setBusy(bool busy);

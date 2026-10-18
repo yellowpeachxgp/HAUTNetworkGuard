@@ -60,8 +60,12 @@ jobs:
           lua5.3 tests/test_openwrt_session.lua
           lua5.1 tests/test_openwrt_log.lua
           lua5.3 tests/test_openwrt_log.lua
+          lua5.1 tests/test_openwrt_config.lua
+          lua5.3 tests/test_openwrt_config.lua
           HAUT_TEST_LUA=lua5.1 python3 tests/test_openwrt_installation.py
           HAUT_TEST_LUA=lua5.3 python3 tests/test_openwrt_installation.py
+          HAUT_TEST_LUA=lua5.1 python3 tests/test_linux_generic_installation.py
+          HAUT_TEST_LUA=lua5.3 python3 tests/test_linux_generic_installation.py
 
       - name: Validate OpenWrt Shell Scripts
         run: |
@@ -71,6 +75,12 @@ jobs:
           sh -n OpenWrt/uninstall-online.sh
           sh -n OpenWrt/upgrade-online.sh
           sh -n OpenWrt/files/etc/init.d/haut-network-guard
+          sh -n linux-generic/install.sh
+          sh -n linux-generic/install-online.sh
+          sh -n linux-generic/uninstall.sh
+          test -s linux-generic/config.example
+          test -s linux-generic/systemd/haut-network-guard.service
+          grep -q '^ExecStart=' linux-generic/systemd/haut-network-guard.service
 
   build-windows-qt:
     # Qt 6.6 的当前构建链使用 VS 2022，固定与生成器配套的镜像。
@@ -211,7 +221,12 @@ jobs:
           test -s HAUTNetworkGuard-Windows.zip
           test -s HAUTNetworkGuard.dmg
           unzip -t HAUTNetworkGuard-Windows.zip >/dev/null
-          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS
+          tar -czf HAUTNetworkGuard-Linux.tar.gz \
+            --transform 's,^,HAUTNetworkGuard-Linux/,' \
+            VERSION OpenWrt/files linux-generic README.md
+          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh"
+          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua"
+          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS
           sha256sum -c SHA256SUMS
           find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
           test -s OpenWrt-SHA256SUMS
@@ -224,6 +239,7 @@ jobs:
             files/usr/lib/haut-network-guard/log.lua \
             files/usr/lib/haut-network-guard/protocol.lua \
             files/usr/lib/haut-network-guard/session.lua \
+            files/usr/lib/haut-network-guard/config.lua \
             files/usr/lib/haut-network-guard/main.lua; do
             grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS
           done
@@ -263,7 +279,10 @@ jobs:
 
       - name: Generate Asset Checksums
         run: |
-          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg > SHA256SUMS
+          tar -czf HAUTNetworkGuard-Linux.tar.gz \
+            --transform 's,^,HAUTNetworkGuard-Linux/,' \
+            VERSION OpenWrt/files linux-generic README.md
+          sha256sum HAUTNetworkGuard-Windows.zip HAUTNetworkGuard.dmg HAUTNetworkGuard-Linux.tar.gz > SHA256SUMS
           find OpenWrt -type f \( -name '*.sh' -o -path 'OpenWrt/files/*' \) -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > OpenWrt-SHA256SUMS
 
       - name: Validate Release Assets
@@ -271,6 +290,9 @@ jobs:
           set -euo pipefail
           test -s HAUTNetworkGuard-Windows.zip
           test -s HAUTNetworkGuard.dmg
+          test -s HAUTNetworkGuard-Linux.tar.gz
+          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/linux-generic/install.sh"
+          tar -tzf HAUTNetworkGuard-Linux.tar.gz | grep -Fq "HAUTNetworkGuard-Linux/OpenWrt/files/usr/lib/haut-network-guard/config.lua"
           sha256sum -c SHA256SUMS
           for path in \
             install.sh install-online.sh upgrade-online.sh uninstall.sh uninstall-online.sh \
@@ -281,6 +303,7 @@ jobs:
             files/usr/lib/haut-network-guard/log.lua \
             files/usr/lib/haut-network-guard/protocol.lua \
             files/usr/lib/haut-network-guard/session.lua \
+            files/usr/lib/haut-network-guard/config.lua \
             files/usr/lib/haut-network-guard/main.lua; do
             grep -Fq "OpenWrt/$path" OpenWrt-SHA256SUMS
           done
@@ -301,6 +324,7 @@ jobs:
             | **Windows** | `HAUTNetworkGuard-Windows.zip` | 解压后运行 `HAUTNetworkGuard.exe` |
             | **macOS** | `HAUTNetworkGuard.dmg` | 双击安装到应用程序 |
             | **OpenWrt** | 一键安装 | `wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/${{ steps.get_version.outputs.VERSION }}/OpenWrt/install-online.sh \| sh -s -- ${{ steps.get_version.outputs.VERSION }}` |
+            | **Linux** | `HAUTNetworkGuard-Linux.tar.gz` | Debian/Ubuntu 等 systemd 发行版；见下方一键安装 |
 
             ### ⚠️ macOS 用户注意
 
@@ -320,8 +344,15 @@ jobs:
             ---
             
             **首次使用**: 运行后输入学号和密码，勾选"记住密码"和"开机自启动"即可。
+
+            ### 🐧 通用 Linux 一键安装
+
+            ```bash
+            wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/${{ steps.get_version.outputs.VERSION }}/linux-generic/install-online.sh | sh -s -- ${{ steps.get_version.outputs.VERSION }}
+            ```
           files: |
             HAUTNetworkGuard-Windows.zip
             HAUTNetworkGuard.dmg
+            HAUTNetworkGuard-Linux.tar.gz
             SHA256SUMS
             OpenWrt-SHA256SUMS

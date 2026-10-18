@@ -2,7 +2,7 @@
 # HAUT Network Guard - OpenWrt 一键升级脚本
 # 用法:
 #   最新 main: wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/main/OpenWrt/upgrade-online.sh | sh
-#   固定版本:   wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.20/OpenWrt/upgrade-online.sh | sh -s -- v1.3.20
+#   固定版本:   wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/upgrade-online.sh | sh -s -- v1.3.21
 
 set -e
 
@@ -20,6 +20,7 @@ SWITCH_STARTED=0
 WAS_RUNNING=0
 CHECKSUM_FILE=""
 OLD_SESSION_PRESENT=0
+OLD_CONFIG_PRESENT=0
 OLD_VERSION_PRESENT=0
 
 version_cmp() {
@@ -62,6 +63,11 @@ cleanup() {
         else
             rm -f "$INSTALL_DIR/session.lua"
         fi
+        if [ "$OLD_CONFIG_PRESENT" -eq 1 ]; then
+            cp -p "$BACKUP_DIR/config.lua" "$INSTALL_DIR/config.lua" || rollback_failed=1
+        else
+            rm -f "$INSTALL_DIR/config.lua"
+        fi
         cp -p "$BACKUP_DIR/haut-network-guard.init" "$INIT_FILE" || rollback_failed=1
         if [ "$WAS_RUNNING" -eq 1 ]; then
             "$INIT_FILE" start >/dev/null 2>&1 || rollback_failed=1
@@ -91,7 +97,7 @@ download_file() {
 
 validate_program_dir() {
     dir="$1"
-    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+    for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua config.lua main.lua; do
         if [ ! -s "$dir/$file" ]; then
             echo "错误: 缺少或为空的程序文件: $file"
             return 1
@@ -247,6 +253,10 @@ if [ -f "$INSTALL_DIR/session.lua" ]; then
     cp -p "$INSTALL_DIR/session.lua" "$BACKUP_DIR/session.lua"
     OLD_SESSION_PRESENT=1
 fi
+if [ -f "$INSTALL_DIR/config.lua" ]; then
+    cp -p "$INSTALL_DIR/config.lua" "$BACKUP_DIR/config.lua"
+    OLD_CONFIG_PRESENT=1
+fi
 cp -p "$INIT_FILE" "$BACKUP_DIR/haut-network-guard.init"
 
 # 下载新文件（不覆盖配置）
@@ -257,6 +267,7 @@ download_file "$REPO_URL/files/usr/lib/haut-network-guard/api.lua" "$TMP_DIR/api
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/log.lua" "$TMP_DIR/log.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/protocol.lua" "$TMP_DIR/protocol.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/session.lua" "$TMP_DIR/session.lua"
+download_file "$REPO_URL/files/usr/lib/haut-network-guard/config.lua" "$TMP_DIR/config.lua"
 download_file "$REPO_URL/files/usr/lib/haut-network-guard/main.lua" "$TMP_DIR/main.lua"
 
 echo "[3/4] 更新服务脚本..."
@@ -266,7 +277,7 @@ echo "      校验下载文件和 Lua 语法..."
 validate_program_dir "$TMP_DIR"
 test -s "$TMP_DIR/haut-network-guard.init"
 sh -n "$TMP_DIR/haut-network-guard.init"
-for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua config.lua main.lua; do
     verify_checksum "files/usr/lib/haut-network-guard/$file" "$TMP_DIR/$file"
 done
 verify_checksum "files/etc/init.d/haut-network-guard" "$TMP_DIR/haut-network-guard.init"
@@ -285,13 +296,14 @@ cp -f "$TMP_DIR/api.lua" "$INSTALL_DIR/api.lua"
 cp -f "$TMP_DIR/log.lua" "$INSTALL_DIR/log.lua"
 cp -f "$TMP_DIR/protocol.lua" "$INSTALL_DIR/protocol.lua"
 cp -f "$TMP_DIR/session.lua" "$INSTALL_DIR/session.lua"
+cp -f "$TMP_DIR/config.lua" "$INSTALL_DIR/config.lua"
 cp -f "$TMP_DIR/main.lua" "$INSTALL_DIR/main.lua"
 cp -f "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"
 chmod +x "$INIT_FILE"
 
 echo "      校验程序文件和 Lua 语法..."
 validate_program_dir "$INSTALL_DIR"
-for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua main.lua; do
+for file in version.lua crypto.lua api.lua log.lua protocol.lua session.lua config.lua main.lua; do
     cmp "$TMP_DIR/$file" "$INSTALL_DIR/$file"
 done
 cmp "$TMP_DIR/haut-network-guard.init" "$INIT_FILE"

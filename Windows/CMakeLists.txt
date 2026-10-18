@@ -110,8 +110,21 @@ target_link_libraries(haut_instance_guard_tests PRIVATE Qt6::Core)
 add_test(NAME instance_guard_tests COMMAND haut_instance_guard_tests)
 set_tests_properties(instance_guard_tests PROPERTIES TIMEOUT 10)
 
+add_executable(haut_layout_tests
+    tests/layout_tests.cpp
+    src/mainwindow.cpp src/config.cpp src/api.cpp src/encryption.cpp
+    src/protocol_utils.cpp src/trayicon.cpp src/logger.cpp
+    ${HEADERS}
+)
+target_link_libraries(haut_layout_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network)
+add_test(NAME layout_tests COMMAND haut_layout_tests)
+set_tests_properties(layout_tests PROPERTIES TIMEOUT 30)
+
 # Windows 特定设置
 if(WIN32)
+    enable_language(RC)
+    configure_file(resources/app.rc.in "${CMAKE_CURRENT_BINARY_DIR}/app.rc" @ONLY)
+    target_sources(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
     target_link_libraries(${PROJECT_NAME} PRIVATE Crypt32)
     target_link_libraries(haut_smoke_tests PRIVATE Crypt32)
     target_link_libraries(haut_controller_tests PRIVATE Crypt32)

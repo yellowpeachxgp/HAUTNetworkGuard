@@ -33,7 +33,7 @@ opkg install lua curl
 固定版本安装（推荐生产环境）：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/install-online.sh | sh -s -- v1.3.21
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.22/OpenWrt/install-online.sh | sh -s -- v1.3.22
 ```
 
 安装最新 main（适合测试）：
@@ -55,7 +55,7 @@ v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，其中记录固定版本
 升级到固定版本：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/upgrade-online.sh | sh -s -- v1.3.21
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.22/OpenWrt/upgrade-online.sh | sh -s -- v1.3.22
 ```
 
 ## 手动安装

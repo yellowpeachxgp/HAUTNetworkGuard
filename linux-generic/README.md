@@ -28,7 +28,7 @@
 ### 固定版本安装（推荐生产环境）
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/linux-generic/install-online.sh | sh -s -- v1.3.21
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.22/linux-generic/install-online.sh | sh -s -- v1.3.22
 ```
 
 安装脚本会从 Release 下载 `HAUTNetworkGuard-Linux.tar.gz`，使用 `SHA256SUMS` 校验后再安装。
@@ -117,7 +117,7 @@ sudo ./linux-generic/uninstall.sh --purge-config
 在线卸载：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/linux-generic/uninstall.sh | sudo sh
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.22/linux-generic/uninstall.sh | sudo sh
 ```
 
 卸载会先停止并禁用服务；停止失败时保留程序文件，避免留下无法管理的服务。

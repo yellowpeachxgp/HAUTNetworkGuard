@@ -67,7 +67,7 @@ v1.3.19 起正式 Release 同时提供 `SHA256SUMS` 和 `OpenWrt-SHA256SUMS`；v
 
 **固定版本安装（推荐生产环境）：**
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/OpenWrt/install-online.sh | sh -s -- v1.3.21
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.22/OpenWrt/install-online.sh | sh -s -- v1.3.22
 ```
 
 > v1.3.19 起正式 Release 提供 `OpenWrt-SHA256SUMS`，固定版本安装会在切换前校验完整清单。
@@ -91,7 +91,7 @@ uci commit haut-network-guard
 
 **固定版本安装（推荐生产环境）：**
 ```bash
-wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.21/linux-generic/install-online.sh | sh -s -- v1.3.21
+wget -qO- https://raw.githubusercontent.com/yellowpeachxgp/HAUTNetworkGuard/v1.3.22/linux-generic/install-online.sh | sh -s -- v1.3.22
 ```
 
 > 固定版本会下载 `HAUTNetworkGuard-Linux.tar.gz`，并使用 `SHA256SUMS` 校验后再安装。
@@ -295,7 +295,7 @@ HAUTNetworkGuard/
 | 加密 | SRUN3K | SRUN3K | SRUN3K | SRUN3K |
 | 配置存储 | UserDefaults | **QSettings** | UCI | 纯文本 (600) |
 | 系统托盘 | NSStatusItem | **QSystemTrayIcon** | - | - |
-| 开机自启 | LaunchAgent | 注册表 Run 键 | procd | systemd |
+| 开机自启 | LaunchAgent | 计划任务 ONLOGON（Run 回退） | procd | systemd |
 | 构建 | swiftc | **CMake + MSVC** | - | - |
 | CI/CD | GitHub Actions | **GitHub Actions** | GitHub Actions | GitHub Actions |
 
@@ -316,9 +316,11 @@ cd macOS
 ### Windows
 
 1. 删除解压后的 `HAUTNetworkGuard-Windows/` 目录
-2. （可选）运行 `regedit`，删除：
+2. （可选）删除计划任务：`schtasks /Delete /TN HAUTNetworkGuard /F`
+3. （可选）运行 `regedit`，删除：
    - `HKEY_CURRENT_USER\Software\HAUTNetworkGuard`
    - `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` 下的 `HAUTNetworkGuard` 项
+   - `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HAUTNetworkGuard-Startup.vbs`
 
 ### OpenWrt
 
@@ -337,6 +339,14 @@ sudo ./linux-generic/uninstall.sh --purge-config
 ```
 
 ## 版本历史
+
+### v1.3.22 (2026-10)
+
+- **Windows 布局二次加固**：内容布局启用 `QLayout::SetMinimumSize`，滚动内容设置明确的最小宽高；窗口宽度按内容最小宽度自适应，高度按屏幕可用区域自适应，横向/纵向都按需滚动。首次显示、字体变化和样式变化后重新排版，避免截图中的标签压缩、行重叠和控件互相覆盖。
+- **Windows 开机自启提速**：自启主链路改为计划任务 `ONLOGON`（登录时触发，早于资源管理器加载 Startup 目录），计划任务不可用时自动回退注册表 `Run`，再回退 Startup 脚本；旧版本入口会自动迁移并清理重复项。
+- **Windows 启动路径优化**：托盘图标优先创建；`--startup` 不再同步构建完整窗口，改为首次打开时按需构建；网络信息后端和自启修复延后到事件循环；日志文件保持打开，避免每条日志重复开关文件。新增启动阶段耗时日志。
+- **回归测试**：新增布局重叠检测（大字体、选项切换、字体再放大）、延迟 UI 构建、自启计划任务参数与回退路径测试；Windows Qt CTest 7/7 通过。
+- **版本同步**：macOS、Windows、OpenWrt、通用 Linux 文档和安装命令统一到 v1.3.22。
 
 ### v1.3.21 (2026-10)
 

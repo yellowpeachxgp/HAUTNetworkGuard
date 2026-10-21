@@ -4,10 +4,11 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QMap>
+#include <QProcess>
 #include <QTextStream>
 #include <cstring>
 #include <utility>
-#include <QMap>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -81,11 +82,14 @@ void Config::load() {
                    .arg(Logger::boolText(m_autoLogin))
                    .arg(Logger::boolText(m_autoLaunch)));
 
-  // 兼容旧版本：自动修正开机自启命令，并补充 Startup 目录兜底脚本
-  if (m_autoLaunch && m_startupIntegration) {
-    verifyAndRepairAutoLaunch();
-  }
+  // 开机自启修复涉及注册表/计划任务/磁盘操作，不能在启动路径同步执行；
+  // 由主程序在事件循环启动后调用 repairAutoLaunchIfNeeded()。
   m_lastSaved = snapshot();
+}
+
+void Config::repairAutoLaunchIfNeeded() {
+  if (!m_autoLaunch || !m_startupIntegration) return;
+  verifyAndRepairAutoLaunch();
 }
 
 bool Config::save() {
@@ -246,20 +250,132 @@ QString Config::startupScriptPath() const {
                  "HAUTNetworkGuard-Startup.vbs");
 }
 
+QString Config::scheduledTaskName() { return QStringLiteral("HAUTNetworkGuard"); }
+
+QStringList Config::scheduledTaskCreateArgs(const QString &command) {
+  // 登录时触发（/SC ONLOGON）比注册表 Run 更早，且可在网络就绪前启动。
+  // 固定最高权限会在部分策略下触发 UAC，因此保持普通用户权限。
+  return {QStringLiteral("/Create"),
+          QStringLiteral("/TN"), scheduledTaskName(),
+          QStringLiteral("/TR"), command,
+          QStringLiteral("/SC"), QStringLiteral("ONLOGON"),
+          QStringLiteral("/RL"), QStringLiteral("LIMITED"),
+          QStringLiteral("/F")};
+}
+
+QStringList Config::scheduledTaskQueryArgs() {
+  return {QStringLiteral("/Query"), QStringLiteral("/TN"), scheduledTaskName()};
+}
+
+QStringList Config::scheduledTaskDeleteArgs() {
+  return {QStringLiteral("/Delete"), QStringLiteral("/TN"), scheduledTaskName(),
+          QStringLiteral("/F")};
+}
+
+bool Config::runScheduledTask(const QStringList &args, int *exitCode,
+                              QString *output) const {
+  if (m_autoLaunchRunner) {
+    return m_autoLaunchRunner(args, exitCode, output);
+  }
+#ifdef Q_OS_WIN
+  QProcess process;
+  process.setProgram(QStringLiteral("schtasks.exe"));
+  process.setArguments(args);
+  process.setProcessChannelMode(QProcess::MergedChannels);
+  // 避免从 GUI 进程调用 schtasks 时闪出控制台窗口。
+  process.setCreateProcessArgumentsModifier(
+      [](QProcess::CreateProcessArguments *arguments) {
+        arguments->flags |= CREATE_NO_WINDOW;
+      });
+  process.start();
+  if (!process.waitForStarted(5000)) {
+    if (exitCode) *exitCode = -1;
+    if (output) *output = process.errorString();
+    return false;
+  }
+  if (!process.waitForFinished(8000)) {
+    process.kill();
+    process.waitForFinished(1000);
+    if (exitCode) *exitCode = -2;
+    if (output) *output = QStringLiteral("schtasks timeout");
+    return false;
+  }
+  const QString text = QString::fromLocal8Bit(process.readAll());
+  if (exitCode) *exitCode = process.exitCode();
+  if (output) *output = text;
+  return process.exitStatus() == QProcess::NormalExit;
+#else
+  Q_UNUSED(args);
+  if (exitCode) *exitCode = -3;
+  if (output) *output = QStringLiteral("unsupported platform");
+  return false;
+#endif
+}
+
+bool Config::scheduledTaskExists() const {
+  int exitCode = -1;
+  QString output;
+  const bool started =
+      runScheduledTask(scheduledTaskQueryArgs(), &exitCode, &output);
+  if (!started) return false;
+  // schtasks 在任务不存在时也返回 0，但从输出中能看出“找不到”。
+  if (output.contains("ERROR: The system cannot find", Qt::CaseInsensitive) ||
+      output.contains("错误: 系统找不到", Qt::CaseInsensitive) ||
+      output.contains("cannot find the file", Qt::CaseInsensitive)) {
+    return false;
+  }
+  return exitCode == 0;
+}
+
+bool Config::createScheduledTask(const QString &command) {
+  int exitCode = -1;
+  QString output;
+  const bool started =
+      runScheduledTask(scheduledTaskCreateArgs(command), &exitCode, &output);
+  if (started && exitCode == 0 && scheduledTaskExists()) {
+    Logger::info("开机自启主链路已写入计划任务（登录触发）");
+    return true;
+  }
+  Logger::warn(QString("计划任务自启不可用 (started=%1, exit=%2)")
+                   .arg(Logger::boolText(started))
+                   .arg(exitCode));
+  return false;
+}
+
+bool Config::deleteScheduledTask() {
+  int exitCode = -1;
+  QString output;
+  runScheduledTask(scheduledTaskDeleteArgs(), &exitCode, &output);
+  const bool removed = !scheduledTaskExists();
+  Logger::info(QString("计划任务自启清理: removed=%1, exit=%2")
+                   .arg(Logger::boolText(removed))
+                   .arg(exitCode));
+  return removed;
+}
+
 void Config::updateAutoLaunch(bool enable) {
   const QString command = autoLaunchCommand();
   Logger::debug(QString("更新开机自启配置: enable=%1, command=%2")
                     .arg(Logger::boolText(enable))
                     .arg(command));
   if (!enable) {
+    deleteScheduledTask();
     updateAutoLaunchRegistry(false, command);
     updateAutoLaunchStartupScript(false, command);
     return;
   }
 
+  // 主链路：计划任务 ONLOGON，登录后立即启动，早于资源管理器加载 Startup 目录。
+  if (createScheduledTask(command)) {
+    updateAutoLaunchRegistry(false, command);
+    updateAutoLaunchStartupScript(false, command);
+    return;
+  }
+
+  Logger::warn("计划任务自启写入未生效，回退注册表 Run");
   updateAutoLaunchRegistry(true, command);
   if (isRegistryCommandExpected(command)) {
-    Logger::info("开机自启主链路已更新为注册表 Run，清理 Startup 脚本兜底");
+    Logger::info("开机自启回退链路已更新为注册表 Run，清理 Startup 脚本兜底");
     updateAutoLaunchStartupScript(false, command);
     return;
   }
@@ -383,32 +499,26 @@ void Config::verifyAndRepairAutoLaunch() {
   QString storedRegistryValue;
   QString scriptPath;
 
+  const bool taskOk = scheduledTaskExists();
   const bool registryOk =
       isRegistryCommandExpected(command, &storedRegistryValue);
   const bool startupOk = isStartupScriptExpected(command, &scriptPath);
 
   Logger::debug(
-      QString("开机自启一致性检查: registry=%1, startup=%2, script=%3")
+      QString("开机自启一致性检查: task=%1, registry=%2, startup=%3")
+          .arg(Logger::boolText(taskOk))
           .arg(Logger::boolText(registryOk))
-          .arg(Logger::boolText(startupOk))
-          .arg(scriptPath.isEmpty() ? "<unknown>" : scriptPath));
+          .arg(Logger::boolText(startupOk)));
 
-  if (registryOk && startupOk) {
-    Logger::warn("检测到重复的开机自启链路，保留注册表 Run 并移除 Startup 脚本");
-    updateAutoLaunchStartupScript(false, command);
+  if (taskOk) {
+    // 计划任务是最早的启动链路；保留它并清理旧的重复入口。
+    if (registryOk) updateAutoLaunchRegistry(false, command);
+    if (startupOk) updateAutoLaunchStartupScript(false, command);
     return;
   }
 
-  if (registryOk) {
-    return;
-  }
-
-  if (startupOk) {
-    Logger::info("检测到 Startup 脚本兜底链路有效，暂不重复注册注册表项");
-    return;
-  }
-
-  Logger::warn(QString("检测到开机自启链路缺失，执行修复 (registry=%1, startup=%2)")
+  // 旧版本只写注册表或 Startup；这里迁移到计划任务，让后续开机更早启动。
+  Logger::info(QString("开机自启链路迁移: registry=%1, startup=%2 -> 计划任务")
                    .arg(Logger::boolText(registryOk))
                    .arg(Logger::boolText(startupOk)));
   updateAutoLaunch(true);

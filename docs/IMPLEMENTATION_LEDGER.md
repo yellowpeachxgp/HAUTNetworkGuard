@@ -1,8 +1,8 @@
 # HAUTNetworkGuard 工程推进台账
 
-更新日期：2026-10-19。`v1.3.21` 已发布（[Release](https://github.com/yellowpeachxgp/HAUTNetworkGuard/releases/tag/v1.3.21)，tag `e69e969`，main 合并提交 `582c220`）；本轮基于社区 Issue #1/#5/#7 和 PR #2/#3/#6 复核，新增 Windows 布局修复、通用 Linux 支持和发布资产。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
+更新日期：2026-10-21。`v1.3.22` 修复 Windows 布局二次加固和开机自启/启动性能（`v1.3.21` 已发布：tag `e69e969`，main 合并提交 `582c220`）。本轮基于 Windows 用户截图反馈和启动耗时问题，新增可滚动自适应布局、托盘优先/延迟 UI、计划任务自启和启动阶段日志。以下 M0-M6 表保留原阶段的实现与验收边界，不能据其中旧的“未发布”状态判断当前 Release。
 
-按用户最新要求，当前推进范围为产品开发、必要基础测试及 CI 构建；真实设备、长期运行和签名公证不作为本轮开发阻塞。v1.3.21 聚焦社区 Issue/PR 复核、Windows 高 DPI 布局、通用 Linux 支持和发布资产完整性，复核记录见 [PR_REVIEW_2026-10-19.md](PR_REVIEW_2026-10-19.md)。
+按用户最新要求，当前推进范围为产品开发、必要基础测试及 CI 构建；真实设备、长期运行和签名公证不作为本轮开发阻塞。v1.3.22 聚焦 Windows 布局二次加固、启动性能和开机自启提速；v1.3.21 的社区复核记录见 [PR_REVIEW_2026-10-19.md](PR_REVIEW_2026-10-19.md)。
 
 v1.3.21 本轮已补齐：Windows 大字体/高 DPI 布局自适应和滚动容器（Issue #7）；共享 `config.lua` 与 `linux-generic/` systemd 安装、在线安装、卸载和发布包（Issue #5 / PR #6）；托盘不可用回退和高 DPI 状态徽标（Issue #1）；OpenWrt 安装/升级/回滚纳入 `config.lua`；应用图标与 About 窗口美化。基础回归：Windows Qt CTest 6/6（含新增 `layout_tests`）、macOS 控制器 32 条断言和 UI smoke、Lua 5.1/5.3 配置/运行时/日志、OpenWrt 安装 25 项 ×2、Linux 安装 15 项 ×2、Python 契约全部通过。新增行为已写入 README v1.3.21。
 
@@ -30,6 +30,14 @@ v1.3.21 本轮已补齐：Windows 大字体/高 DPI 布局自适应和滚动容�
 | M5-06 发布说明一致性 | 自动契约已加入 | `tests/test_release_contract.py` 已接入 CI；PR/main/tag/手动 dry-run 与正式 Release 均校验 tag/VERSION、Release 依赖、桌面资产、双哈希清单和 OpenWrt 固定版本安装命令 | 真实 Release tag、资产上传和发布页面回读 |
 | M6 现场和稳定性 | 未完成 | 已新增 [四端真实设备验收矩阵](REAL_DEVICE_ACCEPTANCE_MATRIX.md) 和 `tests/test_acceptance_matrix.py` 结构契约，CI 校验 A1-A13、状态值、证据列和七天记录字段；但没有新的校园网请求或 7 天运行证据 | 按矩阵完成 Windows/macOS/OpenWrt/通用 Linux 真机、学生完整旅程、稳定性与最终发布门禁 |
 | 社区 PR | v1.3.21 已复核 | [2026-09-08 审查](PR_REVIEW_2026-09-08.md) 记录 #3 采纳、#2 保留已生效修复；[2026-10-19 复核](PR_REVIEW_2026-10-19.md) 记录 Issue #7 布局修复、Issue #5/PR #6 通用 Linux 支持和 Issue #1 托盘加固 | GitHub PR #6 仍需在合并前由维护者确认；Windows/OpenWrt/Linux 实机仍需验收 |
+
+## v1.3.22 本轮修复（2026-10-21）
+
+- **Windows 布局**：`QLayout::SetMinimumSize` + 内容最小宽高 + 横向/纵向按需滚动；首次显示、字体/样式变化重新排版；新增 128 条断言覆盖大字体、选项切换、字体再放大、窗口压到最小和顶层卡片重叠。
+- **Windows 启动性能**：托盘优先创建；`--startup` 延迟构建完整 UI；`QNetworkInformation` 后端延后 1.5s；自启修复延后 2s；日志文件保持打开；新增 qapp/config/window/事件循环启动阶段耗时日志。
+- **Windows 开机自启**：计划任务 `ONLOGON` 为主链路（早于资源管理器加载 Startup），注册表 `Run` 为第一回退，Startup 脚本为第二回退；旧入口迁移并清理重复项；`schtasks` 失败不会弹 UAC。
+- **测试**：新增 `autolaunch_tests`（计划任务参数、创建/回读/回退、18 条断言）和延迟 UI 构建回放；Qt CTest 7/7，`--repeat until-fail:15` 通过；布局回归 128 条断言；macOS DMG 构建/校验通过；Python/Lua/OpenWrt/Linux 安装回归通过。
+- 具体命令与未替代项见 [验证记录](VALIDATION_2026-10-21.md)。
 
 ## v1.3.21 本轮验证（2026-10-19）
 

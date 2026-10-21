@@ -2,7 +2,7 @@
 # HAUT Network Guard - Debian / Ubuntu 在线一键安装
 # 用法:
 #   sh -s --              # 跟随 main 分支（适合测试）
-#   sh -s -- v1.3.21      # 固定 Release 版本（推荐生产环境）
+#   sh -s -- v1.3.22      # 固定 Release 版本（推荐生产环境）
 
 set -eu
 

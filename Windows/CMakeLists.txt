@@ -120,6 +120,12 @@ target_link_libraries(haut_layout_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets 
 add_test(NAME layout_tests COMMAND haut_layout_tests)
 set_tests_properties(layout_tests PROPERTIES TIMEOUT 30)
 
+add_executable(haut_autolaunch_tests
+    tests/autolaunch_tests.cpp src/config.cpp src/logger.cpp)
+target_link_libraries(haut_autolaunch_tests PRIVATE Qt6::Core)
+add_test(NAME autolaunch_tests COMMAND haut_autolaunch_tests)
+set_tests_properties(autolaunch_tests PROPERTIES TIMEOUT 30)
+
 # Windows 特定设置
 if(WIN32)
     enable_language(RC)
@@ -131,6 +137,7 @@ if(WIN32)
     target_link_libraries(haut_credential_tests PRIVATE Crypt32)
     target_link_libraries(haut_instance_guard_tests PRIVATE Crypt32)
     target_link_libraries(haut_layout_tests PRIVATE Crypt32)
+    target_link_libraries(haut_autolaunch_tests PRIVATE Crypt32)
 
     # 静态链接运行时
     set_property(TARGET ${PROJECT_NAME} PROPERTY
@@ -144,6 +151,8 @@ if(WIN32)
     set_property(TARGET haut_instance_guard_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set_property(TARGET haut_layout_tests PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    set_property(TARGET haut_autolaunch_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     
     # 添加版本信息

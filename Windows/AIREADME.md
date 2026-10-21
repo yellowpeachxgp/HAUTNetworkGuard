@@ -1,6 +1,6 @@
 # HAUT Network Guard - AI 技术文档 (Windows Qt)
 
-> 本文件用于后续开发快速理解当前 Windows 版本实现。内容已对齐 `v1.3.21`。
+> 本文件用于后续开发快速理解当前 Windows 版本实现。内容已对齐 `v1.3.22`。
 
 ## 项目概述
 
@@ -8,8 +8,8 @@ HAUT Network Guard Windows 版本使用 `Qt 6 + C++17` 实现，是当前正式�
 
 ### 当前版本
 
-- **版本号**: 1.3.21
-- **最后更新**: 2026-04
+- **版本号**: 1.3.22
+- **最后更新**: 2026-10
 - **构建**: CMake + MSVC + GitHub Actions
 
 ## 当前实现
@@ -33,8 +33,12 @@ HAUT Network Guard Windows 版本使用 `Qt 6 + C++17` 实现，是当前正式�
 - `src/main.cpp`
   - 应用入口
   - 支持 `--startup` 静默托盘启动
+  - 记录 qapp/config/window 启动阶段耗时
+  - 自启修复延后到事件循环
 - `src/mainwindow.cpp`
-  - UI、状态展示、自动登录触发
+  - 托盘优先创建；`--startup` 延迟构建窗口 UI
+  - 可滚动自适应布局：`QLayout::SetMinimumSize` + 内容最小宽高 + 按需滚动
+  - 状态展示、自动登录触发
 - `src/api.cpp`
   - 请求发送、响应分类、请求级日志
 - `src/protocol_utils.cpp`
@@ -42,9 +46,10 @@ HAUT Network Guard Windows 版本使用 `Qt 6 + C++17` 实现，是当前正式�
   - JSONP/CSV 状态解析
 - `src/config.cpp`
   - `QSettings` 存储
-  - 注册表 `Run` 主链路 + Startup 目录兜底脚本
+  - 计划任务 `ONLOGON` 主链路 + 注册表 `Run` + Startup 脚本兜底
+  - 旧版本入口迁移与重复项清理
 - `src/logger.cpp`
-  - 文件日志
+  - 持久化打开文件日志，避免每条日志重复开关文件
   - `HAUT_LOG_LEVEL` 级别控制
   - 用户名脱敏
 
@@ -62,11 +67,13 @@ HAUT Network Guard Windows 版本使用 `Qt 6 + C++17` 实现，是当前正式�
 
 自启动变更在配置写入成功后执行。密码保护、解码校验或存储失败会反馈到主窗口，保留旧配置和待提交输入；失败后不会继续发送本次手动登录请求。
 
-- 主路径: `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`
-- 兜底路径:
-  - `%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\HAUTNetworkGuard-Startup.vbs`
+- 主路径: 计划任务 `HAUTNetworkGuard`，`/SC ONLOGON`，普通用户权限
+- 回退路径 1: `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`
+- 回退路径 2: `%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\HAUTNetworkGuard-Startup.vbs`
 - 启动参数:
   - `--startup`
+- 计划任务创建失败不会弹 UAC，会自动回退到注册表 Run。
+- 启动时先显示托盘图标，再构建窗口 UI；网络信息后端和自启修复延后执行。
 
 ### 凭据存储
 
@@ -107,6 +114,12 @@ cmake --build build --config Release
 - 触发方式: 推送 `v*` tag
 - 质量门禁:
   - `haut_smoke_tests`
+  - `haut_controller_tests`
+  - `haut_credential_tests`
+  - `haut_instance_guard_tests`
+  - `haut_session_tests`
+  - `haut_layout_tests`
+  - `haut_autolaunch_tests`
 - 发布产物:
   - `HAUTNetworkGuard-Windows.zip`
 

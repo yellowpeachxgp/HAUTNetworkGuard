@@ -1,10 +1,7 @@
 #include "logger.h"
-#include <QByteArray>
 #include <QDateTime>
 #include <QDir>
-#include <QFile>
 #include <QFileInfo>
-#include <QTextStream>
 #include <QStandardPaths>
 
 namespace {
@@ -36,40 +33,55 @@ Logger::Logger() {
   }
 }
 
-QString Logger::logFilePath() const {
-  QString dir =
-      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-  QDir().mkpath(dir);
-  return dir + "/app.log";
+Logger::~Logger() {
+  if (m_file.isOpen()) m_file.close();
 }
 
-void Logger::rotate() {
-  QString path = logFilePath();
-  QFileInfo fi(path);
-  if (fi.exists() && fi.size() > MAX_LOG_SIZE) {
-    QString oldPath = path + ".old";
-    QFile::remove(oldPath);
-    QFile::rename(path, oldPath);
+bool Logger::ensureOpen() {
+  if (!m_enabled) return false;
+  if (m_file.isOpen()) return true;
+
+  if (m_path.isEmpty()) {
+    const QString dir =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (dir.isEmpty()) return false;
+    QDir().mkpath(dir);
+    m_path = dir + "/app.log";
+  }
+
+  m_file.setFileName(m_path);
+  if (!m_file.open(QIODevice::WriteOnly | QIODevice::Append)) return false;
+  m_writtenBytes = m_file.size();
+  return true;
+}
+
+void Logger::rotateIfNeeded() {
+  if (m_writtenBytes <= MAX_LOG_SIZE) return;
+
+  m_file.close();
+  const QString oldPath = m_path + ".old";
+  QFile::remove(oldPath);
+  QFile::rename(m_path, oldPath);
+  m_file.setFileName(m_path);
+  if (m_file.open(QIODevice::WriteOnly | QIODevice::Append)) {
+    m_writtenBytes = 0;
   }
 }
 
 void Logger::write(Level level, const QString &msg) {
   QMutexLocker locker(&m_mutex);
-  if (!m_enabled || level < m_minLevel)
-    return;
+  if (!m_enabled || level < m_minLevel) return;
+  if (!ensureOpen()) return;
 
   static const char *labels[] = {"DEBUG", "INFO", "WARN", "ERROR"};
-
-  rotate();
-
-  QFile file(logFilePath());
-  if (!file.open(QIODevice::Append | QIODevice::Text))
-    return;
-
-  QTextStream out(&file);
-  QString timestamp =
+  const QString timestamp =
       QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-  out << "[" << timestamp << "] [" << labels[level] << "] " << msg << "\n";
+  QByteArray line = QString("[%1] [%2] %3\n")
+                        .arg(timestamp, QString::fromLatin1(labels[level]), msg)
+                        .toUtf8();
+  const qint64 written = m_file.write(line);
+  if (written > 0) m_writtenBytes += written;
+  rotateIfNeeded();
 }
 
 void Logger::setMinLevel(Level level) {
@@ -82,6 +94,9 @@ void Logger::setEnabled(bool enabled) {
   Logger &logger = instance();
   QMutexLocker locker(&logger.m_mutex);
   logger.m_enabled = enabled;
+  if (!enabled && logger.m_file.isOpen()) {
+    logger.m_file.close();
+  }
 }
 
 Logger::Level Logger::minLevel() {

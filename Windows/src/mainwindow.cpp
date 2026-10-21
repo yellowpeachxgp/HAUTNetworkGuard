@@ -23,33 +23,24 @@ constexpr int kNetworkChangeDebounceMs = 500;
 }
 
 MainWindow::MainWindow(QWidget *parent)
-    : MainWindow(Config::instance(), nullptr, {}, true, parent) {}
+    : MainWindow(Config::instance(), nullptr, {}, true, false, parent) {}
+
+MainWindow::MainWindow(bool deferUi, QWidget *parent)
+    : MainWindow(Config::instance(), nullptr, {}, true, deferUi, parent) {}
 
 MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
-                       bool backgroundTasks, QWidget *parent)
+                       bool backgroundTasks, bool deferUi, QWidget *parent)
     : QMainWindow(parent), m_config(config), m_now(std::move(now)),
-      m_backgroundTasks(backgroundTasks), m_externalApi(api != nullptr) {
+      m_backgroundTasks(backgroundTasks), m_externalApi(api != nullptr),
+      m_deferUi(deferUi) {
   m_clock.start();
   setWindowTitle(QStringLiteral("HAUT Network Guard v" HAUT_VERSION_STRING));
-  // 宽度固定以维持设计，高度按当前字体和内容自适应。Windows 默认中文字体
-  // （微软雅黑）行高明显高于 macOS 苹方，写死 640px 会把标签压到不足一行。
+  // 宽度先按设计值固定；构建 UI 后会按内容最小宽度和屏幕宽度再校准。
   setFixedWidth(460);
   Logger::debug("MainWindow 初始化开始");
 
-  setupUi();
-  applyWindowStyle();
-  loadSettings();
-  refitWindowHeight();
-
-  // 初始化 API
-  m_api = api ? api : new Api(this);
-  connect(m_api, &Api::loginSuccess, this, &MainWindow::onLoginSuccess);
-  connect(m_api, &Api::loginFailed, this, &MainWindow::onLoginFailed);
-  connect(m_api, &Api::logoutSuccess, this, &MainWindow::onLogoutSuccess);
-  connect(m_api, &Api::logoutFailed, this, &MainWindow::onLogoutFailed);
-  connect(m_api, &Api::statusChecked, this, &MainWindow::onStatusChecked);
-
-  // 初始化托盘图标
+  // 先建立托盘：开机自启时用户应尽快看到菜单栏/托盘图标，
+  // 不等待完整窗口、样式表或网络后端初始化。
   m_trayIcon = new TrayIcon(this, m_backgroundTasks);
   connect(m_trayIcon, &TrayIcon::showWindowRequested, this,
           &MainWindow::showWindow);
@@ -61,8 +52,17 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
           &MainWindow::onLogoutClicked);
   if (m_backgroundTasks) m_trayIcon->show();
   refreshActionState();
-  Logger::info(QString("系统托盘已初始化 (available=%1)")
-                   .arg(m_trayIcon->isAvailable() ? "true" : "false"));
+  Logger::info(QString("系统托盘已初始化 (available=%1, ui_ready=%2)")
+                   .arg(m_trayIcon->isAvailable() ? "true" : "false")
+                   .arg(m_uiReady ? "true" : "false"));
+
+  // 初始化 API
+  m_api = api ? api : new Api(this);
+  connect(m_api, &Api::loginSuccess, this, &MainWindow::onLoginSuccess);
+  connect(m_api, &Api::loginFailed, this, &MainWindow::onLoginFailed);
+  connect(m_api, &Api::logoutSuccess, this, &MainWindow::onLogoutSuccess);
+  connect(m_api, &Api::logoutFailed, this, &MainWindow::onLogoutFailed);
+  connect(m_api, &Api::statusChecked, this, &MainWindow::onStatusChecked);
 
   // 状态检测定时器 (使用配置的间隔)
   m_statusTimer = new QTimer(this);
@@ -73,14 +73,24 @@ MainWindow::MainWindow(Config &config, Api *api, std::function<double()> now,
   if (m_backgroundTasks) m_statusTimer->start();
   Logger::info(QString("网络状态定时器已启动: %1 ms").arg(interval));
 
-  // 网络环境变化只作为及时检测提示，最终请求仍由 SessionPolicy 串行控制。
-  setupNetworkMonitor();
+  if (!m_deferUi) ensureUiBuilt();
 
-  // 启动时检测状态
-  if (m_backgroundTasks) QTimer::singleShot(1000, this, &MainWindow::checkNetworkStatus);
+  // Windows 网络信息后端会初始化 COM/Network List Manager，登录初期可能阻塞；
+  // 正常启动也延后到事件循环，先让窗口/托盘可见。
+  if (m_backgroundTasks && !m_externalApi) {
+    QTimer::singleShot(1500, this, &MainWindow::setupNetworkMonitor);
+  } else {
+    setupNetworkMonitor();
+  }
+
+  // 启动时检测状态。后台启动更早触发，尽快完成首次登录。
+  if (m_backgroundTasks) {
+    QTimer::singleShot(m_deferUi ? 100 : 1000, this,
+                       &MainWindow::checkNetworkStatus);
+  }
 
   // 自动登录只由明确离线的状态响应触发。
-  Logger::debug("MainWindow 初始化完成");
+  Logger::info(QString("MainWindow 初始化完成: %1ms").arg(m_clock.elapsed()));
 }
 
 MainWindow::~MainWindow() {}
@@ -240,16 +250,20 @@ void MainWindow::setupUi() {
   scrollArea->setObjectName("contentScrollArea");
   scrollArea->setWidgetResizable(true);
   scrollArea->setFrameShape(QFrame::NoFrame);
-  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  // 极端字体/缩放比例下允许横向滚动，绝不能把控件压到互相重叠。
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   m_centralWidget = new QWidget();
   m_centralWidget->setObjectName("centralContent");
+  m_centralWidget->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
   scrollArea->setWidget(m_centralWidget);
   setCentralWidget(scrollArea);
 
   QVBoxLayout *mainLayout = new QVBoxLayout(m_centralWidget);
   mainLayout->setSpacing(14);
   mainLayout->setContentsMargins(18, 18, 18, 18);
+  // 让内容控件的最小尺寸等于布局最小尺寸，QScrollArea 会据此滚动而不是压缩。
+  mainLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
   // 顶部概览
   QFrame *heroCard = new QFrame();
@@ -257,6 +271,7 @@ void MainWindow::setupUi() {
   QVBoxLayout *heroLayout = new QVBoxLayout(heroCard);
   heroLayout->setContentsMargins(18, 16, 18, 16);
   heroLayout->setSpacing(6);
+  heroLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
   QLabel *titleLabel = new QLabel("HAUT Network Guard");
   titleLabel->setObjectName("heroTitle");
@@ -279,6 +294,7 @@ void MainWindow::setupUi() {
   QVBoxLayout *statusLayout = new QVBoxLayout(statusGroup);
   statusLayout->setContentsMargins(16, 22, 16, 16);
   statusLayout->setSpacing(10);
+  statusLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
   m_statusLabel = new QLabel("检测中");
   m_statusLabel->setObjectName("statusValue");
@@ -299,6 +315,8 @@ void MainWindow::setupUi() {
   QFormLayout *infoLayout = new QFormLayout();
   infoLayout->setHorizontalSpacing(20);
   infoLayout->setVerticalSpacing(10);
+  infoLayout->setRowWrapPolicy(QFormLayout::DontWrapRows);
+  infoLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
   m_ipLabel = new QLabel("-");
   m_usageLabel = new QLabel("-");
   m_timeLabel = new QLabel("-");
@@ -328,6 +346,9 @@ void MainWindow::setupUi() {
   QFormLayout *accountLayout = new QFormLayout(accountGroup);
   accountLayout->setHorizontalSpacing(18);
   accountLayout->setVerticalSpacing(10);
+  accountLayout->setRowWrapPolicy(QFormLayout::DontWrapRows);
+  accountLayout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+  accountLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
   QLabel *accountHintLabel =
       new QLabel("建议将“记住密码”和“自动登录”配合使用，这样重启后也能自动恢复连接。");
@@ -448,43 +469,123 @@ void MainWindow::setupUi() {
   mainLayout->addWidget(footerLabel);
 }
 
-void MainWindow::refitWindowHeight() {
-  if (!m_centralWidget) return;
+void MainWindow::ensureUiBuilt() {
+  if (m_uiReady) return;
 
-  const int windowWidth = 460;
-  if (m_centralWidget->width() < 200) {
-    m_centralWidget->resize(windowWidth, qMax(640, m_centralWidget->height()));
-  }
+  QElapsedTimer uiClock;
+  uiClock.start();
+  setupUi();
+  applyWindowStyle();
+  m_uiReady = true;
+  loadSettings();
+  applyCachedUiState();
+  refitWindowSize();
+  m_windowFitDone = true;
+  Logger::info(QString("主窗口 UI 构建完成: %1ms").arg(uiClock.elapsed()));
+}
 
-  // 每个 QLabel 至少保留一行文字的高度；自动换行的标签按当前宽度计算
-  // 实际需要的高度。这样即使系统字体行高更大，布局也不会把文字压扁。
-  const QList<QLabel *> labels = findChildren<QLabel *>();
-  for (QLabel *label : labels) {
-    if (!label || label->text().isEmpty()) continue;
-    int minimum = qMax(label->fontMetrics().height(), label->sizeHint().height());
-    if (label->wordWrap()) {
-      int availableWidth = label->width();
-      if (availableWidth <= 0) availableWidth = windowWidth - 80;
-      const int wrappedHeight = label->heightForWidth(availableWidth);
-      if (wrappedHeight > 0) minimum = qMax(minimum, wrappedHeight);
+void MainWindow::applyCachedUiState() {
+  if (!m_uiReady) return;
+  setStatusBadge(m_cachedStatusText, m_cachedStatusColor);
+  setStatusDetail(m_cachedDetail, m_cachedDetailWarning);
+  m_ipLabel->setText(m_cachedIp);
+  m_usageLabel->setText(m_cachedUsage);
+  m_timeLabel->setText(m_cachedTime);
+  m_lastCheckLabel->setText(m_cachedLastCheckText);
+  refreshActionState();
+}
+
+void MainWindow::refitWindowSize() {
+  if (!m_uiReady || !m_centralWidget) return;
+  m_centralWidget->ensurePolished();
+
+  QScreen *targetScreen = screen();
+  const QRect available =
+      targetScreen ? targetScreen->availableGeometry() : QRect(0, 0, 1280, 900);
+  const int maxWindowWidth = qMax(460, available.width() - 40);
+  const int maxWindowHeight = qMax(560, available.height() - 60);
+
+  const int designWidth = 460;
+  m_centralWidget->setMinimumWidth(0);
+  m_centralWidget->resize(designWidth, qMax(640, m_centralWidget->height()));
+  if (QLayout *layout = m_centralWidget->layout()) layout->activate();
+
+  auto refreshLabelMinimums = [&](int fallbackWidth) {
+    // 每个 QLabel 至少保留一行文字的高度；自动换行的标签按当前宽度计算
+    // 实际需要的高度。这样即使系统字体行高更大，布局也不会把文字压扁。
+    const QList<QLabel *> labels = findChildren<QLabel *>();
+    for (QLabel *label : labels) {
+      if (!label || label->text().isEmpty()) continue;
+      label->ensurePolished();
+      int minimum = qMax(label->fontMetrics().height(), label->sizeHint().height());
+      if (label->wordWrap()) {
+        int availableWidth = label->width();
+        if (availableWidth <= 0) availableWidth = fallbackWidth;
+        const int wrappedHeight = label->heightForWidth(availableWidth);
+        if (wrappedHeight > 0) minimum = qMax(minimum, wrappedHeight);
+      }
+      label->setMinimumHeight(minimum);
+      label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     }
-    label->setMinimumHeight(minimum);
-    label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-  }
+  };
+  refreshLabelMinimums(qMax(240, designWidth - 80));
 
   if (QLayout *layout = m_centralWidget->layout()) {
     layout->activate();
-    int contentHeight = qMax(layout->sizeHint().height(), layout->minimumSize().height());
-    const int wrappedHeight = m_centralWidget->heightForWidth(windowWidth);
-    if (wrappedHeight > 0) contentHeight = qMax(contentHeight, wrappedHeight);
+    const int minimumContentWidth = layout->minimumSize().width();
+    const int targetWidth = qBound(460, minimumContentWidth + 2, maxWindowWidth);
+    setFixedWidth(targetWidth);
 
-    int maxHeight = 900;
-    if (QScreen *screen = QGuiApplication::primaryScreen()) {
-      maxHeight = qMax(640, screen->availableGeometry().height() - 80);
+    // 滚动区域内部画布不得小于布局最小宽度；窗口放不下时横向滚动。
+    m_centralWidget->setMinimumWidth(minimumContentWidth);
+    m_centralWidget->resize(qMax(minimumContentWidth, targetWidth),
+                            qMax(640, m_centralWidget->height()));
+    layout->activate();
+    refreshLabelMinimums(qMax(240, targetWidth - 80));
+
+    int contentHeight =
+        qMax(layout->minimumSize().height(), layout->sizeHint().height());
+    const int wrappedHeight = m_centralWidget->heightForWidth(
+        qMax(minimumContentWidth, targetWidth));
+    if (wrappedHeight > 0) contentHeight = qMax(contentHeight, wrappedHeight);
+    contentHeight = qMax(contentHeight, 640);
+    // 明确设置内容最小高度，保证窗口变小时出现滚动条而不是压缩/重叠控件。
+    m_centralWidget->setMinimumHeight(contentHeight);
+
+    if (!m_windowFitDone) {
+      const int targetHeight = qBound(560, contentHeight, maxWindowHeight);
+      resize(targetWidth, targetHeight);
+    } else {
+      // 用户可能调整过窗口；后续只保证最小高度，溢出交给滚动区域。
+      setMinimumHeight(qMin(560, maxWindowHeight));
     }
-    const int targetHeight = qBound(640, contentHeight, maxHeight);
-    // 只在内容变高时扩展窗口，避免状态文本刷新导致窗口来回跳动。
-    if (targetHeight > height()) setFixedHeight(targetHeight);
+  }
+}
+
+void MainWindow::scheduleRefit() {
+  if (!m_uiReady || m_refitPending) return;
+  m_refitPending = true;
+  QTimer::singleShot(0, this, [this] {
+    m_refitPending = false;
+    refitWindowSize();
+  });
+}
+
+void MainWindow::showEvent(QShowEvent *event) {
+  QMainWindow::showEvent(event);
+  ensureUiBuilt();
+  // 首次显示后按真实屏幕/字体再校准一次尺寸；后续文本变化只更新最小尺寸，
+  // 避免状态刷新导致窗口来回跳动。
+  m_windowFitDone = false;
+  refitWindowSize();
+  m_windowFitDone = true;
+}
+
+void MainWindow::changeEvent(QEvent *event) {
+  QMainWindow::changeEvent(event);
+  if (event->type() == QEvent::FontChange ||
+      event->type() == QEvent::StyleChange) {
+    scheduleRefit();
   }
 }
 
@@ -564,16 +665,24 @@ bool MainWindow::syncCredentialsToConfig() {
 }
 
 void MainWindow::onLoginClicked() {
+  if (m_session.isBusy()) {
+    Logger::debug("忽略手动登录：已有操作进行中");
+    return;
+  }
+
+  // 托盘菜单或开机自启阶段可能尚未构建窗口；需要时按需构建，
+  // 保证用户从托盘登录时仍有完整输入界面。
+  ensureUiBuilt();
+  if (!m_uiReady) {
+    Logger::warn("主窗口不可用，忽略手动登录");
+    return;
+  }
+
   QString username = m_usernameEdit->text().trimmed();
   QString password = m_passwordEdit->text();
 
   if (username.isEmpty() || password.isEmpty()) {
     if (m_backgroundTasks) QMessageBox::warning(this, "提示", "请输入学号和密码");
-    return;
-  }
-
-  if (m_session.isBusy()) {
-    Logger::debug("忽略手动登录：已有操作进行中");
     return;
   }
 
@@ -584,7 +693,6 @@ void MainWindow::onLoginClicked() {
       true, monotonicNow(), m_config.checkInterval());
   if (!token) return;
   m_isManualLogin = true;
-  m_loginBtn->setText("登录中...");
   setStatusDetail("正在提交登录请求，请稍候...");
   refreshActionState();
 
@@ -596,7 +704,6 @@ void MainWindow::onLoginClicked() {
 void MainWindow::onLogoutClicked() {
   const auto token = m_session.beginLogout();
   if (!token) return;
-  m_logoutBtn->setText("注销中...");
   setStatusDetail("正在执行注销请求...");
   refreshActionState();
   Logger::info(QString("手动注销触发 (online=%1)")
@@ -633,7 +740,6 @@ void MainWindow::onCopyDiagnosticsClicked() {
 
 void MainWindow::onLoginSuccess(quint64 token, const QString &message) {
   if (!m_session.completeLogin(token, true, monotonicNow())) return;
-  m_loginBtn->setText("登录");
   setStatusDetail("登录请求成功，正在确认校园网连接状态。");
   refreshActionState();
 
@@ -647,7 +753,6 @@ void MainWindow::onLoginFailed(quint64 token, const QString &error) {
   if (!m_session.completeLogin(token, false, monotonicNow())) return;
   const bool wasManual = m_isManualLogin;
   m_isManualLogin = false;
-  m_loginBtn->setText("登录");
   const QString retry = automaticRetryHint();
   setStatusDetail(QString("登录失败：%1%2").arg(error, retry.isEmpty() ? "" : "；" + retry), true);
   refreshActionState();
@@ -669,7 +774,6 @@ void MainWindow::triggerAutoLoginIfPossible(const QString &reason) {
       m_config.checkInterval());
   if (!token) return;
   m_isManualLogin = false;
-  m_loginBtn->setText("登录中...");
   setStatusDetail(QString("%1：正在尝试自动恢复连接...").arg(reason));
   Logger::info(QString("%1 自动登录触发 (用户: %2, 密码长度: %3)")
                    .arg(reason)
@@ -681,7 +785,6 @@ void MainWindow::triggerAutoLoginIfPossible(const QString &reason) {
 
 void MainWindow::onLogoutSuccess(quint64 token, const QString &resultClass) {
   if (!m_session.completeLogout(token, true)) return;
-  m_logoutBtn->setText("注销");
 
   m_isOnline = false;
   updateStatusDisplay(false);
@@ -701,7 +804,6 @@ void MainWindow::onLogoutSuccess(quint64 token, const QString &resultClass) {
 
 void MainWindow::onLogoutFailed(quint64 token, const QString &error) {
   if (!m_session.completeLogout(token, false)) return;
-  m_logoutBtn->setText("注销");
   setStatusDetail(QString("注销失败：%1；自动重连已暂停，可再次注销。").arg(error), true);
   refreshActionState();
 
@@ -729,16 +831,10 @@ void MainWindow::onStatusChecked(quint64 token, bool online, const QString &resu
   updateLastCheckLabel(resultClass == "offline" || online ? "最近检测" : "最近异常");
 
   if (!online && resultClass != "offline") {
-    m_statusLabel->setText("状态异常");
-    m_statusLabel->setStyleSheet(
-        "font-size: 22px; font-weight: 700; color: #ff9800;");
+    setStatusBadge("状态异常", "#ff9800");
     setStatusDetail("网络状态接口返回异常，已保留上一次在线判断以避免误触发自动重连。",
                     true);
-    if (!wasOnline) {
-      m_ipLabel->setText("-");
-      m_usageLabel->setText("-");
-      m_timeLabel->setText("-");
-    }
+    if (!wasOnline) clearMetrics();
     Logger::warn(QString("状态检测异常，保持当前在线状态不变: class=%1")
                      .arg(resultClass));
     flushPendingNetworkCheck();
@@ -758,9 +854,23 @@ void MainWindow::onStatusChecked(quint64 token, bool online, const QString &resu
 
 void MainWindow::refreshActionState() {
   const bool busy = m_session.isBusy();
-  m_loginBtn->setEnabled(!busy && (!m_isOnline || m_session.manualOfflineHold()));
-  m_logoutBtn->setEnabled(!busy && m_isOnline);
-  m_saveBtn->setEnabled(!busy);
+  if (m_uiReady) {
+    m_loginBtn->setEnabled(!busy && (!m_isOnline || m_session.manualOfflineHold()));
+    m_logoutBtn->setEnabled(!busy && m_isOnline);
+    m_saveBtn->setEnabled(!busy);
+    if (busy) {
+      const auto operation = m_session.operation();
+      m_loginBtn->setText(operation == SessionPolicy::Operation::Login
+                              ? QStringLiteral("登录中...")
+                              : QStringLiteral("登录"));
+      m_logoutBtn->setText(operation == SessionPolicy::Operation::Logout
+                               ? QStringLiteral("注销中...")
+                               : QStringLiteral("注销"));
+    } else {
+      m_loginBtn->setText(QStringLiteral("登录"));
+      m_logoutBtn->setText(QStringLiteral("注销"));
+    }
+  }
 
   if (m_trayIcon) {
     m_trayIcon->setBusy(busy);
@@ -770,27 +880,48 @@ void MainWindow::refreshActionState() {
 }
 
 void MainWindow::setStatusDetail(const QString &message, bool warning) {
-  if (!m_statusDetailLabel)
-    return;
+  m_cachedDetail = message;
+  m_cachedDetailWarning = warning;
+  if (!m_uiReady || !m_statusDetailLabel) return;
 
   m_statusDetailLabel->setText(message);
   m_statusDetailLabel->setStyleSheet(
       QString("font-size: 12px; color: %1;")
           .arg(warning ? "#a56a00" : "#60758f"));
-  refitWindowHeight();
+  scheduleRefit();
+}
+
+void MainWindow::setStatusBadge(const QString &text, const QString &color) {
+  m_cachedStatusText = text;
+  m_cachedStatusColor = color;
+  if (!m_uiReady || !m_statusLabel) return;
+
+  m_statusLabel->setText(text);
+  m_statusLabel->setStyleSheet(
+      QString("font-size: 22px; font-weight: 700; color: %1;").arg(color));
+}
+
+void MainWindow::clearMetrics() {
+  m_cachedIp = "-";
+  m_cachedUsage = "-";
+  m_cachedTime = "-";
+  if (!m_uiReady) return;
+  m_ipLabel->setText(m_cachedIp);
+  m_usageLabel->setText(m_cachedUsage);
+  m_timeLabel->setText(m_cachedTime);
 }
 
 void MainWindow::updateLastCheckLabel(const QString &prefix) {
-  if (!m_lastCheckLabel)
-    return;
-
   const QString time = QDateTime::currentDateTime().toString("HH:mm:ss");
-  m_lastCheckLabel->setText(QString("%1：%2").arg(prefix, time));
+  m_cachedLastCheckText = QString("%1：%2").arg(prefix, time);
+  if (!m_uiReady || !m_lastCheckLabel) return;
+
+  m_lastCheckLabel->setText(m_cachedLastCheckText);
+  scheduleRefit();
 }
 
 void MainWindow::updateOptionHint() {
-  if (!m_optionHintLabel)
-    return;
+  if (!m_uiReady || !m_optionHintLabel) return;
 
   QString message;
   QString color = "#38557a";
@@ -828,18 +959,21 @@ void MainWindow::updateOptionHint() {
       QString("QLabel { color: %1; background: %2; border: 1px solid %3; "
               "border-radius: 10px; padding: 10px 12px; }")
           .arg(color, background, border));
-  refitWindowHeight();
+  scheduleRefit();
 }
 
 void MainWindow::updateStatusDisplay(bool online, const QString &ip,
                                      qint64 bytes, qint64 seconds) {
   if (online) {
-    m_statusLabel->setText("在线");
-    m_statusLabel->setStyleSheet(
-        "font-size: 22px; font-weight: 700; color: #4caf50;");
-    m_ipLabel->setText(ip.isEmpty() ? "-" : ip);
-    m_usageLabel->setText(formatBytes(bytes));
-    m_timeLabel->setText(formatTime(seconds));
+    setStatusBadge("在线", "#4caf50");
+    m_cachedIp = ip.isEmpty() ? "-" : ip;
+    m_cachedUsage = formatBytes(bytes);
+    m_cachedTime = formatTime(seconds);
+    if (m_uiReady) {
+      m_ipLabel->setText(m_cachedIp);
+      m_usageLabel->setText(m_cachedUsage);
+      m_timeLabel->setText(m_cachedTime);
+    }
     setStatusDetail(ip.isEmpty()
                         ? "网络连接正常，程序会持续监测在线状态。"
                         : QString("网络连接正常，当前 IP 为 %1。").arg(ip));
@@ -847,12 +981,8 @@ void MainWindow::updateStatusDisplay(bool online, const QString &ip,
       setStatusDetail("当前检测为在线，自动重连仍暂停；可再次注销，或点击登录解除暂停。");
     }
   } else {
-    m_statusLabel->setText("离线");
-    m_statusLabel->setStyleSheet(
-        "font-size: 22px; font-weight: 700; color: #f44336;");
-    m_ipLabel->setText("-");
-    m_usageLabel->setText("-");
-    m_timeLabel->setText("-");
+    setStatusBadge("离线", "#f44336");
+    clearMetrics();
 
     if (m_session.manualOfflineHold()) {
       setStatusDetail("自动重连已暂停；点击登录可解除暂停。", true);
@@ -876,8 +1006,9 @@ QString MainWindow::automaticRetryHint() const {
 
 QString MainWindow::diagnosticText() const {
   const QString retry = automaticRetryHint().isEmpty() ? "无" : automaticRetryHint();
-  return QString("HAUT Network Guard v" HAUT_VERSION_STRING "\n状态: %1\n%2\n自动登录: %3\n自动重试: %4")
-      .arg(m_statusLabel->text(), m_lastCheckLabel->text(),
+  return QString("HAUT Network Guard v" HAUT_VERSION_STRING
+                 "\n状态: %1\n%2\n自动登录: %3\n自动重试: %4")
+      .arg(m_cachedStatusText, m_cachedLastCheckText,
            m_config.autoLogin() ? "开启" : "关闭", retry);
 }
 

@@ -1,6 +1,7 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+#include <QFile>
 #include <QMutex>
 #include <QString>
 
@@ -27,13 +28,19 @@ public:
 
 private:
   Logger();
+  ~Logger();
   void write(Level level, const QString &msg);
-  void rotate();
-  QString logFilePath() const;
+  bool ensureOpen();
+  void rotateIfNeeded();
 
   QMutex m_mutex;
   Level m_minLevel = DEBUG;
   bool m_enabled = true;
+  // 日志文件保持打开，避免每条日志都做路径解析、目录创建和开关文件；
+  // 这在 Windows + 杀毒软件环境下会明显拖慢启动和检测循环。
+  QFile m_file;
+  qint64 m_writtenBytes = 0;
+  QString m_path;
   static const qint64 MAX_LOG_SIZE = 1024 * 1024; // 1MB
 };
 

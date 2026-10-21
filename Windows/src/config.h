@@ -3,8 +3,9 @@
 
 #include <QSettings>
 #include <QString>
-#include <memory>
+#include <QStringList>
 #include <functional>
+#include <memory>
 
 struct PasswordCodec {
   std::function<QString(const QString &)> encode;
@@ -22,6 +23,9 @@ public:
   void load();
   bool save();
   QString lastError() const { return m_lastError; }
+
+  // 延迟到事件循环启动后再修复开机自启，避免注册表/计划任务操作拖慢启动。
+  void repairAutoLaunchIfNeeded();
 
   // 配置项
   QString username() const { return m_username; }
@@ -49,6 +53,22 @@ public:
   bool autoLogin() const { return m_autoLogin; }
   void setAutoLogin(bool autoLogin) { m_autoLogin = autoLogin; }
 
+  // 测试注入：替换 schtasks 执行器并允许启用系统自启动集成。
+  using AutoLaunchRunner =
+      std::function<bool(const QStringList &args, int *exitCode, QString *output)>;
+  void setAutoLaunchRunnerForTesting(AutoLaunchRunner runner) {
+    m_autoLaunchRunner = std::move(runner);
+  }
+  void setStartupIntegrationForTesting(bool enabled) {
+    m_startupIntegration = enabled;
+  }
+
+  // 计划任务参数（纯函数，便于测试和审计）。
+  static QStringList scheduledTaskCreateArgs(const QString &command);
+  static QStringList scheduledTaskQueryArgs();
+  static QStringList scheduledTaskDeleteArgs();
+  static QString scheduledTaskName();
+
 private:
   Config();
   struct Snapshot {
@@ -64,11 +84,17 @@ private:
   QString encodePassword(const QString &password);
   QString decodePassword(const QString &encoded);
 
-  // 设置开机自启动
+  // 设置开机自启动。优先计划任务（登录时更早触发），失败回退注册表 Run，
+  // 再失败回退 Startup 目录脚本。
   void updateAutoLaunch(bool enable);
   void updateAutoLaunchRegistry(bool enable, const QString &command);
   void updateAutoLaunchStartupScript(bool enable, const QString &command);
   void verifyAndRepairAutoLaunch();
+  bool runScheduledTask(const QStringList &args, int *exitCode,
+                        QString *output) const;
+  bool createScheduledTask(const QString &command);
+  bool deleteScheduledTask();
+  bool scheduledTaskExists() const;
   bool isRegistryCommandExpected(const QString &command,
                                  QString *storedValue = nullptr) const;
   bool isStartupScriptExpected(const QString &command,
@@ -81,6 +107,7 @@ private:
   QSettings &m_settings;
   bool m_startupIntegration = false;
   PasswordCodec m_codec;
+  AutoLaunchRunner m_autoLaunchRunner;
   QString m_lastError;
   bool m_credentialReadFailed = false;
   Snapshot m_lastSaved{};
